@@ -1,0 +1,70 @@
+{
+  "folders": [
+    {
+      "id": "root-welcome",
+      "name": "Welcome",
+      "parentId": null,
+      "createdAt": 1776956749115
+    }
+  ],
+  "nodes": [
+    {
+      "id": "x6gh4uRZ35",
+      "folderId": "root-welcome",
+      "position": {
+        "x": -854.0152653905719,
+        "y": 69.4919547345497
+      },
+      "data": {
+        "kind": "pdf",
+        "title": "New PDF",
+        "src": "/uploads/D7efBlp2Auv4.pdf",
+        "highlights": [
+          {
+            "id": "cE-_IgHC",
+            "page": 1,
+            "rects": [
+              {
+                "x": 0.3051826183696977,
+                "y": 0.5203307245224015,
+                "width": 0.460147117852335,
+                "height": 0.014512433014690792
+              },
+              {
+                "x": 0.23509567479386276,
+                "y": 0.5340302186272997,
+                "width": 0.24555271159231454,
+                "height": 0.014512433014690792
+              }
+            ],
+            "text": "ant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that in",
+            "color": "#fde68a",
+            "comments": [],
+            "aiThread": [
+              {
+                "id": "lemNOXnp",
+                "role": "user",
+                "text": "Summarize this in plain English.",
+                "createdAt": 1777045299305
+              },
+              {
+                "id": "zt5IvNjM",
+                "role": "assistant",
+                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. personalGIt will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (104 chars):\n\"ant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that in\"\nYour question: Summarize this in plain English.",
+                "createdAt": 1777045299404
+              }
+            ],
+            "createdAt": 1777045292532
+          }
+        ],
+        "fileName": "1706.03762v7.pdf",
+        "pageCount": 15
+      },
+      "width": 320,
+      "height": 150
+    }
+  ],
+  "edges": [],
+  "selectedFolderId": "root-welcome",
+  "version": 34
+}
