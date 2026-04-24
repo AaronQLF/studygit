@@ -1,0 +1,249 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+:root {
+  --pg-bg: #0a0a0a;
+  --pg-bg-subtle: #111113;
+  --pg-bg-elevated: #151518;
+  --pg-fg: #f3f4f6;
+  --pg-muted: #9ca3af;
+  --pg-border: #27272a;
+  --pg-border-strong: #3f3f46;
+  --pg-accent: #22d3ee;
+  --pg-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+.light {
+  --pg-bg: #f8fafc;
+  --pg-bg-subtle: #ffffff;
+  --pg-bg-elevated: #f4f4f5;
+  --pg-fg: #111827;
+  --pg-muted: #6b7280;
+  --pg-border: #e4e4e7;
+  --pg-border-strong: #d4d4d8;
+  --pg-shadow: 0 10px 20px rgba(16, 24, 40, 0.08);
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--pg-bg);
+  color: var(--pg-fg);
+}
+
+button,
+a,
+input,
+textarea,
+select,
+[role="button"],
+.pg-anim {
+  transition-property: background-color, border-color, color, opacity, transform,
+    box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0.65, 0.3, 1);
+}
+
+* {
+  border-color: var(--pg-border);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.45);
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* React Flow */
+.react-flow__node {
+  font-family: var(--font-sans);
+}
+
+.react-flow__node.selected {
+  box-shadow: 0 0 0 1px var(--pg-accent);
+}
+
+.react-flow__controls {
+  border: 1px solid var(--pg-border);
+  border-radius: 7px;
+  box-shadow: var(--pg-shadow);
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg-subtle);
+  color: var(--pg-muted);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--pg-bg-elevated);
+  color: var(--pg-fg);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--pg-accent) !important;
+}
+
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  border: 1px solid var(--pg-border-strong) !important;
+  background: var(--pg-bg-elevated) !important;
+  opacity: 0;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
+
+.pg-flow-dots {
+  opacity: 1;
+}
+
+.pg-flow-dots-hidden {
+  opacity: 0;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* pdf.js text layer — minimum CSS required for selectable text overlay */
+.pg-pdf-page {
+  position: relative;
+  direction: ltr;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  margin: 0 auto;
+}
+
+.pg-pdf-page > canvas {
+  display: block;
+}
+
+.pg-pdf-textlayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  z-index: 2;
+  --total-scale-factor: 1;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.pg-pdf-textlayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pg-pdf-textlayer > :not(.markedContent),
+.pg-pdf-textlayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+
+.pg-pdf-textlayer .markedContent {
+  display: contents;
+}
+
+.pg-pdf-textlayer ::selection {
+  background: color-mix(in srgb, var(--pg-accent) 40%, transparent);
+}
+
+.pg-pdf-textlayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.pg-pdf-textlayer.selecting .endOfContent {
+  top: 0;
+}
+
+.pg-pdf-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.pg-pdf-highlight {
+  position: absolute;
+  border-radius: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: outline-color 120ms ease, background-color 120ms ease;
+  outline: 0 solid transparent;
+}
+
+.pg-pdf-highlight:hover {
+  filter: brightness(1.05);
+}
+
+.pg-pdf-highlight.active {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 1px;
+}
