@@ -24,6 +24,15 @@ type LoadedPage = {
   baseHeight: number;
 };
 
+if (typeof Map.prototype.getOrInsertComputed !== "function") {
+  Map.prototype.getOrInsertComputed = function (key, callbackFn) {
+    if (this.has(key)) return this.get(key);
+    const value = callbackFn(key);
+    this.set(key, value);
+    return value;
+  };
+}
+
 let pdfjsPromise: Promise<PdfJsModule> | null = null;
 function loadPdfJs(): Promise<PdfJsModule> {
   if (pdfjsPromise) return pdfjsPromise;
@@ -135,6 +144,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const [doc, setDoc] = useState<PdfDoc | null>(null);
     const [pages, setPages] = useState<LoadedPage[]>([]);
     const [scale, setScale] = useState(1.25);
+    const [scaleReady, setScaleReady] = useState(false);
+    const [userScale, setUserScale] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [selectionToolbar, setSelectionToolbar] = useState<{
@@ -165,6 +176,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       setError(null);
       setPages([]);
       setDoc(null);
+      setScaleReady(userScale !== null);
       (async () => {
         try {
           task = pdfjs.getDocument(src);
@@ -204,6 +216,28 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         }
       };
     }, [doc]);
+
+    useEffect(() => {
+      if (userScale !== null || pages.length === 0 || !containerRef.current) return;
+      const container = containerRef.current;
+      const maxBaseWidth = Math.max(...pages.map((p) => p.baseWidth));
+      const padding = 48;
+      let lastWidth = -1;
+
+      const computeAndSet = () => {
+        const availableWidth = container.clientWidth - padding;
+        if (availableWidth <= 0 || maxBaseWidth <= 0) return;
+        if (Math.abs(availableWidth - lastWidth) < 4) return;
+        lastWidth = availableWidth;
+        setScale(Math.max(0.5, +Math.min(availableWidth / maxBaseWidth, 3).toFixed(2)));
+        setScaleReady(true);
+      };
+
+      computeAndSet();
+      const observer = new ResizeObserver(computeAndSet);
+      observer.observe(container);
+      return () => observer.disconnect();
+    }, [pages, userScale]);
 
     useImperativeHandle(
       ref,
@@ -268,10 +302,14 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           viewport,
           canvas,
         } as Parameters<PdfPage["render"]>[0]);
+        let activeTextLayer: { cancel?: () => void } | null = null;
         tasks.push({
           cancel: () => {
             try {
               renderTask.cancel();
+            } catch {}
+            try {
+              activeTextLayer?.cancel?.();
             } catch {}
           },
         });
@@ -285,6 +323,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             container: textLayerEl,
             viewport,
           });
+          activeTextLayer = textLayer as unknown as { cancel?: () => void };
           await textLayer.render();
         } catch (err) {
           const name = (err as { name?: string })?.name;
@@ -300,17 +339,22 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       };
     }, [pdfjs, pages, scale]);
 
-    const onMouseUp = useCallback(() => {
+    const evaluateSelection = useCallback(() => {
+      const container = containerRef.current;
       const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || !containerRef.current) {
+      if (!container || !selection || selection.isCollapsed || selection.rangeCount === 0) {
         setSelectionToolbar(null);
         return;
       }
       const range = selection.getRangeAt(0);
-      const node = range.startContainer.parentElement;
-      if (!node) return;
-      const pageEl = node.closest<HTMLDivElement>("[data-role='pdf-page']");
-      if (!pageEl || !containerRef.current.contains(pageEl)) {
+      const anchorNode = range.commonAncestorContainer;
+      const anchorEl = (
+        anchorNode.nodeType === 1
+          ? (anchorNode as Element)
+          : (anchorNode.parentElement as Element | null)
+      ) as Element | null;
+      const pageEl = anchorEl?.closest<HTMLDivElement>("[data-role='pdf-page']") ?? null;
+      if (!pageEl || !container.contains(pageEl)) {
         setSelectionToolbar(null);
         return;
       }
@@ -322,13 +366,23 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         return;
       }
       const rect = range.getBoundingClientRect();
-      const containerRect = containerRef.current.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
       setSelectionToolbar({
         event: { page: pageIndex, rects, text },
-        x: rect.left + rect.width / 2 - containerRect.left,
-        y: rect.top - containerRect.top,
+        x: rect.left + rect.width / 2 - containerRect.left + container.scrollLeft,
+        y: rect.top - containerRect.top + container.scrollTop,
       });
     }, []);
+
+    useEffect(() => {
+      const onMouseUp = () => {
+        // Defer one frame so selection has settled (Safari fires mouseup before
+        // selectionchange in some cases).
+        requestAnimationFrame(() => evaluateSelection());
+      };
+      document.addEventListener("mouseup", onMouseUp);
+      return () => document.removeEventListener("mouseup", onMouseUp);
+    }, [evaluateSelection]);
 
     useEffect(() => {
       const onChange = () => {
@@ -337,6 +391,14 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       };
       document.addEventListener("selectionchange", onChange);
       return () => document.removeEventListener("selectionchange", onChange);
+    }, []);
+
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return;
+      const onScroll = () => setSelectionToolbar(null);
+      container.addEventListener("scroll", onScroll, { passive: true });
+      return () => container.removeEventListener("scroll", onScroll);
     }, []);
 
     const highlightsByPage = useMemo(() => {
@@ -350,7 +412,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [highlights]);
 
     return (
-      <div className="relative flex h-full min-h-0 flex-1 flex-col">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 text-[11px] font-mono text-zinc-500">
           <div className="flex items-center gap-3">
             <span>
@@ -363,7 +425,20 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           <div className="flex items-center gap-1">
             <button
               className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
-              onClick={() => setScale((s) => Math.max(0.5, +(s - 0.1).toFixed(2)))}
+              onClick={() => {
+                setUserScale(null);
+              }}
+              title="Fit to width"
+            >
+              fit
+            </button>
+            <button
+              className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
+              onClick={() => {
+                const next = Math.max(0.5, +(scale - 0.1).toFixed(2));
+                setScale(next);
+                setUserScale(next);
+              }}
             >
               −
             </button>
@@ -372,7 +447,11 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             </span>
             <button
               className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
-              onClick={() => setScale((s) => Math.min(3, +(s + 0.1).toFixed(2)))}
+              onClick={() => {
+                const next = Math.min(3, +(scale + 0.1).toFixed(2));
+                setScale(next);
+                setUserScale(next);
+              }}
             >
               +
             </button>
@@ -381,8 +460,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
         <div
           ref={containerRef}
-          className="relative flex-1 min-h-0 overflow-y-auto bg-[var(--pg-bg-elevated)]"
-          onMouseUp={onMouseUp}
+          className="relative flex-1 min-h-0 overflow-auto bg-[var(--pg-bg-elevated)]"
         >
           {!pdfjs || loading ? (
             <div className="flex h-full items-center justify-center text-[11px] font-mono text-zinc-500">
@@ -390,7 +468,10 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             </div>
           ) : null}
 
-          <div className="mx-auto flex flex-col items-center gap-5 py-6">
+          <div
+            className="mx-auto flex flex-col items-center gap-5 py-6"
+            style={{ visibility: scaleReady ? "visible" : "hidden" }}
+          >
             {pages.map((info, idx) => {
               const pageNum = idx + 1;
               const pageHighlights = highlightsByPage.get(pageNum) ?? [];

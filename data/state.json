@@ -1,70 +1,143 @@
 {
-  "folders": [
+  "workspaces": [
     {
-      "id": "root-welcome",
+      "id": "ws-root-welcome",
       "name": "Welcome",
-      "parentId": null,
       "createdAt": 1776956749115
     }
   ],
   "nodes": [
     {
-      "id": "x6gh4uRZ35",
-      "folderId": "root-welcome",
+      "id": "BrMpN68GEU",
       "position": {
-        "x": -854.0152653905719,
-        "y": 69.4919547345497
+        "x": 187.0995552618249,
+        "y": 192.64670333032234
       },
       "data": {
         "kind": "pdf",
         "title": "New PDF",
-        "src": "/uploads/D7efBlp2Auv4.pdf",
+        "src": "/uploads/kT7uvjUxXNiC.pdf",
         "highlights": [
           {
-            "id": "cE-_IgHC",
+            "id": "DRfu5GeV",
             "page": 1,
             "rects": [
               {
-                "x": 0.3051826183696977,
-                "y": 0.5203307245224015,
-                "width": 0.460147117852335,
-                "height": 0.014512433014690792
-              },
-              {
-                "x": 0.23509567479386276,
-                "y": 0.5340302186272997,
-                "width": 0.24555271159231454,
-                "height": 0.014512433014690792
+                "x": 0.31379644588045236,
+                "y": 0.5699461993049173,
+                "width": 0.372670739095315,
+                "height": 0.07197229721966912
               }
             ],
-            "text": "ant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that in",
-            "color": "#fde68a",
+            "text": "Reinforcement Learning",
+            "color": "#bbf7d0",
             "comments": [],
             "aiThread": [
               {
-                "id": "lemNOXnp",
+                "id": "TFSpMCw3",
                 "role": "user",
-                "text": "Summarize this in plain English.",
-                "createdAt": 1777045299305
+                "text": "Summarize this in plain English",
+                "createdAt": 1777076863970
               },
               {
-                "id": "zt5IvNjM",
+                "id": "WS3KUbwb",
                 "role": "assistant",
-                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. personalGIt will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (104 chars):\n\"ant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that in\"\nYour question: Summarize this in plain English.",
-                "createdAt": 1777045299404
+                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. personalGIt will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (22 chars):\n\"Reinforcement Learning\"\nYour question: Summarize this in plain English",
+                "createdAt": 1777076864215
               }
             ],
-            "createdAt": 1777045292532
+            "createdAt": 1777070714595
+          },
+          {
+            "id": "O37G49H3",
+            "page": 2,
+            "rects": [
+              {
+                "x": 0.2447808766871115,
+                "y": 0.3068579281077665,
+                "width": 0.23741743030987905,
+                "height": 0.044369686351102944
+              }
+            ],
+            "text": "P, value functions, Bellm",
+            "color": "#fecaca",
+            "comments": [],
+            "aiThread": [
+              {
+                "id": "k7SoyEKB",
+                "role": "user",
+                "text": "Explain it like I'm five",
+                "createdAt": 1777076885587
+              },
+              {
+                "id": "uUSuO-TU",
+                "role": "assistant",
+                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. personalGIt will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (25 chars):\n\"P, value functions, Bellm\"\nYour question: Explain it like I'm five",
+                "createdAt": 1777076885627
+              }
+            ],
+            "createdAt": 1777076880934
           }
         ],
-        "fileName": "1706.03762v7.pdf",
-        "pageCount": 15
+        "fileName": "Reinforcement_Learning_H2026.pdf",
+        "pageCount": 52
       },
       "width": 320,
-      "height": 150
+      "height": 152,
+      "workspaceId": "ws-root-welcome"
+    },
+    {
+      "id": "lsr_9X9A9U",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": 1428.0810086197118,
+        "y": 263.998780533995
+      },
+      "data": {
+        "kind": "pdf",
+        "title": "GAN lecture",
+        "src": "/uploads/Hu6pqYxuFypZ.pdf",
+        "highlights": [],
+        "fileName": "GANs.pdf",
+        "pageCount": 53
+      },
+      "width": 320,
+      "height": 325
+    },
+    {
+      "id": "DDn7a-2f7j",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": -78.74406978566194,
+        "y": 192.09731555444517
+      },
+      "data": {
+        "kind": "link",
+        "url": "https://aaronqlf.github.io/pflioblog/blog/game-theory-obsession/",
+        "title": "New link",
+        "embed": true,
+        "description": ""
+      },
+      "width": 240,
+      "height": 282
+    },
+    {
+      "id": "30nLkWnWJs",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": 928.2886951434881,
+        "y": 366.2880115300089
+      },
+      "data": {
+        "kind": "page",
+        "title": "New page",
+        "content": ""
+      },
+      "width": 440,
+      "height": 124
     }
   ],
   "edges": [],
-  "selectedFolderId": "root-welcome",
-  "version": 34
+  "selectedWorkspaceId": "ws-root-welcome",
+  "version": 172
 }

@@ -2,11 +2,11 @@
 
 import type { NodeKind } from "@/lib/types";
 import {
-  BookOpen,
   FileSearch,
   FileText,
   Image as ImageIcon,
   Link2,
+  NotebookPen,
   StickyNote,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ const ITEMS: {
   { kind: "link", label: "link", keybind: "L", icon: Link2 },
   { kind: "image", label: "image", keybind: "I", icon: ImageIcon },
   { kind: "note", label: "note", keybind: "N", icon: StickyNote },
-  { kind: "blog", label: "blog", keybind: "B", icon: BookOpen },
+  { kind: "page", label: "page", keybind: "B", icon: NotebookPen },
   { kind: "document", label: "doc", keybind: "D", icon: FileText },
   { kind: "pdf", label: "pdf", keybind: "P", icon: FileSearch },
 ];

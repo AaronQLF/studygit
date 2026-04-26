@@ -3,12 +3,14 @@
 import type { NodeProps } from "@xyflow/react";
 import { FileText, Highlighter, MessageSquare } from "lucide-react";
 import { NodeShell } from "./NodeShell";
+import { EditableTitle } from "./EditableTitle";
 import { useStore } from "@/lib/store";
 import type { DocumentNodeData } from "@/lib/types";
 
 export function DocumentNode({ id, data }: NodeProps) {
   const d = data as unknown as DocumentNodeData;
-  const focusNode = useStore((s) => s.focusNode);
+  const openPanel = useStore((s) => s.openPanel);
+  const updateNodeData = useStore((s) => s.updateNodeData);
 
   const preview =
     d.content.length > 200 ? d.content.slice(0, 200) + "..." : d.content;
@@ -26,15 +28,20 @@ export function DocumentNode({ id, data }: NodeProps) {
         </div>
         <button
           className="nodrag text-xs px-2 py-1 rounded border border-[var(--pg-border-strong)] text-zinc-200 hover:bg-zinc-800 font-mono"
-          onClick={() => focusNode(id)}
+          onClick={() => openPanel(id)}
         >
-          focus
+          open
         </button>
       </div>
-      <div className="p-4" onDoubleClick={() => focusNode(id)}>
-        <div className="text-base font-semibold text-zinc-100 mb-1.5 leading-snug">
-          {d.title || "Untitled document"}
-        </div>
+      <div className="p-4" onDoubleClick={() => openPanel(id)}>
+        <EditableTitle
+          value={d.title}
+          onChange={(next) =>
+            updateNodeData(id, { title: next } as Partial<DocumentNodeData>)
+          }
+          placeholder="Untitled document"
+          className="mb-1.5 text-base font-semibold leading-snug text-zinc-100"
+        />
         <div className="text-xs text-zinc-400 leading-relaxed line-clamp-4 whitespace-pre-wrap">
           {preview || (
             <span className="italic text-zinc-500">

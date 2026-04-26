@@ -3,7 +3,6 @@ import { promises as fs } from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
 
-const MAX_BYTES = 40 * 1024 * 1024; // 40 MB
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
 export const runtime = "nodejs";
@@ -23,13 +22,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "missing file field" },
       { status: 400 }
-    );
-  }
-
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: `file too large; max ${MAX_BYTES / (1024 * 1024)}MB` },
-      { status: 413 }
     );
   }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { ExternalLink, Link2 } from "lucide-react";
 import { NodeShell } from "./NodeShell";
+import { EditableTitle } from "./EditableTitle";
 import { useStore } from "@/lib/store";
 import type { LinkNodeData } from "@/lib/types";
 
@@ -90,9 +91,14 @@ export function LinkNode({ id, data }: NodeProps) {
               <Link2 size={11} />
               link
             </div>
-            <div className="text-sm font-medium text-zinc-100 leading-snug">
-              {d.title || "Untitled link"}
-            </div>
+            <EditableTitle
+              value={d.title}
+              onChange={(next) =>
+                updateNodeData(id, { title: next } as Partial<LinkNodeData>)
+              }
+              placeholder="Untitled link"
+              className="text-sm font-medium leading-snug text-zinc-100"
+            />
             {d.description && (
               <div className="text-xs text-zinc-400 leading-snug">
                 {d.description}
