@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
-  BookOpen,
   FileSearch,
   FileText,
-  FolderPlus,
   Image as ImageIcon,
+  Layers,
   Link2,
   MoonStar,
+  NotebookPen,
   PanelLeft,
+  Plus,
   Search,
   StickyNote,
   Target,
@@ -22,7 +23,7 @@ import type { AnyNodeData, NodeKind } from "@/lib/types";
 
 type PaletteItem = {
   id: string;
-  section: "Add" | "Folders" | "Navigate" | "View";
+  section: "Add" | "Workspaces" | "View";
   label: string;
   hint?: string;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -40,7 +41,8 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
     case "note":
       return { kind, text: "", color: NOTE_COLORS[0] };
     case "blog":
-      return { kind, title: "New blog post", markdown: "# New blog post\n\n..." };
+    case "page":
+      return { kind: "page", title: "New page", content: "" };
     case "document":
       return { kind, title: "New document", content: "", highlights: [] };
     case "pdf":
@@ -59,50 +61,53 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const folders = useStore((s) => s.folders);
-  const selectedFolderId = useStore((s) => s.selectedFolderId);
   const selectedNodeId = useStore((s) => s.selectedNodeId);
+  const workspaces = useStore((s) => s.workspaces);
+  const selectedWorkspaceId = useStore((s) => s.selectedWorkspaceId);
   const addNode = useStore((s) => s.addNode);
-  const createFolder = useStore((s) => s.createFolder);
-  const selectFolder = useStore((s) => s.selectFolder);
+  const createWorkspace = useStore((s) => s.createWorkspace);
+  const selectWorkspace = useStore((s) => s.selectWorkspace);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
-  const focusNode = useStore((s) => s.focusNode);
+  const openPanel = useStore((s) => s.openPanel);
 
   const items = useMemo<PaletteItem[]>(() => {
+    const wsId = selectedWorkspaceId;
+    const randomPos = () => ({
+      x: 120 + Math.random() * 120,
+      y: 120 + Math.random() * 120,
+    });
     const addItems: PaletteItem[] = [
-      { id: "add-link", section: "Add", label: "Add link", icon: Link2, hint: "L", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("link"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
-      { id: "add-image", section: "Add", label: "Add image", icon: ImageIcon, hint: "I", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("image"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
-      { id: "add-note", section: "Add", label: "Add note", icon: StickyNote, hint: "N", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("note"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
-      { id: "add-blog", section: "Add", label: "Add blog", icon: BookOpen, hint: "B", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("blog"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
-      { id: "add-document", section: "Add", label: "Add document", icon: FileText, hint: "D", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("document"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
-      { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => selectedFolderId && addNode(selectedFolderId, defaultDataFor("pdf"), { x: 120 + Math.random() * 120, y: 120 + Math.random() * 120 }), disabled: !selectedFolderId },
+      { id: "add-link", section: "Add", label: "Add link", icon: Link2, hint: "L", onSelect: () => wsId && addNode(wsId, defaultDataFor("link"), randomPos()), disabled: !wsId },
+      { id: "add-image", section: "Add", label: "Add image", icon: ImageIcon, hint: "I", onSelect: () => wsId && addNode(wsId, defaultDataFor("image"), randomPos()), disabled: !wsId },
+      { id: "add-note", section: "Add", label: "Add note", icon: StickyNote, hint: "N", onSelect: () => wsId && addNode(wsId, defaultDataFor("note"), randomPos()), disabled: !wsId },
+      { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => wsId && addNode(wsId, defaultDataFor("page"), randomPos()), disabled: !wsId },
+      { id: "add-document", section: "Add", label: "Add document", icon: FileText, hint: "D", onSelect: () => wsId && addNode(wsId, defaultDataFor("document"), randomPos()), disabled: !wsId },
+      { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => wsId && addNode(wsId, defaultDataFor("pdf"), randomPos()), disabled: !wsId },
     ];
 
-    const folderActions: PaletteItem[] = [
+    const workspaceActions: PaletteItem[] = [
       {
-        id: "folder-new",
-        section: "Folders",
-        label: "New root folder",
-        icon: FolderPlus,
+        id: "workspace-new",
+        section: "Workspaces",
+        label: "New workspace",
+        icon: Plus,
         onSelect: () => {
-          const name = window.prompt("Folder name");
+          const name = window.prompt("Workspace name");
           if (!name?.trim()) return;
-          createFolder(name.trim(), null);
+          createWorkspace(name.trim());
         },
       },
+      ...workspaces
+        .filter((w) => w.id !== selectedWorkspaceId)
+        .map((w) => ({
+          id: `workspace-switch-${w.id}`,
+          section: "Workspaces" as const,
+          label: `Switch to ${w.name}`,
+          icon: Layers,
+          onSelect: () => selectWorkspace(w.id),
+          keywords: [w.name],
+        })),
     ];
-
-    const navigateItems: PaletteItem[] = folders
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((folder) => ({
-        id: `nav-${folder.id}`,
-        section: "Navigate",
-        label: `Go to ${folder.name}`,
-        hint: folder.parentId ? "child" : "root",
-        onSelect: () => selectFolder(folder.id),
-        keywords: [folder.name],
-      }));
 
     const viewItems: PaletteItem[] = [
       {
@@ -124,25 +129,26 @@ export function CommandPalette({
         onSelect: () => toggleSidebar(),
       },
       {
-        id: "view-focus-node",
+        id: "view-open-node",
         section: "View",
-        label: "Focus selected node",
+        label: "Open selected node in a panel",
         icon: Target,
-        onSelect: () => selectedNodeId && focusNode(selectedNodeId),
+        keywords: ["focus", "panel", "split"],
+        onSelect: () => selectedNodeId && openPanel(selectedNodeId),
         disabled: !selectedNodeId,
       },
     ];
 
-    return [...addItems, ...folderActions, ...navigateItems, ...viewItems];
+    return [...addItems, ...workspaceActions, ...viewItems];
   }, [
     addNode,
-    createFolder,
-    focusNode,
-    folders,
-    selectFolder,
-    selectedFolderId,
+    createWorkspace,
+    openPanel,
+    selectWorkspace,
     selectedNodeId,
+    selectedWorkspaceId,
     toggleSidebar,
+    workspaces,
   ]);
 
   const filtered = useMemo(() => {

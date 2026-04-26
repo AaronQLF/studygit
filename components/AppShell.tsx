@@ -6,7 +6,7 @@ import { Command, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
-import { FocusMode } from "./FocusMode";
+import { PanelManager } from "./PanelManager";
 import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
 
@@ -24,14 +24,12 @@ export function AppShell() {
   const hydrated = useStore((s) => s.hydrated);
   const isDirty = useStore((s) => s.isDirty);
   const justSaved = useStore((s) => s.justSaved);
-  const folders = useStore((s) => s.folders);
-  const selectedFolderId = useStore((s) => s.selectedFolderId);
+  const workspaces = useStore((s) => s.workspaces);
+  const selectedWorkspaceId = useStore((s) => s.selectedWorkspaceId);
   const selectedNodeId = useStore((s) => s.selectedNodeId);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
-  const focusedNodeId = useStore((s) => s.focusedNodeId);
-  const clearFocus = useStore((s) => s.clearFocus);
-  const focusNode = useStore((s) => s.focusNode);
+  const openPanel = useStore((s) => s.openPanel);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -58,45 +56,19 @@ export function AppShell() {
       } else if (event.key === "Escape") {
         if (paletteOpen) {
           setPaletteOpen(false);
-        } else if (focusedNodeId) {
-          clearFocus();
         }
-      } else if (
-        event.key === "Enter" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        selectedNodeId &&
-        !focusedNodeId
-      ) {
-        focusNode(selectedNodeId);
+      } else if (event.key === "Enter" && selectedNodeId) {
+        openPanel(selectedNodeId);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    clearFocus,
-    focusNode,
-    focusedNodeId,
-    paletteOpen,
-    selectedNodeId,
-    toggleSidebar,
-  ]);
+  }, [openPanel, paletteOpen, selectedNodeId, toggleSidebar]);
 
-  const currentFolder = folders.find((f) => f.id === selectedFolderId);
-
-  const breadcrumb = useMemo(() => {
-    if (!currentFolder) return [];
-    const names: string[] = [];
-    let cur = currentFolder;
-    names.unshift(cur.name);
-    while (cur.parentId) {
-      const parent = folders.find((f) => f.id === cur.parentId);
-      if (!parent) break;
-      names.unshift(parent.name);
-      cur = parent;
-    }
-    return names;
-  }, [currentFolder, folders]);
+  const currentWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === selectedWorkspaceId),
+    [workspaces, selectedWorkspaceId]
+  );
 
   if (!hydrated) {
     return (
@@ -131,25 +103,14 @@ export function AppShell() {
             <span className="font-medium text-zinc-100 tracking-tight">
               personalGIt
             </span>
-            {breadcrumb.length > 0 && (
+            {currentWorkspace ? (
               <div className="flex min-w-0 items-center gap-1 text-[11px] font-mono text-zinc-500">
                 <span>›</span>
-                {breadcrumb.map((name, idx) => (
-                  <span key={name + idx} className="truncate">
-                    {idx > 0 && <span className="px-1 text-zinc-700">/</span>}
-                    <span
-                      className={
-                        idx === breadcrumb.length - 1
-                          ? "text-zinc-300"
-                          : "text-zinc-500"
-                      }
-                    >
-                      {name}
-                    </span>
-                  </span>
-                ))}
+                <span className="truncate text-zinc-300">
+                  {currentWorkspace.name}
+                </span>
               </div>
-            )}
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -175,7 +136,7 @@ export function AppShell() {
         </main>
       </div>
 
-      <FocusMode />
+      <PanelManager />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ToastViewport />
     </div>

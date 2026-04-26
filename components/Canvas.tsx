@@ -20,24 +20,40 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import clsx from "clsx";
 import {
-  BookOpen,
+  Crosshair,
+  ExternalLink,
   FileSearch,
   FileText,
+  Highlighter,
   Image as ImageIcon,
   Link2,
+  MessageSquare,
+  NotebookPen,
   Plus,
+  Sparkles,
   StickyNote,
+  X,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS } from "@/lib/defaults";
-import type { AnyNodeData, NodeKind } from "@/lib/types";
+import type {
+  AnyNodeData,
+  DocumentNodeData,
+  ImageNodeData,
+  LinkNodeData,
+  NoteNodeData,
+  NodeKind,
+  PageNodeData,
+  PdfNodeData,
+} from "@/lib/types";
 import { useToastStore } from "./Toast";
 import { AddDock } from "./AddDock";
 import { LinkNode } from "./nodes/LinkNode";
 import { ImageNode } from "./nodes/ImageNode";
 import { NoteNode } from "./nodes/NoteNode";
-import { BlogNode } from "./nodes/BlogNode";
+import { PageNode } from "./nodes/PageNode";
 import { DocumentNode } from "./nodes/DocumentNode";
 import { PdfNode } from "./nodes/PdfNode";
 
@@ -45,7 +61,8 @@ const nodeTypes = {
   link: LinkNode,
   image: ImageNode,
   note: NoteNode,
-  blog: BlogNode,
+  page: PageNode,
+  blog: PageNode,
   document: DocumentNode,
   pdf: PdfNode,
 };
@@ -54,7 +71,8 @@ const KIND_LABELS: Record<NodeKind, string> = {
   link: "Link",
   image: "Image",
   note: "Note",
-  blog: "Blog",
+  page: "Page",
+  blog: "Page",
   document: "Document",
   pdf: "PDF",
 };
@@ -63,7 +81,8 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   link: Link2,
   image: ImageIcon,
   note: StickyNote,
-  blog: BookOpen,
+  page: NotebookPen,
+  blog: NotebookPen,
   document: FileText,
   pdf: FileSearch,
 };
@@ -76,11 +95,17 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
       return { kind, url: "" };
     case "note":
       return { kind, text: "", color: NOTE_COLORS[0] };
-    case "blog":
+    case "page":
       return {
         kind,
-        title: "New blog post",
-        markdown: "# New blog post\n\nStart writing here...",
+        title: "New page",
+        content: "",
+      };
+    case "blog":
+      return {
+        kind: "page",
+        title: "New page",
+        content: "",
       };
     case "document":
       return {
@@ -133,11 +158,167 @@ function AddMenu({ onAdd }: { onAdd: (kind: NodeKind) => void }) {
   );
 }
 
+function NodePreview() {
+  const selectedNodeId = useStore((s) => s.selectedNodeId);
+  const focusedNodeId = useStore((s) => s.focusedNodeId);
+  const openPanel = useStore((s) => s.openPanel);
+  const nodes = useStore((s) => s.nodes);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+
+  const node = useMemo(
+    () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null),
+    [selectedNodeId, nodes]
+  );
+
+  useEffect(() => {
+    setDismissed(null);
+  }, [selectedNodeId]);
+
+  if (!node || focusedNodeId || dismissed === selectedNodeId) return null;
+
+  const data = node.data;
+  const Icon = KIND_ICONS[data.kind];
+
+  const renderPreviewContent = () => {
+    switch (data.kind) {
+      case "note": {
+        const d = data as NoteNodeData;
+        return (
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 h-8 w-8 shrink-0 rounded-md"
+              style={{ backgroundColor: d.color }}
+            />
+            <p className="text-[13px] text-zinc-300 line-clamp-3 leading-relaxed">
+              {d.text || <span className="italic text-zinc-500">Empty note</span>}
+            </p>
+          </div>
+        );
+      }
+      case "link": {
+        const d = data as LinkNodeData;
+        let hostname = "";
+        try {
+          const url = d.url.trim();
+          hostname = url ? new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, "") : "";
+        } catch { hostname = d.url; }
+        return (
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-zinc-100">{d.title || "Untitled link"}</div>
+            {d.description && <p className="text-[12px] text-zinc-400 line-clamp-2">{d.description}</p>}
+            <div className="flex items-center gap-1 text-[11px] font-mono text-zinc-500">
+              <ExternalLink size={10} /> {hostname}
+            </div>
+          </div>
+        );
+      }
+      case "image": {
+        const d = data as ImageNodeData;
+        return d.url ? (
+          <div className="flex items-start gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={d.url}
+              alt={d.caption ?? ""}
+              className="h-16 w-20 shrink-0 rounded-md object-cover bg-[var(--pg-bg-elevated)] border border-[var(--pg-border)]"
+            />
+            <div className="min-w-0">
+              <p className="text-sm text-zinc-200 truncate">{d.caption || "Image"}</p>
+              <p className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">{d.url}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[12px] text-zinc-500 italic">No image URL set</p>
+        );
+      }
+      case "page":
+      case "blog": {
+        const d = data as PageNodeData;
+        const html = d.content || "<em>Empty</em>";
+        return (
+          <div className="space-y-1.5">
+            <div className="text-sm font-semibold text-zinc-100">{d.title || "Untitled"}</div>
+            <div
+              className="pg-prose pg-prose-preview text-[12px] text-zinc-400 line-clamp-3"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          </div>
+        );
+      }
+      case "document": {
+        const d = data as DocumentNodeData;
+        return (
+          <div className="space-y-1.5">
+            <div className="text-sm font-semibold text-zinc-100">{d.title || "Untitled"}</div>
+            <p className="text-[12px] text-zinc-400 line-clamp-3 leading-relaxed">
+              {d.content.slice(0, 200) || <span className="italic text-zinc-500">Empty document</span>}
+            </p>
+            <div className="flex items-center gap-3 text-[10px] font-mono text-zinc-500">
+              <span className="inline-flex items-center gap-1"><Highlighter size={10} /> {d.highlights.length}</span>
+              <span className="inline-flex items-center gap-1"><MessageSquare size={10} /> {d.highlights.reduce((s, h) => s + h.comments.length, 0)}</span>
+            </div>
+          </div>
+        );
+      }
+      case "pdf": {
+        const d = data as PdfNodeData;
+        return (
+          <div className="space-y-1.5">
+            <div className="text-sm font-semibold text-zinc-100">{d.title || d.fileName || "Untitled PDF"}</div>
+            {d.fileName && <p className="text-[11px] font-mono text-zinc-500 truncate">{d.fileName}</p>}
+            <div className="flex items-center gap-3 text-[10px] font-mono text-zinc-500">
+              {typeof d.pageCount === "number" && <span className="inline-flex items-center gap-1"><FileText size={10} /> {d.pageCount}p</span>}
+              <span className="inline-flex items-center gap-1"><Highlighter size={10} /> {d.highlights.length}</span>
+              <span className="inline-flex items-center gap-1"><Sparkles size={10} /> {d.highlights.reduce((s, h) => s + h.aiThread.length, 0)}</span>
+            </div>
+          </div>
+        );
+      }
+    }
+  };
+
+  return (
+    <div
+      className={clsx(
+        "absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[320px] rounded-xl border border-[var(--pg-border)] bg-[color-mix(in_srgb,var(--pg-bg-subtle)_92%,transparent)] backdrop-blur-lg shadow-[0_16px_48px_rgba(0,0,0,0.35)] overflow-hidden",
+        "animate-in fade-in slide-in-from-bottom-2 duration-150"
+      )}
+    >
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--pg-border)]">
+        <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
+          <Icon size={11} />
+          {KIND_LABELS[data.kind]} preview
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-mono text-zinc-400 hover:text-zinc-100 hover:bg-[var(--pg-bg-elevated)]"
+            onClick={() => openPanel(node.id)}
+          >
+            <Crosshair size={10} /> open
+          </button>
+          <button
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-[var(--pg-bg-elevated)]"
+            onClick={() => setDismissed(selectedNodeId)}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      </div>
+      <div className="px-3 py-3 max-h-[200px] overflow-y-auto">
+        {renderPreviewContent()}
+      </div>
+      <div className="px-3 py-1.5 border-t border-[var(--pg-border)] text-[10px] font-mono text-zinc-600 flex items-center justify-between">
+        <span>double-click or enter to open</span>
+        <span>esc to dismiss</span>
+      </div>
+    </div>
+  );
+}
+
 function CanvasInner() {
-  const selectedFolderId = useStore((s) => s.selectedFolderId);
+  const selectedWorkspaceId = useStore((s) => s.selectedWorkspaceId);
   const storeNodes = useStore((s) => s.nodes);
   const storeEdges = useStore((s) => s.edges);
-  const focusedNodeId = useStore((s) => s.focusedNodeId);
   const addNodeStore = useStore((s) => s.addNode);
   const updateNode = useStore((s) => s.updateNode);
   const deleteNodeWithSnapshot = useStore((s) => s.deleteNodeWithSnapshot);
@@ -159,41 +340,38 @@ function CanvasInner() {
     flowPos: { x: number; y: number };
   } | null>(null);
 
-  const centerOnceByFolder = useRef<Record<string, boolean>>({});
+  const centerOnceByWorkspace = useRef<Record<string, boolean>>({});
   const lastSignatureRef = useRef<string>("");
   useEffect(() => {
-    if (!selectedFolderId) {
+    if (!selectedWorkspaceId) {
       setNodes([]);
       setEdges([]);
-      lastSignatureRef.current = `${selectedFolderId}`;
+      lastSignatureRef.current = `${selectedWorkspaceId}`;
       return;
     }
-    const folderNodes = storeNodes.filter(
-      (n) => n.folderId === selectedFolderId
+    const wsNodes = storeNodes.filter(
+      (n) => n.workspaceId === selectedWorkspaceId
     );
-    const folderEdges = storeEdges.filter(
-      (e) => e.folderId === selectedFolderId
+    const wsEdges = storeEdges.filter(
+      (e) => e.workspaceId === selectedWorkspaceId
     );
     const signature =
-      selectedFolderId +
+      selectedWorkspaceId +
       "|" +
-      folderNodes
+      wsNodes
         .map((n) => n.id)
         .sort()
         .join(",") +
       "|" +
-      folderEdges
+      wsEdges
         .map((e) => e.id)
         .sort()
         .join(",");
 
     if (signature === lastSignatureRef.current) {
-      // IDs haven't changed — just merge the latest `data` into existing
-      // xyflow nodes so node components re-render with fresh props without
-      // losing measurement state.
       setNodes((prev) =>
         prev.map((n) => {
-          const src = folderNodes.find((x) => x.id === n.id);
+          const src = wsNodes.find((x) => x.id === n.id);
           if (!src) return n;
           return {
             ...n,
@@ -206,7 +384,7 @@ function CanvasInner() {
     lastSignatureRef.current = signature;
 
     setNodes(
-      folderNodes.map<Node>((n) => ({
+      wsNodes.map<Node>((n) => ({
         id: n.id,
         type: n.data.kind,
         position: n.position,
@@ -216,7 +394,7 @@ function CanvasInner() {
       }))
     );
     setEdges(
-      folderEdges.map<Edge>((e) => ({
+      wsEdges.map<Edge>((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
@@ -224,17 +402,17 @@ function CanvasInner() {
       }))
     );
 
-    if (!centerOnceByFolder.current[selectedFolderId] && folderNodes.length > 0) {
-      centerOnceByFolder.current[selectedFolderId] = true;
+    if (!centerOnceByWorkspace.current[selectedWorkspaceId] && wsNodes.length > 0) {
+      centerOnceByWorkspace.current[selectedWorkspaceId] = true;
       const centerX =
-        folderNodes.reduce((sum, node) => sum + node.position.x, 0) / folderNodes.length;
+        wsNodes.reduce((sum, node) => sum + node.position.x, 0) / wsNodes.length;
       const centerY =
-        folderNodes.reduce((sum, node) => sum + node.position.y, 0) / folderNodes.length;
+        wsNodes.reduce((sum, node) => sum + node.position.y, 0) / wsNodes.length;
       requestAnimationFrame(() => {
         setCenter(centerX, centerY, { duration: 260, zoom: 1 });
       });
     }
-  }, [selectedFolderId, storeNodes, storeEdges, setNodes, setEdges]);
+  }, [selectedWorkspaceId, storeNodes, storeEdges, setNodes, setEdges, setCenter]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -276,15 +454,15 @@ function CanvasInner() {
 
   const onConnect = useCallback(
     (conn: Connection) => {
-      if (!selectedFolderId || !conn.source || !conn.target) return;
-      addEdgeStore(selectedFolderId, conn.source, conn.target);
+      if (!selectedWorkspaceId || !conn.source || !conn.target) return;
+      addEdgeStore(selectedWorkspaceId, conn.source, conn.target);
     },
-    [selectedFolderId, addEdgeStore]
+    [selectedWorkspaceId, addEdgeStore]
   );
 
   const addNode = useCallback(
     (kind: NodeKind, position?: { x: number; y: number }) => {
-      if (!selectedFolderId) return;
+      if (!selectedWorkspaceId) return;
       const rect = wrapperRef.current?.getBoundingClientRect();
       const centerPos =
         rect &&
@@ -297,15 +475,15 @@ function CanvasInner() {
           x: centerPos?.x ?? 120 + Math.random() * 120,
           y: centerPos?.y ?? 120 + Math.random() * 120,
         };
-      addNodeStore(selectedFolderId, defaultDataFor(kind), pos);
+      addNodeStore(selectedWorkspaceId, defaultDataFor(kind), pos);
     },
-    [selectedFolderId, addNodeStore, screenToFlowPosition]
+    [selectedWorkspaceId, addNodeStore, screenToFlowPosition]
   );
 
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault();
-      if (!wrapperRef.current || !selectedFolderId) return;
+      if (!wrapperRef.current || !selectedWorkspaceId) return;
       const mouseEvent = event as MouseEvent;
       const flowPos = screenToFlowPosition({
         x: mouseEvent.clientX,
@@ -317,7 +495,7 @@ function CanvasInner() {
         flowPos,
       });
     },
-    [screenToFlowPosition, selectedFolderId]
+    [screenToFlowPosition, selectedWorkspaceId]
   );
 
   useEffect(() => {
@@ -328,7 +506,7 @@ function CanvasInner() {
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping || focusedNodeId) {
+      if (event.metaKey || event.ctrlKey || event.altKey || isTyping) {
         return;
       }
       const key = event.key.toLowerCase();
@@ -336,7 +514,7 @@ function CanvasInner() {
         l: "link",
         i: "image",
         n: "note",
-        b: "blog",
+        b: "page",
         d: "document",
         p: "pdf",
       };
@@ -347,7 +525,7 @@ function CanvasInner() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [addNode, focusedNodeId]);
+  }, [addNode]);
 
   const onSelectionChange = useCallback(
     ({ nodes: selected }: { nodes: Node[]; edges: Edge[] }) => {
@@ -358,10 +536,10 @@ function CanvasInner() {
 
   const nodeColor = useMemo(() => "#52525b", []);
 
-  if (!selectedFolderId) {
+  if (!selectedWorkspaceId) {
     return (
       <div className="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400 text-sm">
-        Select or create a folder to start building your canvas.
+        Select or create a workspace to start building your canvas.
       </div>
     );
   }
@@ -439,6 +617,8 @@ function CanvasInner() {
           })}
         </div>
       )}
+
+      <NodePreview />
     </div>
   );
 }

@@ -1,7 +1,6 @@
-export type Folder = {
+export type Workspace = {
   id: string;
   name: string;
-  parentId: string | null;
   createdAt: number;
 };
 
@@ -11,7 +10,8 @@ export type NodeKind =
   | "note"
   | "blog"
   | "document"
-  | "pdf";
+  | "pdf"
+  | "page";
 
 export type Highlight = {
   id: string;
@@ -93,6 +93,13 @@ export type PdfNodeData = {
   fileName?: string;
   pageCount?: number;
   highlights: PdfHighlight[];
+  notes?: string;
+};
+
+export type PageNodeData = {
+  kind: "page";
+  title: string;
+  content: string;
 };
 
 export type AnyNodeData =
@@ -101,11 +108,12 @@ export type AnyNodeData =
   | NoteNodeData
   | BlogNodeData
   | DocumentNodeData
-  | PdfNodeData;
+  | PdfNodeData
+  | PageNodeData;
 
 export type CanvasNode = {
   id: string;
-  folderId: string;
+  workspaceId: string;
   position: { x: number; y: number };
   width?: number;
   height?: number;
@@ -114,15 +122,26 @@ export type CanvasNode = {
 
 export type CanvasEdge = {
   id: string;
-  folderId: string;
+  workspaceId: string;
   source: string;
   target: string;
 };
 
+export type FloatingPanel = {
+  id: string;
+  nodeId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  z: number;
+  maximized?: boolean;
+};
+
 export type AppState = {
-  folders: Folder[];
+  workspaces: Workspace[];
   nodes: CanvasNode[];
   edges: CanvasEdge[];
-  selectedFolderId: string | null;
+  selectedWorkspaceId: string | null;
   version: number;
 };

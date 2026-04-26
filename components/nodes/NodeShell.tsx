@@ -19,7 +19,7 @@ export function NodeShell({
   menuContent?: React.ReactNode;
 }) {
   const duplicateNode = useStore((s) => s.duplicateNode);
-  const focusNode = useStore((s) => s.focusNode);
+  const openPanel = useStore((s) => s.openPanel);
   const deleteNodeWithSnapshot = useStore((s) => s.deleteNodeWithSnapshot);
   const restoreDeletedNode = useStore((s) => s.restoreDeletedNode);
   const pushUndo = useToastStore((s) => s.pushUndo);
@@ -55,7 +55,7 @@ export function NodeShell({
     ) {
       return;
     }
-    focusNode(id);
+    openPanel(id);
   };
 
   return (
@@ -88,11 +88,11 @@ export function NodeShell({
               className="w-full rounded px-2 py-1.5 text-left text-[11px] font-mono text-zinc-300 hover:bg-zinc-800 flex items-center gap-1.5"
               onClick={(event) => {
                 event.stopPropagation();
-                focusNode(id);
+                openPanel(id);
                 setOpen(false);
               }}
             >
-              <Crosshair size={11} /> focus
+              <Crosshair size={11} /> open
             </button>
             <button
               className="w-full rounded px-2 py-1.5 text-left text-[11px] font-mono text-zinc-300 hover:bg-zinc-800 flex items-center gap-1.5"

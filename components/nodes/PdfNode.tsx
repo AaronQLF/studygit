@@ -4,12 +4,14 @@ import { useRef, useState } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { FileText, Highlighter, MessageSquare, Sparkles, Upload } from "lucide-react";
 import { NodeShell } from "./NodeShell";
+import { PdfThumbnail } from "./PdfThumbnail";
+import { EditableTitle } from "./EditableTitle";
 import { useStore } from "@/lib/store";
 import type { PdfNodeData } from "@/lib/types";
 
 export function PdfNode({ id, data }: NodeProps) {
   const d = data as unknown as PdfNodeData;
-  const focusNode = useStore((s) => s.focusNode);
+  const openPanel = useStore((s) => s.openPanel);
   const updateNodeData = useStore((s) => s.updateNodeData);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -56,19 +58,29 @@ export function PdfNode({ id, data }: NodeProps) {
         </div>
         <button
           className="nodrag rounded border border-[var(--pg-border-strong)] px-2 py-1 text-xs font-mono text-zinc-200 hover:bg-zinc-800"
-          onClick={() => focusNode(id)}
+          onClick={() => openPanel(id)}
         >
-          focus
+          open
         </button>
       </div>
-      <div className="p-4" onDoubleClick={() => focusNode(id)}>
-        <div className="mb-2 truncate text-base font-semibold leading-snug text-zinc-100">
-          {d.title || d.fileName || "Untitled PDF"}
-        </div>
+      <div className="p-4" onDoubleClick={() => openPanel(id)}>
+        <EditableTitle
+          value={d.title || d.fileName || ""}
+          onChange={(next) =>
+            updateNodeData(id, { title: next } as Partial<PdfNodeData>)
+          }
+          placeholder="Untitled PDF"
+          className="mb-2 text-base font-semibold leading-snug text-zinc-100"
+        />
         {d.src ? (
-          <div className="truncate text-[11px] font-mono text-zinc-500">
-            {d.fileName ?? d.src}
-          </div>
+          <>
+            <div className="nodrag mb-2 overflow-hidden rounded-md border border-[var(--pg-border)] bg-white">
+              <PdfThumbnail src={d.src} width={288} className="block w-full" />
+            </div>
+            <div className="truncate text-[11px] font-mono text-zinc-500">
+              {d.fileName ?? d.src}
+            </div>
+          </>
         ) : (
           <div className="nodrag">
             <div className="mb-2 text-[11px] text-zinc-400">
