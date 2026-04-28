@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
 import path from "path";
-import { nanoid } from "nanoid";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+import { getDriver } from "@/lib/persistence";
 
 export const runtime = "nodejs";
 
@@ -25,20 +22,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
-  const id = nanoid(12);
   const originalName = file.name || "upload.pdf";
-  const safeExt =
-    path.extname(originalName).toLowerCase().replace(/[^a-z0-9.]/g, "") ||
-    ".pdf";
-  const storedName = `${id}${safeExt}`;
-  const target = path.join(UPLOAD_DIR, storedName);
-  await fs.writeFile(target, buffer);
+  const extension = path.extname(originalName) || ".pdf";
+  const mimeType = file.type || "application/pdf";
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const uploaded = await getDriver().uploadFile(
+    buffer,
+    extension,
+    mimeType
+  );
+  const url = await getDriver().getFileUrl(uploaded.key);
 
   return NextResponse.json({
-    url: `/uploads/${storedName}`,
+    url,
+    key: uploaded.key,
     name: originalName,
     size: file.size,
   });
