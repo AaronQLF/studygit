@@ -24,14 +24,22 @@ export function PdfThumbnail({
   src,
   width = 280,
   className,
+  onRetry,
 }: {
   src: string;
   width?: number;
   className?: string;
+  onRetry?: () => void;
 }) {
   const [dataUrl, setDataUrl] = useState<string | null>(() => cache.get(src) ?? null);
   const [error, setError] = useState<string | null>(null);
   const cancelRef = useRef(false);
+  const placeholderClass = [
+    "flex min-h-32 w-full items-center justify-center rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)]",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   useEffect(() => {
     cancelRef.current = false;
@@ -86,26 +94,32 @@ export function PdfThumbnail({
 
   if (error) {
     return (
-      <div
-        className={
-          className ??
-          "flex h-32 items-center justify-center rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-elevated)] text-[10px] font-mono text-zinc-500"
-        }
-      >
-        preview unavailable
+      <div className={`${placeholderClass} flex-col gap-2 px-3 text-center`}>
+        <FileText size={18} className="text-[var(--pg-muted)]" />
+        <div className="pg-serif text-[11px] italic text-[var(--pg-muted)]">
+          Preview unavailable
+        </div>
+        {onRetry ? (
+          <button
+            type="button"
+            className="rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] px-2 py-1 text-[10px] text-[var(--pg-fg-soft)] hover:bg-[var(--pg-bg-elevated)]"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry();
+            }}
+          >
+            Retry preview
+          </button>
+        ) : null}
       </div>
     );
   }
 
   if (!dataUrl) {
     return (
-      <div
-        className={
-          className ??
-          "flex h-32 items-center justify-center rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-elevated)] text-zinc-500"
-        }
-      >
-        <FileText size={20} className="animate-pulse" />
+      <div className={`${placeholderClass} flex-col gap-2 px-3 text-center`}>
+        <FileText size={18} className="animate-pulse text-[var(--pg-muted)]" />
+        <span className="text-[10px] text-[var(--pg-muted)]">Rendering first page...</span>
       </div>
     );
   }

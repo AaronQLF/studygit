@@ -42,7 +42,7 @@ export function createBaseExtensions({
     Placeholder.configure({
       placeholder,
       emptyEditorClass:
-        "before:content-[attr(data-placeholder)] before:text-zinc-600 before:float-left before:h-0 before:pointer-events-none",
+        "before:content-[attr(data-placeholder)] before:text-[var(--pg-muted)] before:float-left before:h-0 before:pointer-events-none",
     }),
     Link.configure({
       openOnClick: false,

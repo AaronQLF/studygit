@@ -21,35 +21,38 @@ export function DocumentNode({ id, data }: NodeProps) {
   );
 
   return (
-    <NodeShell id={id} className="w-[360px]">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--pg-border)]">
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
-          <FileText size={11} /> doc
-        </div>
+    <NodeShell
+      id={id}
+      className="w-[360px]"
+      accentColor="#7a4a6b"
+      WatermarkIcon={FileText}
+      label="Document"
+    >
+      <div className="flex items-center justify-end px-3.5 pt-2.5 pb-1">
         <button
-          className="nodrag text-xs px-2 py-1 rounded border border-[var(--pg-border-strong)] text-zinc-200 hover:bg-zinc-800 font-mono"
+          className="nodrag text-[12px] px-2 py-1 rounded text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
           onClick={() => openPanel(id)}
         >
-          open
+          Open
         </button>
       </div>
-      <div className="p-4" onDoubleClick={() => openPanel(id)}>
+      <div className="px-4 pb-4 pt-1" onDoubleClick={() => openPanel(id)}>
         <EditableTitle
           value={d.title}
           onChange={(next) =>
             updateNodeData(id, { title: next } as Partial<DocumentNodeData>)
           }
           placeholder="Untitled document"
-          className="mb-1.5 text-base font-semibold leading-snug text-zinc-100"
+          className="mb-1.5 text-[14px] font-semibold leading-snug text-[var(--pg-fg)]"
         />
-        <div className="text-xs text-zinc-400 leading-relaxed line-clamp-4 whitespace-pre-wrap">
+        <div className="text-[12.5px] text-[var(--pg-fg-soft)] leading-relaxed line-clamp-4 whitespace-pre-wrap">
           {preview || (
-            <span className="italic text-zinc-500">
+            <span className="italic text-[var(--pg-muted)]">
               Empty document. Focus to add content.
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-3 text-[11px] text-zinc-500 font-mono">
+        <div className="flex items-center gap-3 mt-3 text-[11px] text-[var(--pg-muted)]">
           <div className="flex items-center gap-1">
             <Highlighter size={11} />
             {d.highlights.length} highlight{d.highlights.length !== 1 && "s"}

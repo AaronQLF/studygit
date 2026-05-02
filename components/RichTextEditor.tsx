@@ -45,10 +45,10 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors",
+        "inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] transition-colors",
         active
-          ? "bg-[var(--pg-bg-elevated)] text-zinc-100"
-          : "hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-100",
+          ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+          : "hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]",
         disabled && "opacity-40 cursor-not-allowed"
       )}
     >
@@ -208,7 +208,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: clsx(
-          "pg-prose focus:outline-none min-h-full px-5 py-4 text-[14px] leading-relaxed text-zinc-200",
+          "pg-prose focus:outline-none min-h-full px-5 py-4 text-[14px] leading-relaxed text-[var(--pg-fg)]",
           className
         ),
       },
@@ -230,8 +230,8 @@ export function RichTextEditor({
 
   if (!editor) {
     return (
-      <div className="flex h-full items-center justify-center text-xs font-mono text-zinc-600">
-        loading editor…
+      <div className="flex h-full items-center justify-center text-xs text-[var(--pg-muted)]">
+        Loading editor…
       </div>
     );
   }

@@ -113,7 +113,7 @@ export function CommandPalette({
       {
         id: "view-theme",
         section: "View",
-        label: "Cycle theme",
+        label: "Apply light theme",
         icon: MoonStar,
         onSelect: () => {
           const current = readThemePreference();
@@ -206,26 +206,29 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[65] bg-black/55 backdrop-blur-sm"
+      className="fixed inset-0 z-[65] bg-[rgba(15,15,20,0.32)] backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-16 w-[min(680px,94vw)] rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-bg-subtle)] shadow-[var(--pg-shadow)]"
+        className="mx-auto mt-[12vh] w-[min(640px,92vw)] rounded-xl border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[var(--pg-border)] px-3 py-2">
-          <Search size={14} className="text-zinc-500" />
+        <div className="flex items-center gap-2 border-b border-[var(--pg-border)] px-3 py-2.5">
+          <Search size={14} className="text-[var(--pg-muted)]" />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search commands..."
-            className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-500"
+            placeholder="what would you like to do?"
+            className="pg-command-search w-full bg-transparent text-[13.5px] text-[var(--pg-fg)] outline-none placeholder:italic placeholder:text-[var(--pg-muted)]"
           />
+          <span className="text-[10.5px] text-[var(--pg-muted)] border border-[var(--pg-border)] rounded px-1.5 py-0.5">
+            ESC
+          </span>
         </div>
-        <div className="max-h-[62vh] overflow-y-auto p-2">
+        <div className="max-h-[60vh] overflow-y-auto p-1.5">
           {filtered.length === 0 ? (
-            <div className="px-2 py-4 text-[11px] font-mono text-zinc-500">no results</div>
+            <div className="px-2 py-6 text-center text-[12px] text-[var(--pg-muted)]">No results</div>
           ) : (
             filtered.map((item, index) => {
               const showSection = lastSection !== item.section;
@@ -234,15 +237,15 @@ export function CommandPalette({
               return (
                 <div key={item.id}>
                   {showSection ? (
-                    <div className="px-2 pt-2 pb-1 text-[10px] font-mono text-zinc-500">
-                      {item.section.toLowerCase()}
+                    <div className="pg-serif px-2 pt-2 pb-1 text-[11px] italic uppercase tracking-[0.08em] text-[var(--pg-muted)]">
+                      {item.section}
                     </div>
                   ) : null}
                   <button
                     className={clsx(
-                      "w-full rounded-md px-2 py-2 text-left flex items-center justify-between",
+                      "w-full rounded-md px-2 py-1.5 text-left flex items-center justify-between",
                       index === activeIndex
-                        ? "bg-[var(--pg-bg-elevated)]"
+                        ? "bg-[color-mix(in_srgb,var(--pg-marker)_58%,transparent)]"
                         : "hover:bg-[var(--pg-bg-elevated)]",
                       item.disabled && "opacity-45"
                     )}
@@ -254,12 +257,17 @@ export function CommandPalette({
                       onClose();
                     }}
                   >
-                    <span className="inline-flex items-center gap-2 text-sm text-zinc-200">
-                      {Icon ? <Icon size={13} className="text-zinc-500" /> : null}
+                    <span className="inline-flex items-center gap-2.5 text-[13px] text-[var(--pg-fg)]">
+                      {Icon ? (
+                        <Icon
+                          size={14}
+                          className={index === activeIndex ? "text-[var(--pg-accent)]" : "text-[var(--pg-muted)]"}
+                        />
+                      ) : null}
                       {item.label}
                     </span>
                     {item.hint ? (
-                      <span className="text-[10px] font-mono text-zinc-500 border border-[var(--pg-border)] rounded px-1">
+                      <span className="text-[10.5px] text-[var(--pg-muted)] border border-[var(--pg-border)] rounded px-1.5 py-0.5">
                         {item.hint}
                       </span>
                     ) : null}

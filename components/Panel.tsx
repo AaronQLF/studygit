@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import type { CanvasNode, FloatingPanel } from "@/lib/types";
 
@@ -177,11 +177,15 @@ export function Panel({
   );
 
   const kindLabel = node?.data.kind ?? "unknown";
+  const formattedKind =
+    kindLabel === "pdf"
+      ? "PDF"
+      : kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
 
   return (
     <div
       className={clsx(
-        "fixed flex flex-col overflow-hidden rounded-xl border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[0_24px_80px_rgba(0,0,0,0.55)]",
+        "fixed flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)]",
         drag.type !== "idle" && "select-none"
       )}
       style={{
@@ -200,27 +204,32 @@ export function Panel({
           togglePanelMaximize(panel.id);
         }}
         className={clsx(
-          "h-11 shrink-0 border-b border-[var(--pg-border)] px-3 flex items-center justify-between",
+          "h-10 shrink-0 border-b border-[var(--pg-border)] px-2.5 flex items-center justify-between",
           panel.maximized ? "cursor-default" : "cursor-grab active:cursor-grabbing"
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-            {kindLabel}
+          <span className="pg-serif text-[12px] italic text-[var(--pg-muted)]">
+            {formattedKind}
           </span>
           {title ? (
-            <span className="truncate text-[12px] text-zinc-200">{title}</span>
+            <>
+              <span className="text-[var(--pg-muted-soft)]">·</span>
+              <span className="pg-serif truncate text-[13px] italic text-[var(--pg-fg)]">
+                {title}
+              </span>
+            </>
           ) : null}
           {workspaceName ? (
-            <span className="truncate text-[11px] font-mono text-zinc-600">
+            <span className="truncate text-[11px] text-[var(--pg-muted)]">
               · {workspaceName}
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {totalPanels > 1 ? (
             <span
-              className="hidden text-[10px] font-mono text-zinc-600 sm:inline"
+              className="hidden text-[11px] text-[var(--pg-muted)] mr-1 sm:inline"
               title={`${totalPanels} panels open`}
             >
               {totalPanels} open
@@ -230,7 +239,7 @@ export function Panel({
             data-panel-control
             type="button"
             onClick={() => togglePanelMaximize(panel.id)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-100"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             title={panel.maximized ? "Restore" : "Maximize"}
           >
             {panel.maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -239,10 +248,10 @@ export function Panel({
             data-panel-control
             type="button"
             onClick={() => closePanel(panel.id)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-red-500/15 hover:text-red-300"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-red-500/10 hover:text-red-500"
             title="Close panel"
           >
-            <X size={14} />
+            <span className="pg-serif text-[17px] leading-none">×</span>
           </button>
         </div>
       </header>
@@ -259,13 +268,14 @@ export function Panel({
           aria-label="Resize panel"
           data-panel-control
         >
-          <svg
-            className="h-full w-full text-zinc-600"
-            viewBox="0 0 16 16"
+          <span
+            className="absolute bottom-0.5 right-0.5 block h-3 w-3 text-[var(--pg-muted-soft)]"
             aria-hidden
-          >
-            <path d="M16 16H10L16 10ZM16 16H6L16 6Z" fill="currentColor" />
-          </svg>
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 3px)",
+            }}
+          />
         </div>
       ) : null}
     </div>

@@ -49,13 +49,13 @@ export function ToastViewport() {
       {items.map((item) => (
         <div
           key={item.id}
-          className="pointer-events-auto inline-flex min-w-[280px] items-center justify-between gap-3 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] px-3 py-2 shadow-[var(--pg-shadow)]"
+          className="pointer-events-auto inline-flex min-w-[280px] items-center justify-between gap-3 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 py-1.5 shadow-[var(--pg-shadow-lg)]"
         >
-          <div className="text-[12px] text-zinc-200">{item.message}</div>
-          <div className="flex items-center gap-2">
+          <div className="pg-serif text-[12px] italic text-[var(--pg-fg)]">{item.message}</div>
+          <div className="flex items-center gap-1">
             {item.actionLabel && item.onAction && (
               <button
-                className="rounded px-1.5 py-0.5 text-[11px] font-mono text-[var(--pg-accent)] hover:bg-zinc-800"
+                className="rounded px-2 py-0.5 text-[12px] font-medium text-[var(--pg-accent)] hover:bg-[var(--pg-accent-soft)]"
                 onClick={() => {
                   item.onAction?.();
                   dismiss(item.id);
@@ -65,7 +65,7 @@ export function ToastViewport() {
               </button>
             )}
             <button
-              className="rounded p-0.5 text-zinc-500 hover:text-zinc-200"
+              className="rounded p-1 text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
               onClick={() => dismiss(item.id)}
             >
               <X size={12} />

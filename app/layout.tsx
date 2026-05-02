@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   description: "Your personal learning canvas",
 };
 
-const themeInitScript = `(function(){try{var k='personalgit-theme';var t=localStorage.getItem(k)||'dark';if(!localStorage.getItem(k)){localStorage.setItem(k,t);}var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var r=t==='system'?(d?'dark':'light'):t;var root=document.documentElement;root.classList.toggle('dark',r==='dark');root.classList.toggle('light',r==='light');}catch(e){}})();`;
+const themeInitScript = `(function(){try{var k='personalgit-theme';localStorage.setItem(k,'light');var root=document.documentElement;root.classList.remove('dark');root.classList.add('light');}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -22,11 +22,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} light h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="h-full flex flex-col bg-[var(--bg)] text-[var(--fg)]">
+      <body className="h-full flex flex-col bg-[var(--pg-bg)] text-[var(--pg-fg)]">
         {children}
       </body>
     </html>

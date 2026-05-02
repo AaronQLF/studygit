@@ -413,27 +413,27 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     return (
       <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 text-[11px] font-mono text-zinc-500">
+        <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 text-[11px] text-[var(--pg-muted)]">
           <div className="flex items-center gap-3">
             <span>
-              {pages.length ? `${pages.length} pages` : loading ? "loading…" : "—"}
+              {pages.length ? `${pages.length} pages` : loading ? "Loading…" : "—"}
             </span>
             {error ? (
-              <span className="text-red-400">error: {error}</span>
+              <span className="text-red-400">Error: {error}</span>
             ) : null}
           </div>
           <div className="flex items-center gap-1">
             <button
-              className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
+              className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => {
                 setUserScale(null);
               }}
               title="Fit to width"
             >
-              fit
+              Fit
             </button>
             <button
-              className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
+              className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => {
                 const next = Math.max(0.5, +(scale - 0.1).toFixed(2));
                 setScale(next);
@@ -442,11 +442,11 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             >
               −
             </button>
-            <span className="w-10 text-center">
+            <span className="w-10 text-center font-mono">
               {Math.round(scale * 100)}%
             </span>
             <button
-              className="rounded border border-[var(--pg-border)] px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]"
+              className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => {
                 const next = Math.min(3, +(scale + 0.1).toFixed(2));
                 setScale(next);
@@ -463,8 +463,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           className="relative flex-1 min-h-0 overflow-auto bg-[var(--pg-bg-elevated)]"
         >
           {!pdfjs || loading ? (
-            <div className="flex h-full items-center justify-center text-[11px] font-mono text-zinc-500">
-              {error ? `failed: ${error}` : "preparing pdf viewer…"}
+            <div className="flex h-full items-center justify-center text-[11px] text-[var(--pg-muted)]">
+              {error ? `Failed: ${error}` : "Preparing PDF viewer…"}
             </div>
           ) : null}
 
@@ -523,7 +523,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       ))
                     )}
                   </div>
-                  <div className="pointer-events-none absolute right-2 top-2 rounded-sm bg-black/55 px-1.5 py-0.5 text-[10px] font-mono text-zinc-100">
+                  <div className="pointer-events-none absolute right-2 top-2 rounded-sm bg-black/55 px-1.5 py-0.5 text-[10px] font-mono text-white">
                     {pageNum}
                   </div>
                 </div>
@@ -541,7 +541,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               onMouseDown={(event) => event.preventDefault()}
             >
               <div className="flex items-center gap-1">
-                <Highlighter size={12} className="ml-1 text-zinc-400" />
+                <Highlighter size={12} className="ml-1 text-[var(--pg-muted)]" />
                 {HIGHLIGHT_COLORS.map((color) => (
                   <button
                     key={color}
@@ -556,14 +556,14 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   />
                 ))}
                 <button
-                  className="ml-1 inline-flex items-center gap-1 rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-1 text-[11px] font-mono text-zinc-200 hover:bg-[var(--pg-bg)]"
+                  className="ml-1 inline-flex items-center gap-1 rounded-md bg-[var(--pg-accent)] px-2 py-1 text-[11px] text-white transition-opacity hover:opacity-90"
                   onClick={() => {
                     onAskAi(selectionToolbar.event);
                     setSelectionToolbar(null);
                     window.getSelection()?.removeAllRanges();
                   }}
                 >
-                  <Sparkles size={11} /> ask ai
+                  <Sparkles size={11} /> Ask AI
                 </button>
               </div>
             </div>

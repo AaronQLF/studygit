@@ -48,17 +48,17 @@ export function NoteNode({ id, data }: NodeProps) {
   return (
     <NodeShell
       id={id}
-      className="!border-transparent !bg-transparent !shadow-none"
+      bare
       menuContent={
         <div className="px-1">
-          <div className="px-1 pb-1 text-[10px] font-mono text-zinc-500">
-            color
+          <div className="px-1 pb-1 text-[11px] text-[var(--pg-muted)]">
+            Color
           </div>
           <div className="grid grid-cols-6 gap-1">
             {NOTE_COLORS.map((c) => (
               <button
                 key={c}
-                className="nodrag h-4 w-4 rounded-full border border-black/20 transition-transform hover:scale-110"
+                className="nodrag h-5 w-5 rounded-full ring-1 ring-black/10 transition-transform hover:scale-110"
                 style={{ backgroundColor: c }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -71,13 +71,14 @@ export function NoteNode({ id, data }: NodeProps) {
       }
     >
       <div
-        className="relative w-[232px] min-h-[132px] rounded-md p-3.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)] ring-1 ring-black/5 transition-transform duration-150 ease-out will-change-transform group-hover:-translate-y-[1px]"
+        className="relative w-[232px] min-h-[132px] overflow-hidden rounded-lg p-3.5 shadow-[var(--pg-shadow-sm)] ring-1 ring-black/5 transition-transform duration-150 ease-out will-change-transform group-hover:-translate-y-[1px] group-hover:shadow-[var(--pg-shadow)]"
         style={{ backgroundColor: d.color }}
       >
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[#c89a3a]" />
         {editing ? (
           <textarea
             ref={ref}
-            className="nodrag nowheel w-full min-h-[104px] resize-none bg-transparent outline-none text-[13.5px] leading-snug text-zinc-900 placeholder:text-zinc-700/60"
+            className="pg-serif nodrag nowheel w-full min-h-[104px] resize-none bg-transparent outline-none text-[13.5px] leading-snug text-zinc-900 placeholder:text-zinc-700/60"
             value={text}
             placeholder="Start writing..."
             onChange={(e) => setText(e.target.value)}
@@ -93,7 +94,7 @@ export function NoteNode({ id, data }: NodeProps) {
           />
         ) : (
           <div
-            className="cursor-text min-h-[104px] text-[13.5px] leading-snug text-zinc-900 whitespace-pre-wrap"
+            className="pg-serif cursor-text min-h-[104px] text-[13.5px] leading-snug text-zinc-900 whitespace-pre-wrap"
             onClick={onBodyClick}
           >
             {d.text || (
@@ -101,6 +102,7 @@ export function NoteNode({ id, data }: NodeProps) {
             )}
           </div>
         )}
+        <span className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 border-l-[16px] border-l-transparent border-t-[16px] border-t-black/15" />
       </div>
     </NodeShell>
   );
