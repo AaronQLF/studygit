@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { NodeProps } from "@xyflow/react";
-import { ExternalLink, Link2 } from "lucide-react";
+import { ArrowUpRight, ExternalLink, Link2 } from "lucide-react";
 import { NodeShell } from "./NodeShell";
 import { EditableTitle } from "./EditableTitle";
 import { useStore } from "@/lib/store";
@@ -18,6 +18,7 @@ function normalizeUrl(url: string) {
 export function LinkNode({ id, data }: NodeProps) {
   const d = data as unknown as LinkNodeData;
   const updateNodeData = useStore((s) => s.updateNodeData);
+  const openPanel = useStore((s) => s.openPanel);
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState(d.url);
   const [title, setTitle] = useState(d.title);
@@ -38,47 +39,46 @@ export function LinkNode({ id, data }: NodeProps) {
   }
 
   return (
-    <NodeShell id={id}>
-      <div className="p-3.5 min-w-[230px]">
+    <NodeShell id={id} accentColor="#2a4a6b" WatermarkIcon={Link2} label="Link">
+      <div className="px-3 pb-3 pt-2 min-w-[240px]">
         {editing ? (
           <div className="flex flex-col gap-2">
-            <div className="text-[11px] font-mono text-zinc-500">link</div>
             <input
-              className="nodrag text-sm px-2 py-1 rounded border border-[var(--pg-border-strong)] bg-transparent text-zinc-200 outline-none"
+              className="nodrag text-[13px] px-2 py-1.5 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] text-[var(--pg-fg)] outline-none focus:border-[var(--pg-accent)]"
               placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <input
-              className="nodrag text-xs px-2 py-1 rounded border border-[var(--pg-border-strong)] bg-transparent text-zinc-300 font-mono outline-none"
-              placeholder="https://..."
+              className="nodrag text-[12px] px-2 py-1.5 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] text-[var(--pg-fg-soft)] outline-none focus:border-[var(--pg-accent)]"
+              placeholder="https://…"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />
             <textarea
-              className="nodrag text-xs px-2 py-1 rounded border border-[var(--pg-border-strong)] resize-none bg-transparent text-zinc-300 outline-none"
+              className="nodrag text-[12px] px-2 py-1.5 rounded-md border border-[var(--pg-border-strong)] resize-none bg-[var(--pg-bg)] text-[var(--pg-fg-soft)] outline-none focus:border-[var(--pg-accent)]"
               placeholder="Description (optional)"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            <label className="nodrag inline-flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+            <label className="nodrag inline-flex items-center gap-2 text-[11px] text-[var(--pg-muted)]">
               <input
                 type="checkbox"
                 checked={embed}
                 onChange={(event) => setEmbed(event.target.checked)}
               />
-              embed website
+              Embed website
             </label>
             <div className="flex gap-1 justify-end">
               <button
-                className="nodrag text-xs px-2 py-1 rounded font-mono text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
+                className="nodrag text-[12px] px-2 py-1 rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
                 onClick={() => setEditing(false)}
               >
                 Cancel
               </button>
               <button
-                className="nodrag text-xs px-2 py-1 rounded font-mono border border-[var(--pg-border-strong)] hover:bg-zinc-800 text-zinc-200"
+                className="nodrag text-[12px] px-2.5 py-1 rounded-md bg-[var(--pg-accent)] text-white hover:opacity-90"
                 onClick={save}
               >
                 Save
@@ -86,10 +86,15 @@ export function LinkNode({ id, data }: NodeProps) {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500">
-              <Link2 size={11} />
-              link
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-end gap-2">
+              <button
+                className="nodrag inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+                onClick={() => openPanel(id)}
+                title="Open in panel"
+              >
+                Open <ArrowUpRight size={10} />
+              </button>
             </div>
             <EditableTitle
               value={d.title}
@@ -97,25 +102,25 @@ export function LinkNode({ id, data }: NodeProps) {
                 updateNodeData(id, { title: next } as Partial<LinkNodeData>)
               }
               placeholder="Untitled link"
-              className="text-sm font-medium leading-snug text-zinc-100"
+              className="text-[13.5px] font-medium leading-snug text-[var(--pg-fg)]"
             />
             {d.description && (
-              <div className="text-xs text-zinc-400 leading-snug">
+              <div className="text-[12px] text-[var(--pg-fg-soft)] leading-snug">
                 {d.description}
               </div>
             )}
-            <div className="text-[11px] font-mono text-zinc-500 truncate">{hostname}</div>
+            <div className="text-[11px] text-[var(--pg-muted)] truncate">{hostname}</div>
             <a
               href={resolvedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="nodrag mt-1 inline-flex items-center gap-1 text-xs text-[var(--pg-accent)] hover:underline"
+              className="nodrag mt-0.5 inline-flex items-center gap-1 text-[12px] text-[var(--pg-accent)] hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               Open <ExternalLink size={10} />
             </a>
             {(d.embed ?? true) && resolvedUrl ? (
-              <div className="nodrag nowheel mt-2 h-36 overflow-hidden rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-elevated)]">
+              <div className="nodrag nowheel mt-2 h-36 overflow-hidden rounded-md border border-[var(--pg-border)] bg-white">
                 <iframe
                   title={d.title || "Embedded website"}
                   src={resolvedUrl}

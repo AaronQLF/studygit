@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { useStore } from "@/lib/store";
 
@@ -16,6 +16,7 @@ export function Sidebar() {
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   const handleNew = () => {
     const name = window.prompt("Workspace name");
@@ -26,31 +27,31 @@ export function Sidebar() {
     <aside
       className={clsx(
         "shrink-0 border-r border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] flex flex-col h-full",
-        sidebarCollapsed ? "w-14" : "w-60"
+        sidebarCollapsed ? "w-12" : "w-56"
       )}
     >
-      <div className="h-11 flex items-center justify-between px-2.5 border-b border-[var(--pg-border)]">
+      <div className="h-9 flex items-center justify-between px-2 mt-1">
         {!sidebarCollapsed ? (
-          <div className="text-[11px] font-mono tracking-wide text-zinc-500 inline-flex items-center gap-1">
-            <Layers size={12} />
-            workspaces
+          <div className="pg-serif pl-1 text-[13px] italic text-[var(--pg-muted)]">
+            Workspaces
           </div>
         ) : (
           <div />
         )}
         <button
           title="New workspace"
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-transparent hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)] text-zinc-400 hover:text-zinc-100"
+          className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
           onClick={handleNew}
         >
-          <Plus size={16} />
+          <Plus size={14} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1.5 py-2">
+      <div className="flex-1 overflow-y-auto px-1.5 pt-1 pb-2">
         {workspaces.map((ws) => {
           const isSelected = ws.id === selectedWorkspaceId;
           const isEditing = renamingId === ws.id;
+          const isMenuOpen = menuOpenId === ws.id;
 
           if (sidebarCollapsed) {
             const initial = ws.name.trim().charAt(0).toUpperCase() || "?";
@@ -59,13 +60,16 @@ export function Sidebar() {
                 key={ws.id}
                 title={ws.name}
                 className={clsx(
-                  "mx-auto my-1 h-9 w-9 rounded-md border text-sm font-medium",
+                  "mx-auto my-0.5 h-8 w-8 rounded-md text-[12px] font-semibold flex items-center justify-center relative",
                   isSelected
-                    ? "border-[var(--pg-accent)] bg-[color-mix(in_srgb,var(--pg-accent)_20%,transparent)] text-zinc-100"
-                    : "border-transparent text-zinc-400 hover:border-[var(--pg-border-strong)] hover:text-zinc-100"
+                    ? "text-[var(--pg-accent)]"
+                    : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
                 )}
                 onClick={() => selectWorkspace(ws.id)}
               >
+                {isSelected ? (
+                  <span className="absolute -left-0.5 h-5 w-[2px] rounded-full bg-[var(--pg-accent)]" />
+                ) : null}
                 {initial}
               </button>
             );
@@ -73,10 +77,10 @@ export function Sidebar() {
 
           if (isEditing) {
             return (
-              <div key={ws.id} className="px-1 py-1">
+              <div key={ws.id} className="px-0.5 py-0.5">
                 <input
                   autoFocus
-                  className="w-full rounded border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] px-2 py-1 text-[13px] text-zinc-200 outline-none"
+                  className="w-full rounded-md border border-[var(--pg-accent)] bg-[var(--pg-bg)] px-2 py-1 text-[12px] text-[var(--pg-fg)] outline-none"
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
                   onBlur={() => {
@@ -102,71 +106,82 @@ export function Sidebar() {
             <div
               key={ws.id}
               className={clsx(
-                "group flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] cursor-pointer",
+                "group relative flex items-center gap-1.5 rounded-md px-2 py-1 pl-3 text-[12.5px] cursor-pointer select-none",
                 isSelected
-                  ? "bg-[color-mix(in_srgb,var(--pg-accent)_16%,transparent)] text-zinc-100"
-                  : "text-zinc-300 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-100"
+                  ? "text-[var(--pg-fg)]"
+                  : "text-[var(--pg-fg-soft)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               )}
               onClick={() => selectWorkspace(ws.id)}
             >
-              <Layers size={13} className="shrink-0 text-zinc-500" />
-              <span className="flex-1 truncate">{ws.name}</span>
-              <div
+              <span
                 className={clsx(
-                  "flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
-                  isSelected && "opacity-100"
+                  "absolute left-0.5 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full transition-colors",
+                  isSelected ? "bg-[var(--pg-accent)]" : "bg-transparent group-hover:bg-[var(--pg-muted-soft)]"
                 )}
+              />
+              <span className="flex-1 truncate">{ws.name}</span>
+              <button
+                title="More"
+                className={clsx(
+                  "h-5 w-5 inline-flex items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-subtle)] hover:text-[var(--pg-fg)]",
+                  isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpenId(isMenuOpen ? null : ws.id);
+                }}
               >
-                <button
-                  title="Rename"
-                  className="rounded p-1 hover:bg-zinc-800"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setRenameValue(ws.name);
-                    setRenamingId(ws.id);
-                  }}
+                <MoreHorizontal size={13} />
+              </button>
+              {isMenuOpen ? (
+                <div
+                  className="absolute right-1 top-7 z-30 min-w-[140px] rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg)] p-1 shadow-[var(--pg-shadow)]"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Pencil size={12} />
-                </button>
-                {workspaces.length > 1 ? (
                   <button
-                    title="Delete workspace"
-                    className="rounded p-1 hover:bg-zinc-800 hover:text-red-400"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (
-                        window.confirm(
-                          `Delete workspace "${ws.name}" and everything in it? This cannot be undone.`
-                        )
-                      ) {
-                        deleteWorkspace(ws.id);
-                      }
+                    className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+                    onClick={() => {
+                      setRenameValue(ws.name);
+                      setRenamingId(ws.id);
+                      setMenuOpenId(null);
                     }}
                   >
-                    <Trash2 size={12} />
+                    <Pencil size={12} className="text-[var(--pg-muted)]" />
+                    Rename
                   </button>
-                ) : null}
-              </div>
+                  {workspaces.length > 1 ? (
+                    <button
+                      className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-red-500 hover:bg-red-500/10"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Delete workspace "${ws.name}" and everything in it? This cannot be undone.`
+                          )
+                        ) {
+                          deleteWorkspace(ws.id);
+                        }
+                        setMenuOpenId(null);
+                      }}
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           );
         })}
 
         {workspaces.length === 0 && !sidebarCollapsed ? (
-          <div className="text-[11px] font-mono text-zinc-500 px-2 py-3">
-            no workspaces
-          </div>
+          <button
+            onClick={handleNew}
+            className="w-full mt-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+          >
+            <Plus size={12} /> New workspace
+          </button>
         ) : null}
       </div>
-
-      {!sidebarCollapsed ? (
-        <button
-          className="m-2 inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--pg-border-strong)] py-1.5 text-[12px] text-zinc-400 hover:border-[var(--pg-accent)] hover:text-zinc-100"
-          onClick={handleNew}
-        >
-          <Plus size={12} />
-          New workspace
-        </button>
-      ) : null}
     </aside>
   );
 }

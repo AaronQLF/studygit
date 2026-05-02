@@ -12,11 +12,19 @@ export function NodeShell({
   children,
   className,
   menuContent,
+  accentColor,
+  WatermarkIcon,
+  label,
+  bare = false,
 }: {
   id: string;
   children: React.ReactNode;
   className?: string;
   menuContent?: React.ReactNode;
+  accentColor?: string;
+  WatermarkIcon?: React.ComponentType<{ size?: number }>;
+  label?: string;
+  bare?: boolean;
 }) {
   const duplicateNode = useStore((s) => s.duplicateNode);
   const openPanel = useStore((s) => s.openPanel);
@@ -58,74 +66,127 @@ export function NodeShell({
     openPanel(id);
   };
 
+  const renderMenu = () => (
+    <div ref={menuRef} className="absolute right-2 top-2 z-20 nodrag">
+      <button
+        className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-[var(--pg-bg)]/0 opacity-0 group-hover:opacity-100 hover:bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        title="More actions"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-1 shadow-[var(--pg-shadow)]">
+          <button
+            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] flex items-center gap-2"
+            onClick={(event) => {
+              event.stopPropagation();
+              openPanel(id);
+              setOpen(false);
+            }}
+          >
+            <Crosshair size={12} className="text-[var(--pg-muted)]" /> Open
+          </button>
+          <button
+            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] flex items-center gap-2"
+            onClick={(event) => {
+              event.stopPropagation();
+              duplicateNode(id);
+              setOpen(false);
+            }}
+          >
+            <Copy size={12} className="text-[var(--pg-muted)]" /> Duplicate
+          </button>
+          {menuContent ? (
+            <div className="my-1 border-t border-[var(--pg-border)] pt-1">{menuContent}</div>
+          ) : null}
+          <button
+            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-red-500 hover:bg-red-500/10 flex items-center gap-2"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+              setOpen(false);
+            }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (bare) {
+    return (
+      <div
+        className={clsx("group relative", className)}
+        onDoubleClick={onShellDoubleClick}
+      >
+        <Handle type="target" position={Position.Top} className="!w-2 !h-2" />
+        {renderMenu()}
+        {children}
+        <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" />
+      </div>
+    );
+  }
+
+  const accent = accentColor ?? "var(--pg-border-strong)";
+
   return (
     <div
-      className={clsx(
-        "group relative rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
-        className
-      )}
+      className="group relative pg-anim"
       onDoubleClick={onShellDoubleClick}
     >
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!w-2 !h-2"
-      />
-      <div ref={menuRef} className="absolute right-2 top-2 z-20 nodrag">
-        <button
-          className="h-6 w-6 inline-flex items-center justify-center rounded-md border border-transparent opacity-0 group-hover:opacity-100 hover:bg-[var(--pg-bg-elevated)] hover:border-[var(--pg-border-strong)] text-zinc-500 hover:text-zinc-200"
-          onClick={(event) => {
-            event.stopPropagation();
-            setOpen((v) => !v);
-          }}
-          title="More actions"
-        >
-          <MoreHorizontal size={13} />
-        </button>
-        {open && (
-          <div className="absolute right-0 top-7 min-w-[148px] rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] p-1 shadow-[var(--pg-shadow)]">
-            <button
-              className="w-full rounded px-2 py-1.5 text-left text-[11px] font-mono text-zinc-300 hover:bg-zinc-800 flex items-center gap-1.5"
-              onClick={(event) => {
-                event.stopPropagation();
-                openPanel(id);
-                setOpen(false);
-              }}
-            >
-              <Crosshair size={11} /> open
-            </button>
-            <button
-              className="w-full rounded px-2 py-1.5 text-left text-[11px] font-mono text-zinc-300 hover:bg-zinc-800 flex items-center gap-1.5"
-              onClick={(event) => {
-                event.stopPropagation();
-                duplicateNode(id);
-                setOpen(false);
-              }}
-            >
-              <Copy size={11} /> duplicate
-            </button>
-            {menuContent ? (
-              <div className="my-1 border-t border-[var(--pg-border)] pt-1">{menuContent}</div>
-            ) : null}
-            <button
-              className="w-full rounded px-2 py-1.5 text-left text-[11px] font-mono text-red-400 hover:bg-zinc-800 flex items-center gap-1.5"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-                setOpen(false);
-              }}
-            >
-              <Trash2 size={11} /> delete
-            </button>
-          </div>
+      {/* Card body */}
+      <div
+        className={clsx(
+          "relative overflow-hidden rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-sm)] transition-[transform,box-shadow,border-color] duration-200 ease-out group-hover:-translate-y-[1px] group-hover:border-[var(--pg-border-strong)] group-hover:shadow-[var(--pg-shadow)]",
+          className
         )}
+      >
+        {/* Thin accent strip along the top edge */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-[3px]"
+          style={{
+            background: `linear-gradient(90deg, ${accent} 0%, color-mix(in srgb, ${accent} 35%, transparent) 100%)`,
+          }}
+        />
+
+        {/* Header row: label chip + reserved space for the menu button */}
+        {label ? (
+          <div className="flex items-center gap-1.5 px-3.5 pt-3 pr-10">
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: accent }}
+            />
+            <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--pg-muted)]">
+              {label}
+            </span>
+            {WatermarkIcon ? (
+              <span className="ml-auto text-[var(--pg-muted-soft)]">
+                <WatermarkIcon size={12} />
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="!w-2 !h-2"
+        />
+        {renderMenu()}
+        {children}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!w-2 !h-2"
+        />
       </div>
-      {children}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!w-2 !h-2"
-      />
     </div>
   );
 }

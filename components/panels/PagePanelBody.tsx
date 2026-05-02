@@ -20,7 +20,7 @@ export function PagePanelBody({ node }: { node: CanvasNode }) {
             } as Partial<PageNodeData>)
           }
           placeholder="Untitled page"
-          className="text-3xl font-semibold leading-tight text-zinc-100"
+          className="text-3xl font-semibold leading-tight text-[var(--pg-fg)]"
         />
       </div>
       <div className="flex-1 min-h-0">

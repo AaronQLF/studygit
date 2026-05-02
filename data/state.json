@@ -10,8 +10,8 @@
     {
       "id": "BrMpN68GEU",
       "position": {
-        "x": 187.0995552618249,
-        "y": 192.64670333032234
+        "x": -739.5519267014154,
+        "y": 487.31061736733693
       },
       "data": {
         "kind": "pdf",
@@ -87,24 +87,6 @@
       "workspaceId": "ws-root-welcome"
     },
     {
-      "id": "lsr_9X9A9U",
-      "workspaceId": "ws-root-welcome",
-      "position": {
-        "x": 1428.0810086197118,
-        "y": 263.998780533995
-      },
-      "data": {
-        "kind": "pdf",
-        "title": "GAN lecture",
-        "src": "/uploads/Hu6pqYxuFypZ.pdf",
-        "highlights": [],
-        "fileName": "GANs.pdf",
-        "pageCount": 53
-      },
-      "width": 320,
-      "height": 325
-    },
-    {
       "id": "DDn7a-2f7j",
       "workspaceId": "ws-root-welcome",
       "position": {
@@ -122,11 +104,11 @@
       "height": 282
     },
     {
-      "id": "30nLkWnWJs",
+      "id": "xGuLjAURdY",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": 928.2886951434881,
-        "y": 366.2880115300089
+        "x": -79.1949036085436,
+        "y": 842.5710897711809
       },
       "data": {
         "kind": "page",
@@ -134,10 +116,10 @@
         "content": ""
       },
       "width": 440,
-      "height": 124
+      "height": 123
     }
   ],
   "edges": [],
   "selectedWorkspaceId": "ws-root-welcome",
-  "version": 173
+  "version": 214
 }

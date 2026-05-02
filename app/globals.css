@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
@@ -6,33 +7,51 @@
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Fraunces", "Iowan Old Style", "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 }
 
 :root {
-  --pg-bg: #0a0a0a;
-  --pg-bg-subtle: #111113;
-  --pg-bg-elevated: #151518;
-  --pg-fg: #f3f4f6;
-  --pg-muted: #9ca3af;
-  --pg-border: #27272a;
-  --pg-border-strong: #3f3f46;
-  --pg-accent: #22d3ee;
-  --pg-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  color-scheme: dark;
+  --pg-bg: #fbf8f3;
+  --pg-bg-subtle: #f5f0e7;
+  --pg-bg-elevated: #ede5d3;
+  --pg-bg-canvas: #f3ede0;
+  --pg-fg: #1c1a17;
+  --pg-fg-soft: #423d36;
+  --pg-muted: #8b8275;
+  --pg-muted-soft: #c9bfa9;
+  --pg-border: #e3dac6;
+  --pg-border-strong: #c8baa0;
+  --pg-accent: #b53b1e;
+  --pg-accent-soft: rgba(181, 59, 30, 0.1);
+  --pg-marker: #ffe98a;
+  --pg-shadow-sm: 0 1px 0 rgba(28, 26, 23, 0.04);
+  --pg-shadow: 0 1px 0 rgba(28, 26, 23, 0.04), 0 8px 22px rgba(28, 26, 23, 0.06);
+  --pg-shadow-lg: 0 1px 0 rgba(28, 26, 23, 0.06), 0 14px 38px rgba(28, 26, 23, 0.12);
+  --pg-radius: 6px;
+  --pg-radius-lg: 8px;
+  color-scheme: light;
 }
 
-.light {
-  --pg-bg: #f8fafc;
-  --pg-bg-subtle: #ffffff;
-  --pg-bg-elevated: #f4f4f5;
-  --pg-fg: #111827;
-  --pg-muted: #6b7280;
-  --pg-border: #e4e4e7;
-  --pg-border-strong: #d4d4d8;
-  --pg-shadow: 0 10px 20px rgba(16, 24, 40, 0.08);
-  color-scheme: light;
+.dark {
+  --pg-bg: #1a1715;
+  --pg-bg-subtle: #211d19;
+  --pg-bg-elevated: #2a241f;
+  --pg-bg-canvas: #181411;
+  --pg-fg: #ede4d3;
+  --pg-fg-soft: #d4c8b2;
+  --pg-muted: #a9997f;
+  --pg-muted-soft: #5f5343;
+  --pg-border: #3a3128;
+  --pg-border-strong: #4a3d31;
+  --pg-accent: #b53b1e;
+  --pg-accent-soft: rgba(181, 59, 30, 0.2);
+  --pg-marker: #8a6a2f;
+  --pg-shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.28);
+  --pg-shadow: 0 1px 0 rgba(0, 0, 0, 0.36), 0 10px 26px rgba(0, 0, 0, 0.35);
+  --pg-shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.42), 0 18px 42px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
 }
 
 html,
@@ -44,8 +63,34 @@ body {
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
-  background: var(--pg-bg);
+  background-color: var(--pg-bg);
+  background-image: radial-gradient(
+      circle at 20% 10%,
+      color-mix(in srgb, var(--pg-muted-soft) 14%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 82% 78%,
+      color-mix(in srgb, var(--pg-muted-soft) 10%, transparent),
+      transparent 36%
+    );
   color: var(--pg-fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01", "ss03";
+}
+
+::selection {
+  background: var(--pg-marker);
+  color: var(--pg-fg);
+}
+
+.pg-serif {
+  font-family: var(--font-serif);
+}
+
+.pg-command-search::placeholder {
+  font-family: var(--font-serif);
 }
 
 button,
@@ -66,14 +111,20 @@ select,
 }
 
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(113, 113, 122, 0.45);
-  border: 2px solid transparent;
+  background: rgba(120, 120, 128, 0.28);
+  border: 3px solid transparent;
   border-radius: 9999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.45);
+  border: 3px solid transparent;
   background-clip: content-box;
 }
 
@@ -87,25 +138,36 @@ select,
 }
 
 .react-flow__node.selected {
-  box-shadow: 0 0 0 1px var(--pg-accent);
+  box-shadow: 0 0 0 1.5px var(--pg-accent);
+  border-radius: var(--pg-radius-lg);
 }
 
 .react-flow__controls {
   border: 1px solid var(--pg-border);
-  border-radius: 7px;
-  box-shadow: var(--pg-shadow);
+  border-radius: var(--pg-radius);
+  box-shadow: var(--pg-shadow-sm);
   overflow: hidden;
+  background: var(--pg-bg);
 }
 
 .react-flow__controls-button {
   border-bottom: 1px solid var(--pg-border);
-  background: var(--pg-bg-subtle);
+  background: var(--pg-bg);
   color: var(--pg-muted);
+  width: 26px;
+  height: 26px;
 }
 
 .react-flow__controls-button:hover {
   background: var(--pg-bg-elevated);
   color: var(--pg-fg);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--pg-border) !important;
+  border-radius: var(--pg-radius) !important;
+  background: var(--pg-bg) !important;
+  box-shadow: var(--pg-shadow-sm);
 }
 
 .react-flow__controls-button svg {
@@ -124,8 +186,8 @@ select,
 .react-flow__handle {
   width: 8px !important;
   height: 8px !important;
-  border: 1px solid var(--pg-border-strong) !important;
-  background: var(--pg-bg-elevated) !important;
+  border: 1.5px solid var(--pg-accent) !important;
+  background: var(--pg-bg) !important;
   opacity: 0;
 }
 
@@ -207,7 +269,7 @@ select,
 }
 
 .pg-pdf-textlayer ::selection {
-  background: color-mix(in srgb, var(--pg-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--pg-marker) 65%, transparent);
 }
 
 .pg-pdf-textlayer .endOfContent {

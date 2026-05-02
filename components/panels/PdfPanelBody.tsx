@@ -213,10 +213,10 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
             title={pdfNotesOpen ? "Hide notes" : "Open notes side-by-side"}
             onClick={() => setPdfNotesOpen((v) => !v)}
             className={clsx(
-              "inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-mono",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] transition-colors",
               pdfNotesOpen
-                ? "border-[var(--pg-accent)] bg-[color-mix(in_srgb,var(--pg-accent)_18%,transparent)] text-zinc-100"
-                : "border-[var(--pg-border)] bg-[var(--pg-bg-elevated)] text-zinc-400 hover:text-zinc-100"
+                ? "bg-[color-mix(in_srgb,var(--pg-accent)_18%,transparent)] text-[var(--pg-accent)]"
+                : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             )}
           >
             {pdfNotesOpen ? (
@@ -224,7 +224,7 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
             ) : (
               <PanelRightOpen size={12} />
             )}
-            notes
+            Notes
           </button>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -251,20 +251,20 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
           ) : (
             <div className="flex flex-1 items-center justify-center">
               <div className="max-w-sm rounded-lg border border-dashed border-[var(--pg-border-strong)] bg-[var(--pg-bg-subtle)] p-8 text-center">
-                <FileText size={28} className="mx-auto mb-2 text-zinc-500" />
-                <div className="mb-1 text-sm font-semibold text-zinc-100">
+                <FileText size={28} className="mx-auto mb-2 text-[var(--pg-muted)]" />
+                <div className="mb-1 text-sm font-semibold text-[var(--pg-fg)]">
                   No PDF yet
                 </div>
-                <div className="mb-4 text-[12px] text-zinc-400">
+                <div className="mb-4 text-[12px] text-[var(--pg-fg-soft)]">
                   Upload a PDF to start reading, highlighting, and asking AI
                   about it.
                 </div>
                 <button
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] px-3 py-1.5 text-[12px] font-mono text-zinc-100 hover:bg-zinc-800"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white transition-opacity hover:opacity-90"
                   onClick={() => pdfFileInputRef.current?.click()}
                 >
                   <Upload size={12} />{" "}
-                  {pdfReplacing ? "uploading…" : "upload pdf"}
+                  {pdfReplacing ? "Uploading…" : "Upload PDF"}
                 </button>
                 {pdfAiError ? (
                   <div className="mt-3 text-[11px] text-red-400">
@@ -291,14 +291,14 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
       {pdfNotesOpen ? (
         <aside className="flex w-[44%] min-w-[340px] max-w-[640px] shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]">
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3">
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wide text-zinc-500">
+            <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--pg-muted)]">
               <StickyNote size={12} />
-              notes
+              Notes
             </div>
             <button
               title="Close notes"
               onClick={() => setPdfNotesOpen(false)}
-              className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-100"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             >
               <PanelRightClose size={12} />
             </button>
@@ -436,7 +436,7 @@ function PdfHighlightPanel({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-zinc-400 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-200"
+          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
         >
           <ArrowLeft size={14} />
           All highlights
@@ -445,7 +445,7 @@ function PdfHighlightPanel({
           <button
             type="button"
             onClick={onJump}
-            className="rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-200"
+            className="rounded-md px-2 py-1 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             title="Jump to page in PDF"
           >
             Jump to page
@@ -453,7 +453,7 @@ function PdfHighlightPanel({
           <button
             type="button"
             onClick={onRemove}
-            className="inline-flex items-center rounded-md p-1.5 text-zinc-500 hover:bg-[var(--pg-bg-elevated)] hover:text-red-400"
+            className="inline-flex items-center rounded-md p-1.5 text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-red-400"
             title="Delete highlight"
           >
             <Trash2 size={13} />
@@ -472,10 +472,10 @@ function PdfHighlightPanel({
             aria-hidden
           />
           <div className="pl-2">
-            <div className="mb-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
               Source · page {highlight.page}
             </div>
-            <p className="text-[13px] leading-relaxed text-zinc-300">
+            <p className="text-[13px] leading-relaxed text-[var(--pg-fg-soft)]">
               {excerpt}
             </p>
           </div>
@@ -483,7 +483,7 @@ function PdfHighlightPanel({
 
         {highlight.aiThread.length === 0 && !sending ? (
           <div className="pt-1">
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+            <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
               <Sparkles size={12} /> Ask about this excerpt
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -493,7 +493,7 @@ function PdfHighlightPanel({
                   type="button"
                   onClick={() => submit(prompt)}
                   disabled={sending}
-                  className="rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-1 text-[12px] text-zinc-300 hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-100 disabled:opacity-50"
+                  className="rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-1 text-[12px] text-[var(--pg-fg-soft)] hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)] disabled:opacity-50"
                 >
                   {prompt}
                 </button>
@@ -518,13 +518,13 @@ function PdfHighlightPanel({
           <button
             type="button"
             onClick={() => setCommentsOpen((v) => !v)}
-            className="flex w-full items-center justify-between text-[11px] font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+            className="flex w-full items-center justify-between text-[11px] uppercase tracking-wider text-[var(--pg-muted)] hover:text-[var(--pg-fg-soft)]"
           >
             <span className="inline-flex items-center gap-1.5">
               <MessageSquare size={12} />
               Notes
               {highlight.comments.length ? (
-                <span className="text-zinc-400">
+                <span className="text-[var(--pg-fg-soft)]">
                   ({highlight.comments.length})
                 </span>
               ) : null}
@@ -538,10 +538,10 @@ function PdfHighlightPanel({
                   key={comment.id}
                   className="group rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-2"
                 >
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-200">
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--pg-fg)]">
                     {comment.text}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-500">
+                  <div className="mt-1.5 flex items-center justify-between text-[10px] text-[var(--pg-muted)]">
                     <span>
                       {new Date(comment.createdAt).toLocaleDateString()}
                     </span>
@@ -550,13 +550,13 @@ function PdfHighlightPanel({
                       onClick={() => onDeleteComment(comment.id)}
                       className="opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                     >
-                      delete
+                      Delete
                     </button>
                   </div>
                 </div>
               ))}
               <textarea
-                className="w-full resize-none rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-2 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-[var(--pg-border-strong)]"
+                className="w-full resize-none rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-2 text-[13px] text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)] focus:border-[var(--pg-border-strong)]"
                 rows={2}
                 placeholder="Add a note… (⌘↵ to save)"
                 value={commentDraft}
@@ -590,7 +590,7 @@ function PdfHighlightPanel({
               }
             }}
             placeholder="Ask a follow-up…"
-            className="min-h-[22px] max-h-[160px] flex-1 resize-none bg-transparent text-[14px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500"
+            className="min-h-[22px] max-h-[160px] flex-1 resize-none bg-transparent text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
           />
           <button
             type="button"
@@ -599,17 +599,17 @@ function PdfHighlightPanel({
             className={clsx(
               "mb-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
               canSend
-                ? "bg-zinc-100 text-zinc-900 hover:bg-white"
-                : "bg-[var(--pg-bg-elevated)] text-zinc-600"
+                ? "bg-[var(--pg-accent)] text-white hover:opacity-90"
+                : "bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)]"
             )}
             aria-label="Send"
           >
             <Send size={13} />
           </button>
         </div>
-        <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] font-mono text-zinc-600">
+        <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-[var(--pg-muted)]">
           <span>⏎ send · ⇧⏎ newline</span>
-          {sending ? <span className="text-zinc-500">thinking…</span> : null}
+          {sending ? <span className="text-[var(--pg-muted)]">Thinking…</span> : null}
         </div>
       </div>
     </div>
@@ -626,7 +626,7 @@ function PdfAiTurn({
   if (message.role === "user") {
     return (
       <div className={clsx(isFirst ? "" : "border-t border-[var(--pg-border)] pt-5")}>
-        <h3 className="text-[17px] font-semibold leading-snug text-zinc-100">
+        <h3 className="text-[17px] font-semibold leading-snug text-[var(--pg-fg)]">
           {message.text}
         </h3>
       </div>
@@ -634,10 +634,10 @@ function PdfAiTurn({
   }
   return (
     <div className="mt-1">
-      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
         <Sparkles size={11} /> Answer
       </div>
-      <div className="prose prose-sm prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-p:text-zinc-200 prose-headings:text-zinc-100 prose-strong:text-zinc-100 prose-a:text-zinc-100 prose-code:text-zinc-100 prose-code:bg-[var(--pg-bg-subtle)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[var(--pg-bg-subtle)] prose-pre:border prose-pre:border-[var(--pg-border)] prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:text-zinc-200">
+      <div className="prose prose-sm prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-p:text-[var(--pg-fg)] prose-headings:text-[var(--pg-fg)] prose-strong:text-[var(--pg-fg)] prose-a:text-[var(--pg-accent)] prose-code:text-[var(--pg-fg)] prose-code:bg-[var(--pg-bg-subtle)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[var(--pg-bg-subtle)] prose-pre:border prose-pre:border-[var(--pg-border)] prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:text-[var(--pg-fg)]">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
       </div>
     </div>
@@ -647,13 +647,13 @@ function PdfAiTurn({
 function PdfThinking() {
   return (
     <div className="mt-1">
-      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
         <Sparkles size={11} /> Answer
       </div>
       <div className="flex items-center gap-1 py-1">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:240ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:240ms]" />
       </div>
     </div>
   );
@@ -677,18 +677,18 @@ function PdfHighlightsList({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--pg-border)] px-4">
-        <div className="inline-flex items-center gap-2 text-[12px] text-zinc-300">
-          <Highlighter size={13} className="text-zinc-500" />
+        <div className="inline-flex items-center gap-2 text-[12px] text-[var(--pg-fg-soft)]">
+          <Highlighter size={13} className="text-[var(--pg-muted)]" />
           <span className="font-medium">Highlights</span>
           {highlights.length ? (
-            <span className="text-zinc-500">{highlights.length}</span>
+            <span className="text-[var(--pg-muted)]">{highlights.length}</span>
           ) : null}
         </div>
         {onReplace ? (
           <button
             type="button"
             onClick={onReplace}
-            className="rounded-md px-2 py-1 text-[11px] text-zinc-500 hover:bg-[var(--pg-bg-elevated)] hover:text-zinc-300"
+            className="rounded-md px-2 py-1 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
           >
             Replace PDF
           </button>
@@ -698,11 +698,11 @@ function PdfHighlightsList({
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
         {sorted.length === 0 ? (
           <div className="mt-8 px-4 text-center">
-            <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] text-zinc-500">
+            <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] text-[var(--pg-muted)]">
               <Highlighter size={16} />
             </div>
-            <p className="text-[13px] text-zinc-300">No highlights yet</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-zinc-500">
+            <p className="text-[13px] text-[var(--pg-fg-soft)]">No highlights yet</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-[var(--pg-muted)]">
               Select text in the PDF to highlight it, or ask the AI to explain
               a passage.
             </p>
@@ -725,7 +725,7 @@ function PdfHighlightsList({
                     style={{ backgroundColor: highlight.color }}
                     aria-hidden
                   />
-                  <div className="mb-1 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
                     <span>Page {highlight.page}</span>
                     <div className="flex items-center gap-2">
                       {highlight.aiThread.length ? (
@@ -745,14 +745,14 @@ function PdfHighlightsList({
                           e.stopPropagation();
                           onDelete(highlight.id);
                         }}
-                        className="inline-flex items-center rounded p-0.5 text-zinc-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                        className="inline-flex items-center rounded p-0.5 text-[var(--pg-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                         title="Remove highlight"
                       >
                         <Trash2 size={11} />
                       </button>
                     </div>
                   </div>
-                  <p className="line-clamp-3 text-[13px] leading-relaxed text-zinc-200">
+                  <p className="line-clamp-3 text-[13px] leading-relaxed text-[var(--pg-fg)]">
                     {preview}
                   </p>
                 </div>

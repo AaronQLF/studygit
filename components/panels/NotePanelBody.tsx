@@ -38,7 +38,7 @@ export function NotePanelBody({ node }: { node: CanvasNode }) {
     <section className="flex-1 min-h-0 overflow-y-auto">
       <div className="mx-auto flex min-h-full max-w-2xl items-center justify-center px-6 py-10">
         <div
-          className="relative w-full rounded-xl p-10 shadow-[0_30px_80px_rgba(0,0,0,0.45)] ring-1 ring-black/10 transition-colors duration-200"
+          className="relative w-full rounded-xl p-10 shadow-[var(--pg-shadow-lg)] ring-1 ring-black/10 transition-colors duration-200"
           style={{ backgroundColor: noteColor }}
         >
           <textarea

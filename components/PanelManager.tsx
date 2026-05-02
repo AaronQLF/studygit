@@ -37,7 +37,7 @@ function PanelBody({ node }: { node: CanvasNode }) {
       return <PdfPanelBody node={node} />;
     default:
       return (
-        <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-500">
+        <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
           Unsupported node kind
         </div>
       );
@@ -111,7 +111,7 @@ export function PanelManager() {
             {node ? (
               <PanelBody node={node} />
             ) : (
-              <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-500">
+              <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
                 Node no longer exists
               </div>
             )}

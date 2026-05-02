@@ -24,17 +24,17 @@ export function ImagePanelBody({ node }: { node: CanvasNode }) {
   return (
     <section className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-6 flex flex-col gap-3">
-        <div className="text-[11px] font-mono text-zinc-500 inline-flex items-center gap-1">
-          <ImageIcon size={11} /> image
+        <div className="text-[11px] text-[var(--pg-muted)] inline-flex items-center gap-1">
+          <ImageIcon size={11} /> Image
         </div>
         <input
-          className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-sm font-mono text-zinc-200 outline-none"
+          className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-sm font-mono text-[var(--pg-fg)] outline-none"
           value={imageUrl}
           onChange={(event) => setImageUrl(event.target.value)}
           placeholder="https://..."
         />
         <input
-          className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-sm text-zinc-300 outline-none"
+          className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-sm text-[var(--pg-fg-soft)] outline-none"
           value={imageCaption}
           onChange={(event) => setImageCaption(event.target.value)}
           placeholder="Caption"
@@ -48,7 +48,7 @@ export function ImagePanelBody({ node }: { node: CanvasNode }) {
               className="max-h-[70vh] w-full object-contain bg-black"
             />
           ) : (
-            <div className="h-64 flex items-center justify-center text-[12px] text-zinc-500">
+            <div className="h-64 flex items-center justify-center text-[12px] text-[var(--pg-muted)]">
               Paste an image URL to preview.
             </div>
           )}

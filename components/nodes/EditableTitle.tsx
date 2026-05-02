@@ -46,7 +46,7 @@ export function EditableTitle({
       <input
         ref={inputRef}
         className={clsx(
-          "nodrag w-full rounded-sm border border-[var(--pg-border-strong)] bg-transparent px-1 py-0.5 outline-none",
+          "nodrag w-full rounded-md border border-[var(--pg-accent)] bg-[var(--pg-bg)] px-1.5 py-0.5 outline-none",
           className
         )}
         value={draft}
@@ -70,7 +70,7 @@ export function EditableTitle({
   return (
     <div
       className={clsx(
-        "nodrag cursor-text truncate rounded-sm px-1 py-0.5 hover:bg-[var(--pg-bg-elevated)]",
+        "nodrag cursor-text truncate rounded-md px-1.5 py-0.5 hover:bg-[var(--pg-bg-elevated)]",
         className
       )}
       title="Click to rename"
@@ -79,7 +79,7 @@ export function EditableTitle({
         setEditing(true);
       }}
     >
-      {value || <span className="italic text-zinc-500">{placeholder}</span>}
+      {value || <span className="italic text-[var(--pg-muted)]">{placeholder}</span>}
     </div>
   );
 }
