@@ -50,6 +50,10 @@ type Store = AppState & {
   focusedNodeId: string | null;
   selectedNodeId: string | null;
   sidebarCollapsed: boolean;
+  // Pending PDF highlight jumps keyed by node id. A panel-body effect picks
+  // them up once the PDF is loaded, scrolls to the highlight, and clears it
+  // via consumePendingHighlightJump.
+  pendingHighlightJumps: Record<string, string>;
 
   hydrate: () => Promise<void>;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -124,6 +128,9 @@ type Store = AppState & {
     highlightId: string,
     message: AiMessage
   ) => void;
+
+  requestPdfHighlightJump: (nodeId: string, highlightId: string) => void;
+  consumePendingHighlightJump: (nodeId: string) => void;
 };
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -262,6 +269,7 @@ export const useStore = create<Store>((set, get) => ({
   focusedNodeId: null,
   selectedNodeId: null,
   sidebarCollapsed: false,
+  pendingHighlightJumps: {},
 
   hydrate: async () => {
     try {
@@ -878,5 +886,33 @@ export const useStore = create<Store>((set, get) => ({
       }),
     }));
     scheduleSave(get, set);
+  },
+
+  requestPdfHighlightJump: (nodeId, highlightId) => {
+    const state = get();
+    const target = state.nodes.find((n) => n.id === nodeId);
+    if (!target) return;
+    // If the citation points to a node in another workspace, switch first so
+    // the panel becomes visible. selectWorkspace clears panels, so we open
+    // afterwards.
+    if (target.workspaceId !== state.selectedWorkspaceId) {
+      get().selectWorkspace(target.workspaceId);
+    }
+    get().openPanel(nodeId);
+    set((s) => ({
+      pendingHighlightJumps: {
+        ...s.pendingHighlightJumps,
+        [nodeId]: highlightId,
+      },
+    }));
+  },
+
+  consumePendingHighlightJump: (nodeId) => {
+    set((s) => {
+      if (!(nodeId in s.pendingHighlightJumps)) return s;
+      const next = { ...s.pendingHighlightJumps };
+      delete next[nodeId];
+      return { pendingHighlightJumps: next };
+    });
   },
 }));

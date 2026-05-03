@@ -18,6 +18,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Link2,
   List,
   ListOrdered,
   Minus,
@@ -27,6 +28,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { type CalloutVariant } from "./CalloutBlock";
+
+export const CITATION_PICKER_EVENT = "pg:open-citation-picker";
 
 export type SlashItem = {
   title: string;
@@ -164,9 +167,27 @@ const ALL_ITEMS: SlashItem[] = [
     title: "Quote",
     description: "Block quote",
     icon: Quote,
-    keywords: ["blockquote", "cite"],
+    keywords: ["blockquote"],
     command: ({ editor, range }) =>
       editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
+  },
+  {
+    title: "Citation",
+    description: "Cite a PDF highlight from this workspace",
+    icon: Link2,
+    keywords: ["cite", "citation", "ref", "reference", "pdf", "quote", "source"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      // Defer one frame so the editor selection has settled after the
+      // deleteRange before the picker computes caret coords.
+      requestAnimationFrame(() => {
+        window.dispatchEvent(
+          new CustomEvent(CITATION_PICKER_EVENT, {
+            detail: { editor },
+          })
+        );
+      });
+    },
   },
   {
     title: "Code block",

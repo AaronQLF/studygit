@@ -22,17 +22,26 @@ import { MathBlock } from "./extensions/MathBlock";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { CalloutBlock } from "./extensions/CalloutBlock";
 import { SlashMenu } from "./extensions/SlashMenu";
+import { Citation } from "./extensions/Citation";
+import { CitationMention } from "./extensions/CitationMention";
 
 const lowlight = createLowlight(common);
+
+export type CitationContext = {
+  sourceNodeId: string | null;
+  workspaceId: string | null;
+};
 
 export type EditorBaseOptions = {
   placeholder?: string;
   withSlashMenu?: boolean;
+  citationContext?: CitationContext | null;
 };
 
 export function createBaseExtensions({
   placeholder = "Start writing... (press / for commands)",
   withSlashMenu = true,
+  citationContext = null,
 }: EditorBaseOptions = {}): AnyExtension[] {
   const extensions: AnyExtension[] = [
     StarterKit.configure({
@@ -73,10 +82,20 @@ export function createBaseExtensions({
     MathBlock,
     MermaidBlock,
     CalloutBlock,
+    Citation,
   ];
 
   if (withSlashMenu) {
     extensions.push(SlashMenu);
+  }
+
+  if (citationContext) {
+    extensions.push(
+      CitationMention.configure({
+        sourceNodeId: citationContext.sourceNodeId,
+        workspaceId: citationContext.workspaceId,
+      })
+    );
   }
 
   return extensions;

@@ -32,8 +32,12 @@ export function PagePanelBody({ node }: { node: CanvasNode }) {
                 content: html,
               } as Partial<PageNodeData>)
             }
-            placeholder="Press / for commands. Just start writing…"
+            placeholder="Press / for commands. Try /cite to reference a PDF highlight…"
             showToolbar
+            citationContext={{
+              sourceNodeId: node.id,
+              workspaceId: node.workspaceId,
+            }}
           />
         </div>
       </div>

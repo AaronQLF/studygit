@@ -10,12 +10,12 @@
     {
       "id": "BrMpN68GEU",
       "position": {
-        "x": -1295.3490625557704,
-        "y": 647.530467663324
+        "x": -1362.7704186137105,
+        "y": 699.0879752370428
       },
       "data": {
         "kind": "pdf",
-        "title": "New PDF",
+        "title": "Reinformcement learning",
         "src": "/uploads/kT7uvjUxXNiC.pdf",
         "highlights": [
           {
@@ -121,40 +121,70 @@
       "height": 282
     },
     {
-      "id": "xGuLjAURdY",
-      "workspaceId": "ws-root-welcome",
-      "position": {
-        "x": -847.7490139015148,
-        "y": 761.2613949348847
-      },
-      "data": {
-        "kind": "page",
-        "title": "Notes 1",
-        "content": ""
-      },
-      "width": 440,
-      "height": 124
-    },
-    {
       "id": "7BiA_Eijhq",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -1307.751338942286,
-        "y": 188.97076447512532
+        "x": -1477.751338942286,
+        "y": 158.97076447512532
       },
       "data": {
         "kind": "pdf",
-        "title": "New PDF",
+        "title": "Resume",
         "src": "/uploads/J2yRMnQv8cbm.pdf",
-        "highlights": [],
+        "highlights": [
+          {
+            "id": "rxyFHYOx",
+            "page": 1,
+            "rects": [
+              {
+                "x": 0.30476116572761774,
+                "y": 0.8182715311004785,
+                "width": 0.5825553808956785,
+                "height": 0.013397129186602871
+              },
+              {
+                "x": 0.03678748451053284,
+                "y": 0.833776913875598,
+                "width": 0.5287856015721809,
+                "height": 0.013397129186602871
+              }
+            ],
+            "text": "o redesign and revamp the website and user portals to meet 508 Compliance standards,\nsignificantly enhancing accessibility and usability for individuals with disabilities.",
+            "color": "#fbcfe8",
+            "comments": [
+              {
+                "id": "AAAetYeO",
+                "text": "this is pretty interesting, I'm not sure if anyone has caught up to it yet",
+                "createdAt": 1777843144306
+              }
+            ],
+            "aiThread": [],
+            "createdAt": 1777843124380
+          }
+        ],
         "fileName": "Haroun_Guessous (4).pdf",
         "pageCount": 2
       },
       "width": 320,
       "height": 409
+    },
+    {
+      "id": "jlCMbCf1Y4",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": -1410.4545952525575,
+        "y": -261.56739689600886
+      },
+      "data": {
+        "kind": "page",
+        "title": "New page",
+        "content": "<p><span data-node-id=\"7BiA_Eijhq\" data-highlight-id=\"rxyFHYOx\" data-label=\"Resume\" data-page=\"1\" data-excerpt=\"o redesign and revamp the website and user portals to meet 508 Compliance standards,\nsignificantly enhancing accessibility and usability for individuals with disabilities.\" data-type=\"citation\" class=\"pg-citation\"><span class=\"pg-citation-pill\"><span class=\"pg-citation-bar\" aria-hidden=\"true\"></span><span class=\"pg-citation-icon\" aria-hidden=\"true\">“</span><span class=\"pg-citation-label\"><span class=\"pg-citation-doc\">Resume</span><span class=\"pg-citation-page\">p1</span></span><span class=\"pg-citation-excerpt\"><span class=\"pg-citation-quote\" aria-hidden=\"true\">“</span>o redesign and revamp the website and user portals to meet 508 Compliance standards, significantly enhancing accessibility and usability for…</span></span></span> </p>"
+      },
+      "width": 440,
+      "height": 140
     }
   ],
   "edges": [],
   "selectedWorkspaceId": "ws-root-welcome",
-  "version": 268
+  "version": 314
 }
