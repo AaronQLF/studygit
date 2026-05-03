@@ -14,7 +14,11 @@ export const metadata: Metadata = {
   description: "Your personal learning canvas",
 };
 
-const themeInitScript = `(function(){try{var k='personalgit-theme';localStorage.setItem(k,'light');var root=document.documentElement;root.classList.remove('dark');root.classList.add('light');}catch(e){}})();`;
+// Runs before React hydration. Reads the stored theme preference (or falls
+// back to the system color scheme) and toggles the `dark`/`light` class on
+// <html> so styling is correct on first paint with no flash. The matching
+// React component is `ThemeToggle`.
+const themeInitScript = `(function(){try{var k='personalgit-theme';var t=localStorage.getItem(k);if(t!=='light'&&t!=='dark'&&t!=='system'){t='system';}var resolved=t==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;var root=document.documentElement;root.classList.remove('dark');root.classList.remove('light');root.classList.add(resolved);root.dataset.themePref=t;root.style.colorScheme=resolved;}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -22,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} light h-full antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
