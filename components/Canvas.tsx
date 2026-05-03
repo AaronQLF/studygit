@@ -30,8 +30,10 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS } from "@/lib/defaults";
+import { extractCitedPdfIds } from "@/lib/citations";
 import type {
   AnyNodeData,
+  CanvasNode,
   NodeKind,
 } from "@/lib/types";
 import { useToastStore } from "./Toast";
@@ -72,6 +74,50 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   document: FileText,
   pdf: FileSearch,
 };
+
+const CITATION_EDGE_PREFIX = "cite:";
+
+type CitationEdge = {
+  id: string;
+  source: string;
+  target: string;
+};
+
+function buildCitationEdges(wsNodes: CanvasNode[]): CitationEdge[] {
+  const pdfIds = new Set<string>();
+  for (const n of wsNodes) {
+    if (n.data.kind === "pdf") pdfIds.add(n.id);
+  }
+  if (pdfIds.size === 0) return [];
+  const edges: CitationEdge[] = [];
+  const seen = new Set<string>();
+  for (const n of wsNodes) {
+    if (n.data.kind !== "page") continue;
+    const html = n.data.content;
+    if (!html) continue;
+    const targets = extractCitedPdfIds(html);
+    for (const target of targets) {
+      if (target === n.id) continue;
+      if (!pdfIds.has(target)) continue;
+      const id = `${CITATION_EDGE_PREFIX}${n.id}->${target}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      edges.push({ id, source: n.id, target });
+    }
+  }
+  return edges;
+}
+
+function citationSignature(wsNodes: CanvasNode[]): string {
+  const parts: string[] = [];
+  for (const n of wsNodes) {
+    if (n.data.kind !== "page" || !n.data.content) continue;
+    const ids = extractCitedPdfIds(n.data.content);
+    if (ids.length === 0) continue;
+    parts.push(`${n.id}:${ids.sort().join(",")}`);
+  }
+  return parts.sort().join("|");
+}
 
 function defaultDataFor(kind: NodeKind): AnyNodeData {
   switch (kind) {
@@ -150,6 +196,7 @@ function CanvasInner() {
     const wsEdges = storeEdges.filter(
       (e) => e.workspaceId === selectedWorkspaceId
     );
+    const citationEdges = buildCitationEdges(wsNodes);
     const signature =
       selectedWorkspaceId +
       "|" +
@@ -161,7 +208,9 @@ function CanvasInner() {
       wsEdges
         .map((e) => e.id)
         .sort()
-        .join(",");
+        .join(",") +
+      "|c:" +
+      citationSignature(wsNodes);
 
     if (signature === lastSignatureRef.current) {
       setNodes((prev) =>
@@ -188,14 +237,35 @@ function CanvasInner() {
         height: n.height,
       }))
     );
-    setEdges(
-      wsEdges.map<Edge>((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        style: { stroke: "var(--pg-border-strong)", strokeWidth: 1.25 },
-      }))
-    );
+    const storedEdges = wsEdges.map<Edge>((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      style: { stroke: "var(--pg-border-strong)", strokeWidth: 1.25 },
+    }));
+    const derivedEdges = citationEdges.map<Edge>((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: "bezier",
+      animated: false,
+      selectable: false,
+      deletable: false,
+      data: { kind: "citation" },
+      style: {
+        stroke: "var(--pg-accent)",
+        strokeWidth: 1.25,
+        strokeDasharray: "4 3",
+        opacity: 0.85,
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "var(--pg-accent)",
+        width: 14,
+        height: 14,
+      },
+    }));
+    setEdges([...storedEdges, ...derivedEdges]);
 
     if (!centerOnceByWorkspace.current[selectedWorkspaceId] && wsNodes.length > 0) {
       centerOnceByWorkspace.current[selectedWorkspaceId] = true;
@@ -241,7 +311,9 @@ function CanvasInner() {
     (changes: EdgeChange[]) => {
       onEdgesChangeBase(changes);
       for (const c of changes) {
-        if (c.type === "remove") deleteEdge(c.id);
+        if (c.type === "remove" && !c.id.startsWith(CITATION_EDGE_PREFIX)) {
+          deleteEdge(c.id);
+        }
       }
     },
     [onEdgesChangeBase, deleteEdge]

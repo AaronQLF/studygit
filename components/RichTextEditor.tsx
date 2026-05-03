@@ -21,7 +21,10 @@ import {
   Strikethrough,
   Undo2,
 } from "lucide-react";
-import { createBaseExtensions } from "./editor-extensions";
+import {
+  createBaseExtensions,
+  type CitationContext,
+} from "./editor-extensions";
 
 type ToolbarButtonProps = {
   onClick: () => void;
@@ -190,11 +193,13 @@ export function RichTextEditor({
   onChange,
   placeholder = "Start writing...",
   className,
+  citationContext = null,
 }: {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   className?: string;
+  citationContext?: CitationContext | null;
 }) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -203,7 +208,11 @@ export function RichTextEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: createBaseExtensions({ placeholder, withSlashMenu: true }),
+    extensions: createBaseExtensions({
+      placeholder,
+      withSlashMenu: true,
+      citationContext,
+    }),
     content: value || "",
     editorProps: {
       attributes: {

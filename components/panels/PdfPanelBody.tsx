@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   ArrowLeft,
@@ -47,6 +47,9 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const addPdfComment = useStore((s) => s.addPdfComment);
   const deletePdfComment = useStore((s) => s.deletePdfComment);
   const appendPdfAiMessage = useStore((s) => s.appendPdfAiMessage);
+  const consumePendingHighlightJump = useStore(
+    (s) => s.consumePendingHighlightJump
+  );
 
   const [pdfActiveHighlightId, setPdfActiveHighlightId] = useState<string | null>(null);
   const [pdfAiInput, setPdfAiInput] = useState("");
@@ -56,9 +59,61 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const [pdfReplacing, setPdfReplacing] = useState(false);
   const [pdfNotesOpen, setPdfNotesOpen] = useState(false);
   const [pdfHighlightsOpen, setPdfHighlightsOpen] = useState(true);
+  // Track which `src` has actually finished loading. Derived state — never
+  // need to reset it from an effect when `src` changes (avoids cascading
+  // setState in effects).
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const pdfDocReady = !!pdfData.src && loadedSrc === pdfData.src;
   const pdfFileInputRef = useRef<HTMLInputElement>(null);
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
   const pdfAutoAskRef = useRef<string | null>(null);
+
+  // Mirror the values that the store-subscription callback below needs to
+  // read at fire-time, so it can act on the freshest data without re-binding
+  // the subscription on every render.
+  const jumpDataRef = useRef({ pdfDocReady, highlights: pdfData.highlights });
+  useEffect(() => {
+    jumpDataRef.current = {
+      pdfDocReady,
+      highlights: pdfData.highlights,
+    };
+  }, [pdfDocReady, pdfData.highlights]);
+
+  const tryJumpToHighlight = useCallback(
+    (highlightId: string) => {
+      const { pdfDocReady: ready, highlights } = jumpDataRef.current;
+      const target = highlights.find((h) => h.id === highlightId);
+      if (!target) {
+        // Highlight no longer exists — drop the request.
+        consumePendingHighlightJump(nodeId);
+        return;
+      }
+      if (!ready) return; // wait for onDocumentLoaded to retry
+      setPdfActiveHighlightId(highlightId);
+      setPdfHighlightsOpen(true);
+      requestAnimationFrame(() => {
+        pdfViewerRef.current?.jumpToHighlight(highlightId);
+        consumePendingHighlightJump(nodeId);
+      });
+    },
+    [nodeId, consumePendingHighlightJump]
+  );
+
+  // React to citation clicks anywhere in the app: either an existing pending
+  // jump on mount, or a future change written by requestPdfHighlightJump.
+  useEffect(() => {
+    const initial =
+      useStore.getState().pendingHighlightJumps[nodeId] ?? null;
+    if (initial) tryJumpToHighlight(initial);
+
+    const unsub = useStore.subscribe((state, prev) => {
+      const next = state.pendingHighlightJumps[nodeId] ?? null;
+      const before = prev.pendingHighlightJumps[nodeId] ?? null;
+      if (!next || next === before) return;
+      tryJumpToHighlight(next);
+    });
+    return unsub;
+  }, [nodeId, tryJumpToHighlight]);
 
   const activePdfHighlight =
     pdfData.highlights.find((h) => h.id === pdfActiveHighlightId) ?? null;
@@ -288,10 +343,23 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                 setPdfHighlightsOpen(true);
               }}
               onDocumentLoaded={({ pageCount }) => {
+                setLoadedSrc(pdfData.src);
                 if (pdfData.pageCount !== pageCount) {
                   updateNodeData(nodeId, {
                     pageCount,
                   } as Partial<PdfNodeData>);
+                }
+                // Late-arriving citation jump: pending was set before the
+                // PDF finished loading. Update the ref synchronously so
+                // tryJumpToHighlight sees ready=true, then dispatch.
+                const pending =
+                  useStore.getState().pendingHighlightJumps[nodeId] ?? null;
+                if (pending) {
+                  jumpDataRef.current = {
+                    ...jumpDataRef.current,
+                    pdfDocReady: true,
+                  };
+                  tryJumpToHighlight(pending);
                 }
               }}
             />
@@ -358,7 +426,11 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                   notes: html,
                 } as Partial<PdfNodeData>)
               }
-              placeholder="Take notes on this PDF…"
+              placeholder="Take notes on this PDF… press /cite to reference a highlight"
+              citationContext={{
+                sourceNodeId: nodeId,
+                workspaceId: node.workspaceId,
+              }}
             />
           </div>
         </aside>
