@@ -138,7 +138,7 @@ select,
 }
 
 .react-flow__node.selected {
-  box-shadow: 0 0 0 1.5px var(--pg-accent);
+  box-shadow: 0 0 0 1.5px var(--pg-border-strong);
   border-radius: var(--pg-radius-lg);
 }
 
@@ -270,6 +270,9 @@ select,
 
 .pg-pdf-textlayer ::selection {
   background: color-mix(in srgb, var(--pg-marker) 65%, transparent);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
 }
 
 .pg-pdf-textlayer .endOfContent {

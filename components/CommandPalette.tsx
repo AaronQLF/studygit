@@ -113,8 +113,9 @@ export function CommandPalette({
       {
         id: "view-theme",
         section: "View",
-        label: "Apply light theme",
+        label: "Cycle theme (light → dark → system)",
         icon: MoonStar,
+        keywords: ["dark", "light", "system", "appearance"],
         onSelect: () => {
           const current = readThemePreference();
           writeThemePreference(cycleTheme(current));

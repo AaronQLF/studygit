@@ -55,6 +55,7 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const [pdfCommentDraft, setPdfCommentDraft] = useState("");
   const [pdfReplacing, setPdfReplacing] = useState(false);
   const [pdfNotesOpen, setPdfNotesOpen] = useState(false);
+  const [pdfHighlightsOpen, setPdfHighlightsOpen] = useState(true);
   const pdfFileInputRef = useRef<HTMLInputElement>(null);
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
   const pdfAutoAskRef = useRef<string | null>(null);
@@ -226,6 +227,43 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
             )}
             Notes
           </button>
+          <button
+            title={
+              pdfHighlightsOpen ? "Hide highlights panel" : "Show highlights panel"
+            }
+            onClick={() => {
+              setPdfHighlightsOpen((v) => {
+                const next = !v;
+                if (!next) setPdfActiveHighlightId(null);
+                return next;
+              });
+            }}
+            className={clsx(
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] transition-colors",
+              pdfHighlightsOpen
+                ? "bg-[color-mix(in_srgb,var(--pg-accent)_18%,transparent)] text-[var(--pg-accent)]"
+                : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+            )}
+          >
+            {pdfHighlightsOpen ? (
+              <PanelRightClose size={12} />
+            ) : (
+              <PanelRightOpen size={12} />
+            )}
+            Highlights
+            {pdfData.highlights.length ? (
+              <span
+                className={clsx(
+                  "ml-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px]",
+                  pdfHighlightsOpen
+                    ? "bg-[color-mix(in_srgb,var(--pg-accent)_25%,transparent)] text-[var(--pg-accent)]"
+                    : "bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)]"
+                )}
+              >
+                {pdfData.highlights.length}
+              </span>
+            ) : null}
+          </button>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {pdfData.src ? (
@@ -236,10 +274,19 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
               activeHighlightId={pdfActiveHighlightId}
               onSelectionHighlight={(selection, color) => {
                 const id = createPdfHighlight(selection, color);
-                if (id) setPdfActiveHighlightId(id);
+                if (id) {
+                  setPdfActiveHighlightId(id);
+                  setPdfHighlightsOpen(true);
+                }
               }}
-              onAskAi={handleAskAiFromSelection}
-              onHighlightClick={(id) => setPdfActiveHighlightId(id)}
+              onAskAi={(selection) => {
+                setPdfHighlightsOpen(true);
+                handleAskAiFromSelection(selection);
+              }}
+              onHighlightClick={(id) => {
+                setPdfActiveHighlightId(id);
+                setPdfHighlightsOpen(true);
+              }}
               onDocumentLoaded={({ pageCount }) => {
                 if (pdfData.pageCount !== pageCount) {
                   updateNodeData(nodeId, {
@@ -317,51 +364,53 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
         </aside>
       ) : null}
 
-      <aside className="flex w-[340px] shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]">
-        {activePdfHighlight ? (
-          <PdfHighlightPanel
-            highlight={activePdfHighlight}
-            onBack={() => setPdfActiveHighlightId(null)}
-            onJump={() =>
-              pdfViewerRef.current?.jumpToHighlight(activePdfHighlight.id)
-            }
-            onRemove={() => {
-              deletePdfHighlight(nodeId, activePdfHighlight.id);
-              setPdfActiveHighlightId(null);
-            }}
-            input={pdfAiInput}
-            setInput={setPdfAiInput}
-            sending={pdfAiSending}
-            error={pdfAiError}
-            onAsk={(question) =>
-              askAiAboutHighlight(activePdfHighlight.id, question)
-            }
-            commentDraft={pdfCommentDraft}
-            setCommentDraft={setPdfCommentDraft}
-            onAddComment={(text) => {
-              addPdfComment(nodeId, activePdfHighlight.id, text);
-            }}
-            onDeleteComment={(commentId) => {
-              deletePdfComment(nodeId, activePdfHighlight.id, commentId);
-            }}
-          />
-        ) : (
-          <PdfHighlightsList
-            highlights={pdfData.highlights}
-            onOpen={(id) => {
-              setPdfActiveHighlightId(id);
-              pdfViewerRef.current?.jumpToHighlight(id);
-            }}
-            onDelete={(id) => {
-              deletePdfHighlight(nodeId, id);
-              if (pdfActiveHighlightId === id) setPdfActiveHighlightId(null);
-            }}
-            onReplace={
-              pdfData.src ? () => pdfFileInputRef.current?.click() : undefined
-            }
-          />
-        )}
-      </aside>
+      {pdfHighlightsOpen ? (
+        <aside className="flex w-[340px] shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]">
+          {activePdfHighlight ? (
+            <PdfHighlightPanel
+              highlight={activePdfHighlight}
+              onBack={() => setPdfActiveHighlightId(null)}
+              onJump={() =>
+                pdfViewerRef.current?.jumpToHighlight(activePdfHighlight.id)
+              }
+              onRemove={() => {
+                deletePdfHighlight(nodeId, activePdfHighlight.id);
+                setPdfActiveHighlightId(null);
+              }}
+              input={pdfAiInput}
+              setInput={setPdfAiInput}
+              sending={pdfAiSending}
+              error={pdfAiError}
+              onAsk={(question) =>
+                askAiAboutHighlight(activePdfHighlight.id, question)
+              }
+              commentDraft={pdfCommentDraft}
+              setCommentDraft={setPdfCommentDraft}
+              onAddComment={(text) => {
+                addPdfComment(nodeId, activePdfHighlight.id, text);
+              }}
+              onDeleteComment={(commentId) => {
+                deletePdfComment(nodeId, activePdfHighlight.id, commentId);
+              }}
+            />
+          ) : (
+            <PdfHighlightsList
+              highlights={pdfData.highlights}
+              onOpen={(id) => {
+                setPdfActiveHighlightId(id);
+                pdfViewerRef.current?.jumpToHighlight(id);
+              }}
+              onDelete={(id) => {
+                deletePdfHighlight(nodeId, id);
+                if (pdfActiveHighlightId === id) setPdfActiveHighlightId(null);
+              }}
+              onReplace={
+                pdfData.src ? () => pdfFileInputRef.current?.click() : undefined
+              }
+            />
+          )}
+        </aside>
+      ) : null}
     </section>
   );
 }

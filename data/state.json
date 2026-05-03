@@ -10,8 +10,8 @@
     {
       "id": "BrMpN68GEU",
       "position": {
-        "x": -739.5519267014154,
-        "y": 487.31061736733693
+        "x": -1295.3490625557704,
+        "y": 647.530467663324
       },
       "data": {
         "kind": "pdf",
@@ -77,6 +77,23 @@
               }
             ],
             "createdAt": 1777076880934
+          },
+          {
+            "id": "A4HKuTmD",
+            "page": 2,
+            "rects": [
+              {
+                "x": 0.08868815104166666,
+                "y": 0.43677662037037035,
+                "width": 0.2244374910990397,
+                "height": 0.044444444444444446
+              }
+            ],
+            "text": "Dynamic programming",
+            "color": "#fde68a",
+            "comments": [],
+            "aiThread": [],
+            "createdAt": 1777842455823
           }
         ],
         "fileName": "Reinforcement_Learning_H2026.pdf",
@@ -90,8 +107,8 @@
       "id": "DDn7a-2f7j",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -78.74406978566194,
-        "y": 192.09731555444517
+        "x": -884.1670836878668,
+        "y": 192.3599467243878
       },
       "data": {
         "kind": "link",
@@ -107,19 +124,37 @@
       "id": "xGuLjAURdY",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -79.1949036085436,
-        "y": 842.5710897711809
+        "x": -847.7490139015148,
+        "y": 761.2613949348847
       },
       "data": {
         "kind": "page",
-        "title": "New page",
+        "title": "Notes 1",
         "content": ""
       },
       "width": 440,
-      "height": 123
+      "height": 124
+    },
+    {
+      "id": "7BiA_Eijhq",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": -1307.751338942286,
+        "y": 188.97076447512532
+      },
+      "data": {
+        "kind": "pdf",
+        "title": "New PDF",
+        "src": "/uploads/J2yRMnQv8cbm.pdf",
+        "highlights": [],
+        "fileName": "Haroun_Guessous (4).pdf",
+        "pageCount": 2
+      },
+      "width": 320,
+      "height": 409
     }
   ],
   "edges": [],
   "selectedWorkspaceId": "ws-root-welcome",
-  "version": 214
+  "version": 268
 }
