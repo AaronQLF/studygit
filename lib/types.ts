@@ -11,7 +11,10 @@ export type NodeKind =
   | "blog"
   | "document"
   | "pdf"
-  | "page";
+  | "page"
+  | "shape";
+
+export type ShapeVariant = "rectangle" | "rounded" | "ellipse" | "diamond";
 
 export type Highlight = {
   id: string;
@@ -102,6 +105,26 @@ export type PageNodeData = {
   content: string;
 };
 
+export type ShapeTextSize = "sm" | "md" | "lg" | "xl";
+
+export type ShapeBorderStyle = "solid" | "dashed" | "dotted";
+
+export type ShapeNodeData = {
+  kind: "shape";
+  variant: ShapeVariant;
+  // CSS color string. Use "transparent" for an outline-only frame.
+  fill: string;
+  stroke: string;
+  borderStyle?: ShapeBorderStyle;
+  label?: string;
+  // Text styling for the label. All optional — sensible defaults applied
+  // at render time when undefined.
+  textColor?: string;
+  textSize?: ShapeTextSize;
+  textBold?: boolean;
+  textItalic?: boolean;
+};
+
 export type AnyNodeData =
   | LinkNodeData
   | ImageNodeData
@@ -109,7 +132,8 @@ export type AnyNodeData =
   | BlogNodeData
   | DocumentNodeData
   | PdfNodeData
-  | PageNodeData;
+  | PageNodeData
+  | ShapeNodeData;
 
 export type CanvasNode = {
   id: string;

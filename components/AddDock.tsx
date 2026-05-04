@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Link2,
   NotebookPen,
+  Shapes,
   StickyNote,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ const ITEMS: {
   { kind: "page", label: "Page", keybind: "B", icon: NotebookPen },
   { kind: "document", label: "Document", keybind: "D", icon: FileText },
   { kind: "pdf", label: "PDF", keybind: "P", icon: FileSearch },
+  { kind: "shape", label: "Shape", keybind: "S", icon: Shapes },
 ];
 
 const TIP_KEY = "personalgit-dock-tip-dismissed";

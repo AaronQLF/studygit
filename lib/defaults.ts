@@ -67,3 +67,27 @@ export const HIGHLIGHT_COLORS = [
   "#fbcfe8", // pink
   "#fecaca", // red
 ];
+
+// Fill palette for shape nodes. "transparent" renders an outline-only frame.
+export const SHAPE_FILLS = [
+  "transparent",
+  "#fde68a", // amber
+  "#bfdbfe", // blue
+  "#bbf7d0", // green
+  "#fbcfe8", // pink
+  "#ddd6fe", // purple
+  "#fecaca", // red
+  "#e7e5e4", // stone
+];
+
+// Border palette for shape nodes, paired roughly to the fills above.
+export const SHAPE_STROKES = [
+  "#92400e", // amber
+  "#1d4ed8", // blue
+  "#15803d", // green
+  "#be185d", // pink
+  "#6d28d9", // purple
+  "#b91c1c", // red
+  "#57534e", // stone
+  "#1f2937", // slate
+];

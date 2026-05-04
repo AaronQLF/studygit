@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import path from "path";
-import { getDriver } from "@/lib/persistence";
+import { getDriver, getPersistenceMode } from "@/lib/persistence";
+import { getCurrentUser } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (getPersistenceMode() === "supabase") {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+  }
+
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return NextResponse.json(

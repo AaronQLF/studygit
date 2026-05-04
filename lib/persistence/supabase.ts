@@ -1,16 +1,14 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { nanoid } from "nanoid";
 import { INITIAL_STATE } from "@/lib/defaults";
+import { getSupabaseServerClient } from "@/lib/server/supabase/server";
 import type { AnyNodeData, AppState, CanvasEdge, CanvasNode, Workspace } from "@/lib/types";
 import type { PersistenceDriver, UploadedFile } from "./types";
 
-const APP_META_USER_ID = "00000000-0000-0000-0000-000000000000";
 const S3_KEY_PREFIX = "uploads";
 const PRESIGNED_URL_TTL_SECONDS = 60 * 60;
 
-let cachedSupabase: SupabaseClient | null = null;
 let cachedS3: S3Client | null = null;
 
 function cloneInitialState(): AppState {
@@ -34,22 +32,6 @@ function sanitizeExtension(extension: string): string {
 
 function s3ObjectKeyFromFileKey(key: string): string {
   return `${S3_KEY_PREFIX}/${key}`;
-}
-
-function getSupabaseClient(): SupabaseClient {
-  if (!cachedSupabase) {
-    cachedSupabase = createClient(
-      requireEnv("SUPABASE_URL"),
-      requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
-  }
-  return cachedSupabase;
 }
 
 function getS3Client(): S3Client {
@@ -124,7 +106,8 @@ function mapEdge(row: EdgeRow): CanvasEdge {
 }
 
 async function loadStateFromSupabase(): Promise<AppState> {
-  const supabase = getSupabaseClient();
+  // Per-request authed client. RLS scopes every read to auth.uid().
+  const supabase = await getSupabaseServerClient();
 
   const [workspacesRes, nodesRes, edgesRes, metaRes] = await Promise.all([
     supabase
@@ -136,7 +119,6 @@ async function loadStateFromSupabase(): Promise<AppState> {
     supabase
       .from("app_meta")
       .select("selected_workspace_id,version")
-      .eq("user_id", APP_META_USER_ID)
       .maybeSingle(),
   ]);
 
@@ -170,7 +152,7 @@ async function loadStateFromSupabase(): Promise<AppState> {
 }
 
 async function saveStateToSupabase(state: AppState): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = await getSupabaseServerClient();
   const { error } = await supabase.rpc("save_state", {
     payload: state as unknown as Record<string, unknown>,
   });
@@ -222,3 +204,10 @@ export function createSupabaseDriver(): PersistenceDriver {
     getFileUrl: async (key: string) => `/api/files/${encodeURIComponent(key)}`,
   };
 }
+
+// Exposed for the one-shot migration script which authenticates as the
+// service role and writes directly to S3 outside of the request lifecycle.
+export const supabaseFileOperations = {
+  uploadFile: uploadToS3,
+  getFileUrl: async (key: string) => `/api/files/${encodeURIComponent(key)}`,
+};

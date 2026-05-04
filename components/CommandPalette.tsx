@@ -13,10 +13,11 @@ import {
   PanelLeft,
   Plus,
   Search,
+  Shapes,
   StickyNote,
   Target,
 } from "lucide-react";
-import { NOTE_COLORS } from "@/lib/defaults";
+import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { cycleTheme, readThemePreference, writeThemePreference } from "./ThemeToggle";
 import { useStore } from "@/lib/store";
 import type { AnyNodeData, NodeKind } from "@/lib/types";
@@ -47,6 +48,14 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
       return { kind, title: "New document", content: "", highlights: [] };
     case "pdf":
       return { kind, title: "New PDF", src: "", highlights: [] };
+    case "shape":
+      return {
+        kind,
+        variant: "rounded",
+        fill: SHAPE_FILLS[1],
+        stroke: SHAPE_STROKES[0],
+        label: "",
+      };
   }
 }
 
@@ -83,6 +92,7 @@ export function CommandPalette({
       { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => wsId && addNode(wsId, defaultDataFor("page"), randomPos()), disabled: !wsId },
       { id: "add-document", section: "Add", label: "Add document", icon: FileText, hint: "D", onSelect: () => wsId && addNode(wsId, defaultDataFor("document"), randomPos()), disabled: !wsId },
       { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => wsId && addNode(wsId, defaultDataFor("pdf"), randomPos()), disabled: !wsId },
+      { id: "add-shape", section: "Add", label: "Add shape", icon: Shapes, hint: "S", keywords: ["shape", "frame", "group", "color", "organize", "rectangle", "ellipse", "diamond"], onSelect: () => wsId && addNode(wsId, defaultDataFor("shape"), randomPos()), disabled: !wsId },
     ];
 
     const workspaceActions: PaletteItem[] = [
