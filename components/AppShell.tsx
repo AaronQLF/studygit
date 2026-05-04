@@ -9,6 +9,11 @@ import { ThemeToggle } from "./ThemeToggle";
 import { PanelManager } from "./PanelManager";
 import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
+import { UserMenu } from "./UserMenu";
+
+type AppShellProps = {
+  user?: { id: string; email: string | null } | null;
+};
 
 const Canvas = dynamic(() => import("./Canvas").then((m) => m.Canvas), {
   ssr: false,
@@ -19,7 +24,7 @@ const Canvas = dynamic(() => import("./Canvas").then((m) => m.Canvas), {
   ),
 });
 
-export function AppShell() {
+export function AppShell({ user }: AppShellProps = {}) {
   const hydrate = useStore((s) => s.hydrate);
   const hydrated = useStore((s) => s.hydrated);
   const isDirty = useStore((s) => s.isDirty);
@@ -127,6 +132,7 @@ export function AppShell() {
               <span className="font-medium tracking-tight">⌘K</span>
             </button>
             <ThemeToggle />
+            {user ? <UserMenu email={user.email} /> : null}
           </div>
         </div>
       </header>

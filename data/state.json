@@ -124,8 +124,8 @@
       "id": "7BiA_Eijhq",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -1477.751338942286,
-        "y": 158.97076447512532
+        "x": -1482.4471652359766,
+        "y": 168.05824335619727
       },
       "data": {
         "kind": "pdf",
@@ -172,7 +172,7 @@
       "id": "jlCMbCf1Y4",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -1410.4545952525575,
+        "x": -1411.0102744813764,
         "y": -261.56739689600886
       },
       "data": {
@@ -182,9 +182,26 @@
       },
       "width": 440,
       "height": 140
+    },
+    {
+      "id": "C9d7u_tYIb",
+      "workspaceId": "ws-root-welcome",
+      "position": {
+        "x": -1970.4452741874918,
+        "y": -316.60905241826896
+      },
+      "data": {
+        "kind": "shape",
+        "variant": "rectangle",
+        "fill": "transparent",
+        "stroke": "#1f2937",
+        "label": "LEarning"
+      },
+      "width": 1637,
+      "height": 1447
     }
   ],
   "edges": [],
   "selectedWorkspaceId": "ws-root-welcome",
-  "version": 314
+  "version": 355
 }

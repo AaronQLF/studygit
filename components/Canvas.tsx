@@ -26,10 +26,11 @@ import {
   Image as ImageIcon,
   Link2,
   NotebookPen,
+  Shapes,
   StickyNote,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { NOTE_COLORS } from "@/lib/defaults";
+import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { extractCitedPdfIds } from "@/lib/citations";
 import type {
   AnyNodeData,
@@ -44,6 +45,7 @@ import { NoteNode } from "./nodes/NoteNode";
 import { PageNode } from "./nodes/PageNode";
 import { DocumentNode } from "./nodes/DocumentNode";
 import { PdfNode } from "./nodes/PdfNode";
+import { ShapeNode } from "./nodes/ShapeNode";
 
 const nodeTypes = {
   link: LinkNode,
@@ -53,6 +55,7 @@ const nodeTypes = {
   blog: PageNode,
   document: DocumentNode,
   pdf: PdfNode,
+  shape: ShapeNode,
 };
 
 const KIND_LABELS: Record<NodeKind, string> = {
@@ -63,6 +66,7 @@ const KIND_LABELS: Record<NodeKind, string> = {
   blog: "Page",
   document: "Document",
   pdf: "PDF",
+  shape: "Shape",
 };
 
 const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
@@ -73,6 +77,7 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   blog: NotebookPen,
   document: FileText,
   pdf: FileSearch,
+  shape: Shapes,
 };
 
 const CITATION_EDGE_PREFIX = "cite:";
@@ -152,6 +157,15 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
         title: "New PDF",
         src: "",
         highlights: [],
+      };
+    case "shape":
+      return {
+        kind,
+        variant: "rounded",
+        // Default to a soft amber fill with a matching warm border.
+        fill: SHAPE_FILLS[1],
+        stroke: SHAPE_STROKES[0],
+        label: "",
       };
   }
 }
@@ -235,6 +249,9 @@ function CanvasInner() {
         data: n.data as unknown as Record<string, unknown>,
         width: n.width,
         height: n.height,
+        // Shapes are organizational backdrops, so they always sit behind the
+        // content nodes regardless of insertion order.
+        zIndex: n.data.kind === "shape" ? 0 : 10,
       }))
     );
     const storedEdges = wsEdges.map<Edge>((e) => ({
@@ -384,6 +401,7 @@ function CanvasInner() {
         b: "page",
         d: "document",
         p: "pdf",
+        s: "shape",
       };
       const kind = map[key];
       if (!kind) return;

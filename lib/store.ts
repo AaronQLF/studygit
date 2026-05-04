@@ -577,7 +577,10 @@ export const useStore = create<Store>((set, get) => ({
           ? 320
           : data.kind === "image"
           ? 280
+          : data.kind === "shape"
+          ? 360
           : 240,
+      height: data.kind === "shape" ? 220 : undefined,
     };
     set((s) => ({ nodes: [...s.nodes, node] }));
     scheduleSave(get, set);
