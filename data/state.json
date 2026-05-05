@@ -184,24 +184,27 @@
       "height": 140
     },
     {
-      "id": "C9d7u_tYIb",
+      "id": "Z5BfYuXBp4",
       "workspaceId": "ws-root-welcome",
       "position": {
-        "x": -1970.4452741874918,
-        "y": -316.60905241826896
+        "x": -2101.308950694468,
+        "y": -332.80248130835264
       },
       "data": {
         "kind": "shape",
-        "variant": "rectangle",
+        "variant": "rounded",
         "fill": "transparent",
         "stroke": "#1f2937",
-        "label": "LEarning"
+        "label": "Reinforcement learning",
+        "textSize": "lg",
+        "textColor": "#1f2937",
+        "borderStyle": "solid"
       },
-      "width": 1637,
-      "height": 1447
+      "width": 1744,
+      "height": 1453
     }
   ],
   "edges": [],
   "selectedWorkspaceId": "ws-root-welcome",
-  "version": 355
+  "version": 379
 }

@@ -18,26 +18,21 @@ export function Sidebar() {
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
+  // Toggle hides the sidebar entirely. The header toggle button remains
+  // visible so the user can bring it back.
+  if (sidebarCollapsed) return null;
+
   const handleNew = () => {
     const name = window.prompt("Workspace name");
     if (name && name.trim()) createWorkspace(name.trim());
   };
 
   return (
-    <aside
-      className={clsx(
-        "shrink-0 border-r border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] flex flex-col h-full",
-        sidebarCollapsed ? "w-12" : "w-56"
-      )}
-    >
+    <aside className="shrink-0 border-r border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] flex flex-col h-full w-56">
       <div className="h-9 flex items-center justify-between px-2 mt-1">
-        {!sidebarCollapsed ? (
-          <div className="pg-serif pl-1 text-[13px] italic text-[var(--pg-muted)]">
-            Workspaces
-          </div>
-        ) : (
-          <div />
-        )}
+        <div className="pg-serif pl-1 text-[13px] italic text-[var(--pg-muted)]">
+          Workspaces
+        </div>
         <button
           title="New workspace"
           className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
@@ -52,28 +47,6 @@ export function Sidebar() {
           const isSelected = ws.id === selectedWorkspaceId;
           const isEditing = renamingId === ws.id;
           const isMenuOpen = menuOpenId === ws.id;
-
-          if (sidebarCollapsed) {
-            const initial = ws.name.trim().charAt(0).toUpperCase() || "?";
-            return (
-              <button
-                key={ws.id}
-                title={ws.name}
-                className={clsx(
-                  "mx-auto my-0.5 h-8 w-8 rounded-md text-[12px] font-semibold flex items-center justify-center relative",
-                  isSelected
-                    ? "text-[var(--pg-accent)]"
-                    : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-                )}
-                onClick={() => selectWorkspace(ws.id)}
-              >
-                {isSelected ? (
-                  <span className="absolute -left-0.5 h-5 w-[2px] rounded-full bg-[var(--pg-accent)]" />
-                ) : null}
-                {initial}
-              </button>
-            );
-          }
 
           if (isEditing) {
             return (
@@ -173,7 +146,7 @@ export function Sidebar() {
           );
         })}
 
-        {workspaces.length === 0 && !sidebarCollapsed ? (
+        {workspaces.length === 0 ? (
           <button
             onClick={handleNew}
             className="w-full mt-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
