@@ -10,14 +10,12 @@ import {
   Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getCurrentUser } from "@/lib/server/auth";
-import { getPersistenceMode } from "@/lib/persistence";
+import { tryGetCurrentUser } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
-  const user =
-    getPersistenceMode() === "supabase" ? await getCurrentUser() : null;
+  const user = await tryGetCurrentUser();
   const primaryHref = user ? "/app" : "/signup";
   const primaryLabel = user ? "Open your canvas" : "Get started";
 
