@@ -80,6 +80,16 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   shape: Shapes,
 };
 
+/** Add-from-canvas palette order; excludes legacy `blog` (same UX as page) and `document` (no longer created from UI). */
+const CONTEXT_MENU_KINDS: NodeKind[] = [
+  "link",
+  "image",
+  "note",
+  "page",
+  "pdf",
+  "shape",
+];
+
 const CITATION_EDGE_PREFIX = "cite:";
 
 type CitationEdge = {
@@ -399,7 +409,6 @@ function CanvasInner() {
         i: "image",
         n: "note",
         b: "page",
-        d: "document",
         p: "pdf",
         s: "shape",
       };
@@ -488,7 +497,7 @@ function CanvasInner() {
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={() => setContextMenu(null)}
         >
-          {(Object.keys(KIND_LABELS) as NodeKind[]).map((kind) => {
+          {CONTEXT_MENU_KINDS.map((kind) => {
             const Icon = KIND_ICONS[kind];
             return (
               <button

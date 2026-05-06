@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   FileSearch,
-  FileText,
   Image as ImageIcon,
   Layers,
   Link2,
@@ -90,7 +89,6 @@ export function CommandPalette({
       { id: "add-image", section: "Add", label: "Add image", icon: ImageIcon, hint: "I", onSelect: () => wsId && addNode(wsId, defaultDataFor("image"), randomPos()), disabled: !wsId },
       { id: "add-note", section: "Add", label: "Add note", icon: StickyNote, hint: "N", onSelect: () => wsId && addNode(wsId, defaultDataFor("note"), randomPos()), disabled: !wsId },
       { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => wsId && addNode(wsId, defaultDataFor("page"), randomPos()), disabled: !wsId },
-      { id: "add-document", section: "Add", label: "Add document", icon: FileText, hint: "D", onSelect: () => wsId && addNode(wsId, defaultDataFor("document"), randomPos()), disabled: !wsId },
       { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => wsId && addNode(wsId, defaultDataFor("pdf"), randomPos()), disabled: !wsId },
       { id: "add-shape", section: "Add", label: "Add shape", icon: Shapes, hint: "S", keywords: ["shape", "frame", "group", "color", "organize", "rectangle", "ellipse", "diamond"], onSelect: () => wsId && addNode(wsId, defaultDataFor("shape"), randomPos()), disabled: !wsId },
     ];

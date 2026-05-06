@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import type { NodeKind } from "@/lib/types";
 import {
   FileSearch,
-  FileText,
   Image as ImageIcon,
   Link2,
   NotebookPen,
@@ -22,7 +21,6 @@ const ITEMS: {
   { kind: "image", label: "Image", keybind: "I", icon: ImageIcon },
   { kind: "note", label: "Note", keybind: "N", icon: StickyNote },
   { kind: "page", label: "Page", keybind: "B", icon: NotebookPen },
-  { kind: "document", label: "Document", keybind: "D", icon: FileText },
   { kind: "pdf", label: "PDF", keybind: "P", icon: FileSearch },
   { kind: "shape", label: "Shape", keybind: "S", icon: Shapes },
 ];
