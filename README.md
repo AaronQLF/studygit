@@ -146,7 +146,7 @@ If you already have data in `0001` and want to keep it, edit the top of `0002_au
 
 ### 4. R2 + run
 
-Create an R2 bucket and an API token under **Cloudflare → R2 → Manage API Tokens** with read/write access to that bucket. Drop the four `R2_*` values into `.env.local` and `npm run dev`. Visit `/` for the landing page, `/signup` to create an account, or `/app` to jump straight to the canvas (the proxy redirects to `/login` if you're not signed in).
+Create an R2 bucket and an API token under **Cloudflare → R2 → Manage API Tokens** with read/write access to that bucket. Drop the four `R2_`* values into `.env.local` and `npm run dev`. Visit `/` for the landing page, `/signup` to create an account, or `/app` to jump straight to the canvas (the proxy redirects to `/login` if you're not signed in).
 
 ### Optional: one-shot migration from local state/uploads
 
@@ -163,7 +163,7 @@ Find the user's UUID under **Authentication → Users** in the Supabase dashboar
 - `PERSISTENCE=file` keeps the original auth-less behavior (`data/state.json` + `public/uploads`). Auth pages and the proxy session refresh only kick in when `PERSISTENCE=supabase`.
 - `PERSISTENCE=supabase` uses Supabase Auth + Postgres for state and R2 for PDF assets, with per-user RLS.
 - `/api/files/[key]` streams reconstructed bytes (with `Range` + `ETag`/`If-None-Match` support) from the chunked R2 store; it 401s for unauthenticated callers in supabase mode.
-- `NEXT_PUBLIC_*` env vars are inlined into the client bundle; the anon key is safe to expose. The service-role key must remain server-only.
+- `NEXT_PUBLIC_`* env vars are inlined into the client bundle; the anon key is safe to expose. The service-role key must remain server-only.
 
 ## Storage: chunked, dedup-friendly compression on R2
 
@@ -184,34 +184,33 @@ upload buffer
 
 The five ideas, briefly:
 
-0. **PDF-aware structural re-emit (pre-chunk).** PDFs are already compressed internally (FlateDecode/JPEG/JBIG2 streams), so a generic codec like zstd has almost nothing to remove. Before chunking, we re-emit the PDF through one of two pluggable strategies (selected with `PDF_PRECOMPRESS`):
-
-   - `pdflib` *(default)* — `pdf-lib` re-save with `useObjectStreams: true`, packing the object table into compressed object streams and writing a cross-reference *stream* instead of an ASCII xref table. Pure JS, no native deps, near-zero cold-start cost. Typical gain: 5–30% on unoptimized exports, near-zero on already-optimized PDFs.
-   - `mupdf` *(opt-in)* — the official MuPDF WASM build with `garbage=deduplicate,objstms=yes,compress=yes,compress-fonts=yes,compress-images=yes,compress-effort=100,regenerate-id=no`. Drops unreachable objects, removes byte-identical duplicate objects, and re-flate-compresses every stream (incl. fonts and images, lossless — does not re-encode JPEGs). Loaded lazily via dynamic `import()` so it pays a one-time ~10 MB WASM cost only when enabled. Typical gain: 10–40% even on already-optimized PDFs. Note: `mupdf` is **AGPL-3.0**; use the `pdflib` strategy if that license is a non-starter for your deployment.
-
+1. **PDF-aware structural re-emit (pre-chunk).** PDFs are already compressed internally (FlateDecode/JPEG/JBIG2 streams), so a generic codec like zstd has almost nothing to remove. Before chunking, we re-emit the PDF through one of two pluggable strategies (selected with `PDF_PRECOMPRESS`):
+  - `pdflib` *(default)* — `pdf-lib` re-save with `useObjectStreams: true`, packing the object table into compressed object streams and writing a cross-reference *stream* instead of an ASCII xref table. Pure JS, no native deps, near-zero cold-start cost. Typical gain: 5–30% on unoptimized exports, near-zero on already-optimized PDFs.
+  - `mupdf` *(opt-in)* — the official MuPDF WASM build with `garbage=deduplicate,objstms=yes,compress=yes,compress-fonts=yes,compress-images=yes,compress-effort=100,regenerate-id=no`. Drops unreachable objects, removes byte-identical duplicate objects, and re-flate-compresses every stream (incl. fonts and images, lossless — does not re-encode JPEGs). Loaded lazily via dynamic `import()` so it pays a one-time ~10 MB WASM cost only when enabled. Typical gain: 10–40% even on already-optimized PDFs. Note: `mupdf` is **AGPL-3.0**; use the `pdflib` strategy if that license is a non-starter for your deployment.
    Both strategies are byte-altering but content-equivalent. We keep whichever of `(original, re-emitted)` is smaller, so the layer is strictly never a regression. Re-saved bytes are deterministic for identical inputs (pdf-lib: `updateMetadata: false`; mupdf: `regenerate-id=no`), which preserves cross-user dedup at the chunk layer. Encrypted PDFs, parse errors, and "no size win" cases fall through to the original bytes transparently.
-
-1. **Content-defined chunking (FastCDC).** We split the buffer into variable-size chunks where the boundaries are decided by a rolling Gear hash over the bytes themselves, with a strict mask up to the average size and a loose mask up to the max — this is the normalized chunking trick from Xia et al., *FastCDC: a Fast and Efficient Content-Defined Chunking Approach for Data Deduplication* (USENIX ATC '16). Editing the front of a 50-MB PDF only invalidates the chunks around the edit instead of every chunk after it, the way fixed-size chunks would.
-2. **Content-addressable storage.** Each chunk is named by `sha256(plaintext)`. Two students who upload the same paper share its chunks for free. A student who re-exports a 200-slide deck after fixing a typo on slide 3 only re-uploads the chunk(s) covering slide 3. There's no coordination, no "is this a duplicate?" RPC — content addressing is globally consistent by definition.
-3. **Per-chunk Zstandard at level 19.** Because dedup happens *before* compression, we only ever spend CPU on a chunk's zstd pass once across the entire system. That makes high compression levels (the slow, ratio-optimised end of zstd) economically reasonable.
-4. **Manifest-as-pointer.** A "logical file" is a tiny `manifests/<key>.json` listing the ordered chunk hashes. It's cheap to copy (rename a file, version a file, share a file with a colleague) and turns `Range: bytes=` requests into "find chunk index, decompress one chunk, slice" — which is what `/api/files/[key]` does for PDF.js range fetches.
+2. **Content-defined chunking (FastCDC).** We split the buffer into variable-size chunks where the boundaries are decided by a rolling Gear hash over the bytes themselves, with a strict mask up to the average size and a loose mask up to the max — this is the normalized chunking trick from Xia et al., *FastCDC: a Fast and Efficient Content-Defined Chunking Approach for Data Deduplication* (USENIX ATC '16). Editing the front of a 50-MB PDF only invalidates the chunks around the edit instead of every chunk after it, the way fixed-size chunks would.
+3. **Content-addressable storage.** Each chunk is named by `sha256(plaintext)`. Two students who upload the same paper share its chunks for free. A student who re-exports a 200-slide deck after fixing a typo on slide 3 only re-uploads the chunk(s) covering slide 3. There's no coordination, no "is this a duplicate?" RPC — content addressing is globally consistent by definition.
+4. **Per-chunk Zstandard at level 19.** Because dedup happens *before* compression, we only ever spend CPU on a chunk's zstd pass once across the entire system. That makes high compression levels (the slow, ratio-optimised end of zstd) economically reasonable.
+5. **Manifest-as-pointer.** A "logical file" is a tiny `manifests/<key>.json` listing the ordered chunk hashes. It's cheap to copy (rename a file, version a file, share a file with a colleague) and turns `Range: bytes=` requests into "find chunk index, decompress one chunk, slice" — which is what `/api/files/[key]` does for PDF.js range fetches.
 
 Operational details worth knowing:
 
 - A small on-disk cache lives at `lib/persistence/cache/shards/` (gitignored). Cache hit → no R2 round-trip *and* no zstd pass on uploads, no R2 round-trip *and* a single zstd pass on reads.
-- Chunks are *never* deleted on file delete: the same chunk may back many manifests. Garbage collection is a periodic mark-and-sweep job (mark every chunk reachable from any manifest, sweep the orphans). It runs as `npm run gc` locally and as a weekly GitHub Action (`.github/workflows/gc.yml`, Sundays at 03:00 UTC, with manual `workflow_dispatch` for ad-hoc runs). The job needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the `R2_*` secrets configured in **Settings → Secrets and variables → Actions**.
+- Chunks are *never* deleted on file delete: the same chunk may back many manifests. Garbage collection is a periodic mark-and-sweep job (mark every chunk reachable from any manifest, sweep the orphans). It runs as `npm run gc` locally and as a weekly GitHub Action (`.github/workflows/gc.yml`, Sundays at 03:00 UTC, with manual `workflow_dispatch` for ad-hoc runs). The job needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the `R2_`* secrets configured in **Settings → Secrets and variables → Actions**.
 - An optional `npm run zstd:train` script samples R2 chunks (or a local directory) and trains a zstd dictionary, uploaded to `dicts/<id>` plus a `dicts/current` pointer. The dictionary path is wired into the manifest schema (`compression.dictId`) but not yet used by the runtime — `@mongodb-js/zstd` doesn't expose dict APIs. Swapping to a dict-aware codec (`zstd-napi` or Node 23.8+ native zstd) is a single-file change in `lib/persistence/compression/zstd.ts`.
 
 Tunables (all optional, all read once at module load):
 
-| env var                      | default     | meaning                                                                |
-| ---------------------------- | ----------- | ---------------------------------------------------------------------- |
-| `ZSTD_LEVEL`                 | `19`        | zstd compression level (1–22).                                         |
-| `CHUNK_MIN`                  | `65536`     | FastCDC minimum chunk size, bytes.                                     |
-| `CHUNK_AVG`                  | `262144`    | FastCDC target average chunk size, bytes.                              |
-| `CHUNK_MAX`                  | `1048576`   | FastCDC maximum chunk size, bytes.                                     |
-| `PDF_PRECOMPRESS`            | `pdflib`    | `pdflib` (pure-JS, fast, default), `mupdf` (WASM, AGPL, max ratio), or `off`/`0`/`false` to disable. |
-| `PDF_PRECOMPRESS_MAX_BYTES`  | `268435456` | Skip the pre-compress pass for inputs larger than this (256 MiB).      |
+
+| env var                     | default     | meaning                                                                                              |
+| --------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `ZSTD_LEVEL`                | `19`        | zstd compression level (1–22).                                                                       |
+| `CHUNK_MIN`                 | `65536`     | FastCDC minimum chunk size, bytes.                                                                   |
+| `CHUNK_AVG`                 | `262144`    | FastCDC target average chunk size, bytes.                                                            |
+| `CHUNK_MAX`                 | `1048576`   | FastCDC maximum chunk size, bytes.                                                                   |
+| `PDF_PRECOMPRESS`           | `pdflib`    | `pdflib` (pure-JS, fast, default), `mupdf` (WASM, AGPL, max ratio), or `off`/`0`/`false` to disable. |
+| `PDF_PRECOMPRESS_MAX_BYTES` | `268435456` | Skip the pre-compress pass for inputs larger than this (256 MiB).                                    |
+
 
 ## Project layout
 
@@ -293,3 +292,4 @@ data/
 
 - Images are loaded from URLs (no upload pipeline yet). If you want local images, drop them in `public/` and reference `/your-image.png`.
 - Legacy plain-text **document** nodes are migrated to **Pages** on load (body text preserved; old offset-based highlights and comments are not carried over).
+
