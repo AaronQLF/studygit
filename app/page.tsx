@@ -112,7 +112,7 @@ function Hero({
               Your personal learning canvas.
             </h1>
             <p className="mt-5 max-w-xl text-[15px] text-[var(--pg-fg-soft)]">
-              Drop links, images, sticky notes, rich pages, documents, and PDFs
+              Drop links, images, sticky notes, rich pages, and PDFs
               you can highlight, annotate, and ask AI about — all on an
               infinite canvas, organized into independent workspaces.
             </p>
@@ -229,7 +229,7 @@ function Features() {
     {
       icon: Workflow,
       title: "Infinite canvas",
-      body: "Drag in links, images, notes, pages, documents, and PDFs. Connect them with edges to build a map.",
+      body: "Drag in links, images, notes, pages, and PDFs. Connect them with edges to build a map.",
     },
     {
       icon: FileText,
@@ -244,7 +244,7 @@ function Features() {
     {
       icon: Highlighter,
       title: "Highlights & comments",
-      body: "Highlight any text in a document or PDF, then thread comments and revisit them later.",
+      body: "Highlight passages in PDFs, then thread comments and revisit them later.",
     },
     {
       icon: Layout,
@@ -301,7 +301,7 @@ function HowItWorks() {
     },
     {
       title: "Drop in your material",
-      body: "Right-click the canvas to add a link, image, sticky note, page, document, or PDF. Connect related ideas with edges.",
+      body: "Right-click the canvas to add a link, image, sticky note, page, shape, or PDF. Connect related ideas with edges.",
     },
     {
       title: "Highlight, annotate, ask",
@@ -350,7 +350,7 @@ function Faq() {
     },
     {
       q: "What can I drop on the canvas?",
-      a: "Links (with optional iframe embeds), images, sticky notes, rich Notion-like pages, plain documents you can highlight, and PDFs with highlights, comments, and AI Q&A.",
+      a: "Links (with optional iframe embeds), images, sticky notes, rich Notion-like pages, shapes, and PDFs with highlights, comments, and AI Q&A.",
     },
     {
       q: "Do I need an account to try it?",
