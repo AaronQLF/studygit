@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import clsx from "clsx";
-import { Highlighter, Sparkles } from "lucide-react";
+import { Highlighter } from "lucide-react";
 import { HIGHLIGHT_COLORS } from "@/lib/defaults";
 import type { PdfHighlight, PdfHighlightRect } from "@/lib/types";
 
@@ -107,7 +107,6 @@ type PdfViewerProps = {
   highlights: PdfHighlight[];
   activeHighlightId: string | null;
   onSelectionHighlight: (selection: PdfSelectionEvent, color: string) => void;
-  onAskAi: (selection: PdfSelectionEvent) => void;
   onHighlightClick: (id: string) => void;
   onDocumentLoaded?: (info: { pageCount: number }) => void;
 };
@@ -177,7 +176,6 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       highlights,
       activeHighlightId,
       onSelectionHighlight,
-      onAskAi,
       onHighlightClick,
       onDocumentLoaded,
     },
@@ -613,16 +611,6 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     aria-label={`Highlight ${color}`}
                   />
                 ))}
-                <button
-                  className="ml-1 inline-flex items-center gap-1 rounded-md bg-[var(--pg-accent)] px-2 py-1 text-[11px] text-white transition-opacity hover:opacity-90"
-                  onClick={() => {
-                    onAskAi(selectionToolbar.event);
-                    setSelectionToolbar(null);
-                    window.getSelection()?.removeAllRanges();
-                  }}
-                >
-                  <Sparkles size={11} /> Ask AI
-                </button>
               </div>
             </div>
           ) : null}

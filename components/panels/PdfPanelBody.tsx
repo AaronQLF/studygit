@@ -9,18 +9,13 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
-  Send,
-  Sparkles,
   StickyNote,
   Trash2,
   Upload,
 } from "lucide-react";
-import { nanoid } from "nanoid";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { HIGHLIGHT_COLORS } from "@/lib/defaults";
 import { useStore } from "@/lib/store";
-import type { AiMessage, CanvasNode, PdfNodeData } from "@/lib/types";
+import type { CanvasNode, PdfNodeData } from "@/lib/types";
 import {
   PdfViewer,
   type PdfSelectionEvent,
@@ -29,13 +24,6 @@ import {
 import { RichTextEditor } from "../RichTextEditor";
 
 type PdfHighlightItem = PdfNodeData["highlights"][number];
-
-const SUGGESTED_PROMPTS = [
-  "Summarize this in plain English",
-  "Explain it like I'm five",
-  "What are the key claims?",
-  "What's the counter-argument?",
-];
 
 export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const pdfData = node.data as PdfNodeData;
@@ -46,15 +34,12 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const deletePdfHighlight = useStore((s) => s.deletePdfHighlight);
   const addPdfComment = useStore((s) => s.addPdfComment);
   const deletePdfComment = useStore((s) => s.deletePdfComment);
-  const appendPdfAiMessage = useStore((s) => s.appendPdfAiMessage);
   const consumePendingHighlightJump = useStore(
     (s) => s.consumePendingHighlightJump
   );
 
   const [pdfActiveHighlightId, setPdfActiveHighlightId] = useState<string | null>(null);
-  const [pdfAiInput, setPdfAiInput] = useState("");
-  const [pdfAiSending, setPdfAiSending] = useState(false);
-  const [pdfAiError, setPdfAiError] = useState<string | null>(null);
+  const [pdfUploadError, setPdfUploadError] = useState<string | null>(null);
   const [pdfCommentDraft, setPdfCommentDraft] = useState("");
   const [pdfReplacing, setPdfReplacing] = useState(false);
   const [pdfNotesOpen, setPdfNotesOpen] = useState(false);
@@ -66,7 +51,6 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const pdfDocReady = !!pdfData.src && loadedSrc === pdfData.src;
   const pdfFileInputRef = useRef<HTMLInputElement>(null);
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
-  const pdfAutoAskRef = useRef<string | null>(null);
 
   // Mirror the values that the store-subscription callback below needs to
   // read at fire-time, so it can act on the freshest data without re-binding
@@ -118,52 +102,9 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
   const activePdfHighlight =
     pdfData.highlights.find((h) => h.id === pdfActiveHighlightId) ?? null;
 
-  useEffect(() => {
-    if (!pdfAutoAskRef.current) return;
-    const targetId = pdfAutoAskRef.current;
-    const target = pdfData.highlights.find((h) => h.id === targetId);
-    if (!target) return;
-    pdfAutoAskRef.current = null;
-    const question = "Summarize this in plain English.";
-    const ctx = target.text;
-    const src = pdfData.fileName ?? pdfData.title;
-    const userMsg: AiMessage = {
-      id: nanoid(8),
-      role: "user",
-      text: question,
-      createdAt: Date.now(),
-    };
-    appendPdfAiMessage(nodeId, targetId, userMsg);
-    setPdfAiSending(true);
-    setPdfAiError(null);
-    (async () => {
-      try {
-        const res = await fetch("/api/ai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, context: ctx, source: src, history: [] }),
-        });
-        const data = (await res.json()) as { answer?: string; error?: string };
-        if (!res.ok) throw new Error(data.error || `AI error (${res.status})`);
-        const assistantMsg: AiMessage = {
-          id: nanoid(8),
-          role: "assistant",
-          text: data.answer ?? "(empty response)",
-          createdAt: Date.now(),
-        };
-        appendPdfAiMessage(nodeId, targetId, assistantMsg);
-      } catch (err) {
-        setPdfAiError((err as Error).message);
-      } finally {
-        setPdfAiSending(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfData.highlights, nodeId]);
-
   const uploadPdfFile = async (file: File) => {
     setPdfReplacing(true);
-    setPdfAiError(null);
+    setPdfUploadError(null);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -182,63 +123,9 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
             : json.name.replace(/\.pdf$/i, ""),
       } as Partial<PdfNodeData>);
     } catch (err) {
-      setPdfAiError((err as Error).message);
+      setPdfUploadError((err as Error).message);
     } finally {
       setPdfReplacing(false);
-    }
-  };
-
-  const askAiAboutHighlight = async (
-    highlightId: string,
-    question: string
-  ) => {
-    if (!question.trim()) return;
-    const target = pdfData.highlights.find((h) => h.id === highlightId);
-    if (!target) return;
-
-    const userMessage: AiMessage = {
-      id: nanoid(8),
-      role: "user",
-      text: question.trim(),
-      createdAt: Date.now(),
-    };
-    appendPdfAiMessage(nodeId, highlightId, userMessage);
-    setPdfAiInput("");
-    setPdfAiSending(true);
-    setPdfAiError(null);
-    try {
-      const history = target.aiThread.map((m) => ({
-        role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-        text: m.text,
-      }));
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: userMessage.text,
-          context: target.text,
-          source: pdfData.fileName ?? pdfData.title,
-          history,
-        }),
-      });
-      const data = (await res.json()) as {
-        answer?: string;
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error || `AI error (${res.status})`);
-      }
-      const assistantMessage: AiMessage = {
-        id: nanoid(8),
-        role: "assistant",
-        text: data.answer ?? "(empty response)",
-        createdAt: Date.now(),
-      };
-      appendPdfAiMessage(nodeId, highlightId, assistantMessage);
-    } catch (err) {
-      setPdfAiError((err as Error).message);
-    } finally {
-      setPdfAiSending(false);
     }
   };
 
@@ -251,14 +138,6 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
       color
     );
     return id;
-  };
-
-  const handleAskAiFromSelection = (selection: PdfSelectionEvent) => {
-    const id = createPdfHighlight(selection, HIGHLIGHT_COLORS[0]);
-    if (id) {
-      setPdfActiveHighlightId(id);
-      pdfAutoAskRef.current = id;
-    }
   };
 
   return (
@@ -334,10 +213,6 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                   setPdfHighlightsOpen(true);
                 }
               }}
-              onAskAi={(selection) => {
-                setPdfHighlightsOpen(true);
-                handleAskAiFromSelection(selection);
-              }}
               onHighlightClick={(id) => {
                 setPdfActiveHighlightId(id);
                 setPdfHighlightsOpen(true);
@@ -371,8 +246,7 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                   No PDF yet
                 </div>
                 <div className="mb-4 text-[12px] text-[var(--pg-fg-soft)]">
-                  Upload a PDF to start reading, highlighting, and asking AI
-                  about it.
+                  Upload a PDF to start reading, highlighting, and annotating.
                 </div>
                 <button
                   className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white transition-opacity hover:opacity-90"
@@ -381,9 +255,9 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                   <Upload size={12} />{" "}
                   {pdfReplacing ? "Uploading…" : "Upload PDF"}
                 </button>
-                {pdfAiError ? (
+                {pdfUploadError ? (
                   <div className="mt-3 text-[11px] text-red-400">
-                    {pdfAiError}
+                    {pdfUploadError}
                   </div>
                 ) : null}
               </div>
@@ -449,13 +323,6 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
                 deletePdfHighlight(nodeId, activePdfHighlight.id);
                 setPdfActiveHighlightId(null);
               }}
-              input={pdfAiInput}
-              setInput={setPdfAiInput}
-              sending={pdfAiSending}
-              error={pdfAiError}
-              onAsk={(question) =>
-                askAiAboutHighlight(activePdfHighlight.id, question)
-              }
               commentDraft={pdfCommentDraft}
               setCommentDraft={setPdfCommentDraft}
               onAddComment={(text) => {
@@ -492,11 +359,6 @@ function PdfHighlightPanel({
   onBack,
   onJump,
   onRemove,
-  input,
-  setInput,
-  sending,
-  error,
-  onAsk,
   commentDraft,
   setCommentDraft,
   onAddComment,
@@ -506,50 +368,17 @@ function PdfHighlightPanel({
   onBack: () => void;
   onJump: () => void;
   onRemove: () => void;
-  input: string;
-  setInput: (value: string) => void;
-  sending: boolean;
-  error: string | null;
-  onAsk: (question: string) => void;
   commentDraft: string;
   setCommentDraft: (value: string) => void;
   onAddComment: (text: string) => void;
   onDeleteComment: (commentId: string) => void;
 }) {
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-  }, [highlight.aiThread.length, sending]);
-
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
-  }, [input]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => textareaRef.current?.focus(), 120);
-    return () => clearTimeout(timer);
-  }, [highlight.id]);
-
-  const submit = (value: string) => {
-    const q = value.trim();
-    if (!q || sending) return;
-    onAsk(q);
-  };
 
   const excerpt =
     highlight.text.length > 320
       ? highlight.text.slice(0, 320).trimEnd() + "…"
       : highlight.text;
-
-  const canSend = input.trim().length > 0 && !sending;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -583,7 +412,6 @@ function PdfHighlightPanel({
       </header>
 
       <div
-        ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto px-5 pb-6 pt-4"
       >
         <div className="relative mb-5 overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] pl-3 pr-3 py-2.5">
@@ -600,39 +428,6 @@ function PdfHighlightPanel({
               {excerpt}
             </p>
           </div>
-        </div>
-
-        {highlight.aiThread.length === 0 && !sending ? (
-          <div className="pt-1">
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
-              <Sparkles size={12} /> Ask about this excerpt
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => submit(prompt)}
-                  disabled={sending}
-                  className="rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-1 text-[12px] text-[var(--pg-fg-soft)] hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)] disabled:opacity-50"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-5">
-          {highlight.aiThread.map((message, idx) => (
-            <PdfAiTurn key={message.id} message={message} isFirst={idx === 0} />
-          ))}
-          {sending ? <PdfThinking /> : null}
-          {error ? (
-            <div className="rounded-md border border-red-900/60 bg-red-950/30 p-2.5 text-[12px] text-red-300">
-              {error}
-            </div>
-          ) : null}
         </div>
 
         <div className="mt-8 border-t border-[var(--pg-border)] pt-3">
@@ -696,86 +491,6 @@ function PdfHighlightPanel({
           ) : null}
         </div>
       </div>
-
-      <div className="shrink-0 border-t border-[var(--pg-border)] bg-[var(--pg-bg)] px-4 py-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 transition-colors focus-within:border-[var(--pg-border-strong)]">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                submit(input);
-              }
-            }}
-            placeholder="Ask a follow-up…"
-            className="min-h-[22px] max-h-[160px] flex-1 resize-none bg-transparent text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
-          />
-          <button
-            type="button"
-            onClick={() => submit(input)}
-            disabled={!canSend}
-            className={clsx(
-              "mb-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
-              canSend
-                ? "bg-[var(--pg-accent)] text-white hover:opacity-90"
-                : "bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)]"
-            )}
-            aria-label="Send"
-          >
-            <Send size={13} />
-          </button>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-[var(--pg-muted)]">
-          <span>⏎ send · ⇧⏎ newline</span>
-          {sending ? <span className="text-[var(--pg-muted)]">Thinking…</span> : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PdfAiTurn({
-  message,
-  isFirst,
-}: {
-  message: AiMessage;
-  isFirst: boolean;
-}) {
-  if (message.role === "user") {
-    return (
-      <div className={clsx(isFirst ? "" : "border-t border-[var(--pg-border)] pt-5")}>
-        <h3 className="text-[17px] font-semibold leading-snug text-[var(--pg-fg)]">
-          {message.text}
-        </h3>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-1">
-      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
-        <Sparkles size={11} /> Answer
-      </div>
-      <div className="prose prose-sm prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-p:text-[var(--pg-fg)] prose-headings:text-[var(--pg-fg)] prose-strong:text-[var(--pg-fg)] prose-a:text-[var(--pg-accent)] prose-code:text-[var(--pg-fg)] prose-code:bg-[var(--pg-bg-subtle)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[var(--pg-bg-subtle)] prose-pre:border prose-pre:border-[var(--pg-border)] prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:text-[var(--pg-fg)]">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
-      </div>
-    </div>
-  );
-}
-
-function PdfThinking() {
-  return (
-    <div className="mt-1">
-      <div className="mb-1.5 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
-        <Sparkles size={11} /> Answer
-      </div>
-      <div className="flex items-center gap-1 py-1">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--pg-muted)] [animation-delay:240ms]" />
-      </div>
     </div>
   );
 }
@@ -824,8 +539,7 @@ function PdfHighlightsList({
             </div>
             <p className="text-[13px] text-[var(--pg-fg-soft)]">No highlights yet</p>
             <p className="mt-1 text-[12px] leading-relaxed text-[var(--pg-muted)]">
-              Select text in the PDF to highlight it, or ask the AI to explain
-              a passage.
+              Select text in the PDF to create your first highlight.
             </p>
           </div>
         ) : (
@@ -849,11 +563,6 @@ function PdfHighlightsList({
                   <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
                     <span>Page {highlight.page}</span>
                     <div className="flex items-center gap-2">
-                      {highlight.aiThread.length ? (
-                        <span className="inline-flex items-center gap-0.5">
-                          <Sparkles size={10} /> {highlight.aiThread.length}
-                        </span>
-                      ) : null}
                       {highlight.comments.length ? (
                         <span className="inline-flex items-center gap-0.5">
                           <MessageSquare size={10} />{" "}
