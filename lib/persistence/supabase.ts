@@ -1,26 +1,21 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+// Supabase + R2 driver. Postgres holds canvas state (workspaces / nodes /
+// edges / meta), R2 holds the uploaded blobs (PDFs, etc) — but R2 doesn't
+// see your bytes verbatim. Every upload flows through the
+// content-addressable, deduplicating, zstd-compressed chunk store under
+// `lib/persistence/compression/`. See `chunk-store.ts` for the details.
+
 import { nanoid } from "nanoid";
 import { INITIAL_STATE } from "@/lib/defaults";
 import { getSupabaseServerClient } from "@/lib/server/supabase/server";
 import type { AnyNodeData, AppState, CanvasEdge, CanvasNode, Workspace } from "@/lib/types";
+import {
+  storeFile,
+  type StoreReport,
+} from "./compression/chunk-store";
 import type { PersistenceDriver, UploadedFile } from "./types";
-
-const S3_KEY_PREFIX = "uploads";
-const PRESIGNED_URL_TTL_SECONDS = 60 * 60;
-
-let cachedS3: S3Client | null = null;
 
 function cloneInitialState(): AppState {
   return JSON.parse(JSON.stringify(INITIAL_STATE)) as AppState;
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
 }
 
 function sanitizeExtension(extension: string): string {
@@ -28,26 +23,6 @@ function sanitizeExtension(extension: string): string {
   if (!cleaned) return ".pdf";
   if (cleaned.startsWith(".")) return cleaned;
   return `.${cleaned}`;
-}
-
-function s3ObjectKeyFromFileKey(key: string): string {
-  return `${S3_KEY_PREFIX}/${key}`;
-}
-
-function getS3Client(): S3Client {
-  if (!cachedS3) {
-    const region = requireEnv("AWS_REGION");
-    const accessKeyId = requireEnv("AWS_ACCESS_KEY_ID");
-    const secretAccessKey = requireEnv("AWS_SECRET_ACCESS_KEY");
-    cachedS3 = new S3Client({
-      region,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-    });
-  }
-  return cachedS3;
 }
 
 type WorkspaceRow = {
@@ -161,38 +136,41 @@ async function saveStateToSupabase(state: AppState): Promise<void> {
   }
 }
 
-async function uploadToS3(
+async function uploadToR2(
   buffer: Buffer,
   extension: string,
   mimeType: string
 ): Promise<UploadedFile> {
+  // The "key" is the public-facing identifier — a short opaque token that
+  // appears in /api/files/<key>. The actual bytes live across many R2
+  // objects (one per unique chunk) plus a single manifests/<key>.json that
+  // glues them back together.
   const key = `${nanoid(12)}${sanitizeExtension(extension)}`;
-  const s3Key = s3ObjectKeyFromFileKey(key);
-  const bucket = requireEnv("AWS_S3_BUCKET");
-  const s3 = getS3Client();
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: s3Key,
-      Body: buffer,
-      ContentType: mimeType || "application/pdf",
-    })
-  );
-  return {
+  const report = await storeFile(
     key,
-  };
+    buffer,
+    mimeType || "application/pdf",
+    undefined
+  );
+  logStoreReport(report);
+  return { key };
 }
 
-export async function getSupabaseSignedFileUrl(key: string): Promise<string> {
-  const bucket = requireEnv("AWS_S3_BUCKET");
-  const s3 = getS3Client();
-  return getSignedUrl(
-    s3,
-    new GetObjectCommand({
-      Bucket: bucket,
-      Key: s3ObjectKeyFromFileKey(key),
-    }),
-    { expiresIn: PRESIGNED_URL_TTL_SECONDS }
+function logStoreReport(r: StoreReport): void {
+  // Surface dedup/compression stats in dev so you can see the savings without
+  // wiring up a metrics backend. The numbers are also what makes for a fun
+  // blog post: cold uploads vs. warm re-uploads vs. shared course PDFs.
+  if (process.env.NODE_ENV === "production") return;
+  const ratio =
+    r.plaintextBytes > 0 ? r.compressedBytes / r.plaintextBytes : 1;
+  const dedupPct =
+    r.totalChunks > 0 ? (r.dedupedChunks / r.totalChunks) * 100 : 0;
+  console.log(
+    `[r2-store] ${r.key}: ` +
+      `plaintext=${r.plaintextBytes} ` +
+      `compressed=${r.compressedBytes} (ratio=${ratio.toFixed(3)}) ` +
+      `uploaded=${r.uploadedBytes} ` +
+      `chunks=${r.totalChunks} dedup=${r.dedupedChunks} (${dedupPct.toFixed(1)}%)`
   );
 }
 
@@ -200,14 +178,15 @@ export function createSupabaseDriver(): PersistenceDriver {
   return {
     loadState: loadStateFromSupabase,
     saveState: saveStateToSupabase,
-    uploadFile: uploadToS3,
+    uploadFile: uploadToR2,
     getFileUrl: async (key: string) => `/api/files/${encodeURIComponent(key)}`,
   };
 }
 
-// Exposed for the one-shot migration script which authenticates as the
-// service role and writes directly to S3 outside of the request lifecycle.
+// Exposed for the one-shot migration script which runs outside the request
+// lifecycle. Same R2 store, same chunk dedup, just bypasses RLS for the
+// state writes.
 export const supabaseFileOperations = {
-  uploadFile: uploadToS3,
+  uploadFile: uploadToR2,
   getFileUrl: async (key: string) => `/api/files/${encodeURIComponent(key)}`,
 };
