@@ -1,0 +1,103 @@
+# Periodic garbage collection over the R2 chunk store.
+#
+# Runs `npm run gc` (which wraps scripts/gc.ts) on a schedule and can be
+# triggered ad-hoc from the Actions tab. Defaults are tuned for a calm,
+# weekly cleanup; tweak the cron line and inputs to taste.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL                 e.g. https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY    service_role secret (server-only)
+#   R2_ACCOUNT_ID                Cloudflare account id
+#   R2_BUCKET                    bucket name (e.g. studygit-uploads)
+#   R2_ACCESS_KEY_ID             R2 API token access key
+#   R2_SECRET_ACCESS_KEY         R2 API token secret
+#
+# Optional:
+#   R2_ENDPOINT                  override the default R2 endpoint
+#
+# The GC needs the service-role key to query `nodes` for live file
+# references when --with-manifests is on; nothing here is exposed to
+# clients.
+
+name: gc-orphan-files
+
+on:
+  schedule:
+    # Sundays at 03:00 UTC. Quiet time, weekly cadence — adjust if you
+    # upload-and-delete a lot and want orphans reaped sooner.
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run only (don't actually delete)"
+        type: boolean
+        default: false
+      with_manifests:
+        description: "Also reap orphan manifests against Postgres"
+        type: boolean
+        default: true
+      grace:
+        description: "Grace period for orphan candidates (e.g. 30m, 24h, 7d)"
+        type: string
+        default: "24h"
+
+# The GC is idempotent but there's no value in running two at once. Queue
+# overlapping runs instead of cancelling — a scheduled run shouldn't be
+# pre-empted by a manual one mid-flight.
+concurrency:
+  group: gc-orphan-files
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run GC
+        env:
+          PERSISTENCE: supabase
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          # Forward raw inputs as strings; scheduled runs leave them empty
+          # so shell-side `:-` fallbacks fill in the defaults. Don't use
+          # `${{ inputs.x || 'default' }}` here — Actions' `||` treats the
+          # boolean `false` as falsy, which would silently re-enable a
+          # default the user explicitly unchecked.
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_WITH_MANIFESTS: ${{ inputs.with_manifests }}
+          INPUT_GRACE: ${{ inputs.grace }}
+        run: |
+          DRY_RUN="${INPUT_DRY_RUN:-false}"
+          WITH_MANIFESTS="${INPUT_WITH_MANIFESTS:-true}"
+          GRACE="${INPUT_GRACE:-24h}"
+
+          ARGS=("--grace=${GRACE}")
+          if [[ "${DRY_RUN}" != "true" ]]; then
+            ARGS+=("--apply")
+          fi
+          if [[ "${WITH_MANIFESTS}" == "true" ]]; then
+            ARGS+=("--with-manifests")
+          fi
+
+          echo "Running: npm run gc -- ${ARGS[*]}"
+          npm run gc -- "${ARGS[@]}"

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
-import { usePdfSource } from "@/lib/usePdfSource";
 
 type PdfJsModule = typeof import("pdfjs-dist");
 
@@ -19,9 +18,6 @@ function loadPdfJs(): Promise<PdfJsModule> {
   return pdfjsPromise;
 }
 
-// Cache rendered first-page previews by the *original* src string. For
-// `local:<hash>` srcs the bytes are content-addressed so the rendered
-// thumbnail is stable across re-attachments.
 const cache = new Map<string, string>();
 
 type Rendered = { src: string; url: string };
@@ -38,9 +34,6 @@ export function PdfThumbnail({
   className?: string;
   onRetry?: () => void;
 }) {
-  const resolved = usePdfSource(src);
-  const resolvedUrl = resolved.kind === "ready" ? resolved.url : null;
-  const isMissing = resolved.kind === "missing";
   const cancelRef = useRef(false);
 
   const [rendered, setRendered] = useState<Rendered | null>(null);
@@ -60,12 +53,12 @@ export function PdfThumbnail({
 
   useEffect(() => {
     cancelRef.current = false;
-    if (!src || !resolvedUrl) return;
+    if (!src) return;
     if (cache.has(src)) return;
     (async () => {
       try {
         const pdfjs = await loadPdfJs();
-        const doc = await pdfjs.getDocument(resolvedUrl).promise;
+        const doc = await pdfjs.getDocument(src).promise;
         if (cancelRef.current) {
           await doc.destroy();
           return;
@@ -102,21 +95,7 @@ export function PdfThumbnail({
     return () => {
       cancelRef.current = true;
     };
-  }, [src, resolvedUrl, width]);
-
-  if (isMissing) {
-    return (
-      <div className={`${placeholderClass} flex-col gap-2 px-3 text-center`}>
-        <FileText size={18} className="text-[var(--pg-muted)]" />
-        <div className="pg-serif text-[11px] italic text-[var(--pg-muted)]">
-          PDF stored on another device
-        </div>
-        <div className="text-[10px] text-[var(--pg-muted)]">
-          Open this card to re-attach
-        </div>
-      </div>
-    );
-  }
+  }, [src, width]);
 
   if (liveError) {
     return (

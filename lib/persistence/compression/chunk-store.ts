@@ -40,7 +40,7 @@ import {
   type ChunkRef,
   type Manifest,
 } from "./manifest";
-import { r2BlobStore, type BlobStore } from "../r2-client";
+import { r2BlobStore, type BlobObject, type BlobStore } from "../r2-client";
 
 const CHUNK_PREFIX = "chunks/";
 const MANIFEST_PREFIX = "manifests/";
@@ -306,17 +306,238 @@ export async function* streamFileRange(
   }
 }
 
+/**
+ * Delete a logical file by removing its manifest. Chunks are intentionally
+ * left in place because they are shared across files via content addressing
+ * — eagerly removing them here would corrupt every other file that
+ * referenced the same bytes. Reclaim orphan chunks periodically with
+ * `gcOrphanChunks` (mark-and-sweep over manifests with a grace period to
+ * cover the in-flight upload race).
+ */
 export async function deleteFile(
   key: string,
   opts?: ChunkStoreOpts
 ): Promise<void> {
-  // Important: we only delete the manifest, not the chunks. Chunks are shared
-  // across files via content addressing — eagerly removing them on a single
-  // file delete would corrupt every other file that referenced the same
-  // bytes. Garbage-collecting orphan chunks is a periodic batch job (mark
-  // every chunk reachable from any manifest, sweep the rest) and is left as
-  // future work.
   await blob(opts).delete(manifestKey(key));
+}
+
+// Default 24h grace period: the upload pipeline writes chunks before the
+// manifest, so a chunk could be unreferenced for the duration of an upload.
+// 24h is comfortably longer than any plausible single upload, even on a slow
+// link, and protects against clock skew between the GC host and R2.
+const DEFAULT_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export type GcOptions = {
+  blob?: BlobStore;
+  /** Skip objects newer than `now - graceMs`. Defaults to 24h. */
+  graceMs?: number;
+  /** When true, compute the report but don't actually delete anything. */
+  dryRun?: boolean;
+  /** Optional progress callback (for CLI logging). */
+  onProgress?: (msg: string) => void;
+};
+
+export type GcChunkReport = {
+  /** Manifest objects walked from R2. */
+  manifestsScanned: number;
+  /** Manifests we couldn't parse (skipped — they keep their chunks alive). */
+  manifestsCorrupt: number;
+  /** Distinct chunk hashes referenced by some live manifest. */
+  reachableChunks: number;
+  /** Chunk objects walked from R2. */
+  chunksScanned: number;
+  /** Chunks not referenced by any manifest. */
+  orphanCandidates: number;
+  /** Orphans newer than the grace cutoff (skipped this run). */
+  protectedByGrace: number;
+  /** Chunks that were (or would be, in dry-run) deleted. */
+  deletedChunks: number;
+  /** Bytes reclaimed (or that would be reclaimed in dry-run). */
+  deletedBytes: number;
+  /** Per-key delete failures from the bucket layer. */
+  errors: { key: string; error: string }[];
+};
+
+function chunkHashFromKey(key: string): string | null {
+  if (!key.startsWith(CHUNK_PREFIX)) return null;
+  const rest = key.slice(CHUNK_PREFIX.length);
+  const slash = rest.indexOf("/");
+  if (slash < 0) return null;
+  return rest.slice(0, slash) + rest.slice(slash + 1);
+}
+
+function manifestKeyToFileKey(objectKey: string): string | null {
+  if (!objectKey.startsWith(MANIFEST_PREFIX)) return null;
+  const rest = objectKey.slice(MANIFEST_PREFIX.length);
+  if (!rest.endsWith(".json")) return null;
+  return rest.slice(0, -".json".length);
+}
+
+/**
+ * Mark-and-sweep over the chunk store. Reads every manifest, builds the
+ * reachable set of chunk hashes, lists every chunk, and deletes the unreached
+ * ones older than the grace period. Safe to interleave with normal uploads:
+ * the grace period covers the window between writing a chunk and writing
+ * the manifest that references it.
+ */
+export async function gcOrphanChunks(opts?: GcOptions): Promise<GcChunkReport> {
+  const store = blob(opts);
+  const graceMs = opts?.graceMs ?? DEFAULT_GRACE_MS;
+  const dryRun = opts?.dryRun ?? false;
+  const log = opts?.onProgress ?? (() => {});
+
+  const reachable = new Set<string>();
+  let manifestsScanned = 0;
+  let manifestsCorrupt = 0;
+
+  log(`Scanning manifests (prefix=${MANIFEST_PREFIX})...`);
+  for await (const obj of store.list(MANIFEST_PREFIX)) {
+    manifestsScanned++;
+    try {
+      const buf = await store.getBuffer(obj.key);
+      const m = decodeManifest(buf);
+      for (const ref of m.chunks) reachable.add(ref.h);
+    } catch (err) {
+      manifestsCorrupt++;
+      log(`  ! corrupt manifest ${obj.key}: ${(err as Error).message}`);
+    }
+  }
+  log(
+    `Manifests: ${manifestsScanned} scanned (${manifestsCorrupt} corrupt), ` +
+      `reachable chunks: ${reachable.size}`
+  );
+
+  const cutoff = Date.now() - graceMs;
+  const toDelete: BlobObject[] = [];
+  let chunksScanned = 0;
+  let orphanCandidates = 0;
+  let protectedByGrace = 0;
+
+  log(`Scanning chunks (prefix=${CHUNK_PREFIX})...`);
+  for await (const obj of store.list(CHUNK_PREFIX)) {
+    chunksScanned++;
+    const hash = chunkHashFromKey(obj.key);
+    if (!hash) continue;
+    if (reachable.has(hash)) continue;
+    orphanCandidates++;
+    if (obj.lastModified.getTime() > cutoff) {
+      protectedByGrace++;
+      continue;
+    }
+    toDelete.push(obj);
+  }
+  log(
+    `Chunks: ${chunksScanned} scanned, ${orphanCandidates} orphan ` +
+      `(${protectedByGrace} protected by grace, ${toDelete.length} eligible)`
+  );
+
+  let deletedBytes = 0;
+  for (const obj of toDelete) deletedBytes += obj.size;
+
+  const errors: { key: string; error: string }[] = [];
+  if (!dryRun && toDelete.length > 0) {
+    log(`Deleting ${toDelete.length} chunks...`);
+    const failures = await store.deleteMany(toDelete.map((o) => o.key));
+    errors.push(...failures);
+    if (failures.length) {
+      // Don't claim bytes we didn't actually free.
+      const failedKeys = new Set(failures.map((f) => f.key));
+      deletedBytes = toDelete
+        .filter((o) => !failedKeys.has(o.key))
+        .reduce((sum, o) => sum + o.size, 0);
+    }
+  }
+
+  return {
+    manifestsScanned,
+    manifestsCorrupt,
+    reachableChunks: reachable.size,
+    chunksScanned,
+    orphanCandidates,
+    protectedByGrace,
+    deletedChunks: toDelete.length - errors.length,
+    deletedBytes,
+    errors,
+  };
+}
+
+export type GcManifestOptions = GcOptions & {
+  /**
+   * Set of file keys (the `<key>` in `manifests/<key>.json`) that are still
+   * referenced by application state. Anything in R2 not in this set is an
+   * orphan candidate.
+   */
+  liveKeys: Set<string>;
+};
+
+export type GcManifestReport = {
+  manifestsScanned: number;
+  /** Manifests whose key is not in `liveKeys`. */
+  orphanCandidates: number;
+  /** Orphans newer than the grace cutoff (skipped). */
+  protectedByGrace: number;
+  /** Manifests that were (or would be, in dry-run) deleted. */
+  deletedManifests: number;
+  errors: { key: string; error: string }[];
+};
+
+/**
+ * Sweep manifests whose file key is no longer referenced by application
+ * state. Caller provides the live key set (typically derived from a DB
+ * query over node `data.src` URLs); anything in R2 not in that set and
+ * older than the grace period is removed.
+ *
+ * Run this BEFORE `gcOrphanChunks` so the chunk sweep sees the up-to-date
+ * reachability set.
+ */
+export async function gcOrphanManifests(
+  opts: GcManifestOptions
+): Promise<GcManifestReport> {
+  const store = blob(opts);
+  const graceMs = opts.graceMs ?? DEFAULT_GRACE_MS;
+  const dryRun = opts.dryRun ?? false;
+  const log = opts.onProgress ?? (() => {});
+  const cutoff = Date.now() - graceMs;
+
+  const toDelete: BlobObject[] = [];
+  let manifestsScanned = 0;
+  let orphanCandidates = 0;
+  let protectedByGrace = 0;
+
+  log(
+    `Scanning manifests against live key set (size=${opts.liveKeys.size})...`
+  );
+  for await (const obj of store.list(MANIFEST_PREFIX)) {
+    manifestsScanned++;
+    const fileKey = manifestKeyToFileKey(obj.key);
+    if (!fileKey) continue;
+    if (opts.liveKeys.has(fileKey)) continue;
+    orphanCandidates++;
+    if (obj.lastModified.getTime() > cutoff) {
+      protectedByGrace++;
+      continue;
+    }
+    toDelete.push(obj);
+  }
+  log(
+    `Manifests: ${manifestsScanned} scanned, ${orphanCandidates} orphan ` +
+      `(${protectedByGrace} protected by grace, ${toDelete.length} eligible)`
+  );
+
+  const errors: { key: string; error: string }[] = [];
+  if (!dryRun && toDelete.length > 0) {
+    log(`Deleting ${toDelete.length} manifests...`);
+    const failures = await store.deleteMany(toDelete.map((o) => o.key));
+    errors.push(...failures);
+  }
+
+  return {
+    manifestsScanned,
+    orphanCandidates,
+    protectedByGrace,
+    deletedManifests: toDelete.length - errors.length,
+    errors,
+  };
 }
 
 export const __internals = {
@@ -325,4 +546,6 @@ export const __internals = {
   MANIFEST_PREFIX,
   chunkKey,
   manifestKey,
+  chunkHashFromKey,
+  manifestKeyToFileKey,
 };

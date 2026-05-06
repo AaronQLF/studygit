@@ -11,8 +11,10 @@
 import {
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   S3Client,
   S3ServiceException,
 } from "@aws-sdk/client-s3";
@@ -48,6 +50,12 @@ export function getR2(): { client: S3Client; bucket: string } {
   return cached;
 }
 
+export type BlobObject = {
+  key: string;
+  size: number;
+  lastModified: Date;
+};
+
 export type BlobStore = {
   exists(key: string): Promise<boolean>;
   put(
@@ -58,6 +66,18 @@ export type BlobStore = {
   ): Promise<void>;
   getBuffer(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
+  /**
+   * Stream every object under `prefix`, paginating transparently. Yields
+   * `BlobObject`s with size + lastModified so callers (e.g. the GC) can
+   * filter by age without an extra HEAD round-trip.
+   */
+  list(prefix: string): AsyncIterable<BlobObject>;
+  /**
+   * Delete up to ~1000 keys per request. The S3 batch API caps each call at
+   * 1000 keys, so this implementation chunks larger inputs internally.
+   * Returns the keys that failed to delete with their error messages.
+   */
+  deleteMany(keys: string[]): Promise<{ key: string; error: string }[]>;
 };
 
 function isNotFound(err: unknown): boolean {
@@ -134,5 +154,65 @@ export const r2BlobStore: BlobStore = {
     await client.send(
       new DeleteObjectCommand({ Bucket: bucket, Key: key })
     );
+  },
+
+  async *list(prefix) {
+    const { client, bucket } = getR2();
+    let continuationToken: string | undefined;
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+      for (const obj of res.Contents ?? []) {
+        if (!obj.Key) continue;
+        yield {
+          key: obj.Key,
+          size: obj.Size ?? 0,
+          // S3 always sets LastModified on listed objects; fall back to
+          // epoch defensively so the GC's grace check stays well-defined.
+          lastModified: obj.LastModified ?? new Date(0),
+        };
+      }
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+  },
+
+  async deleteMany(keys) {
+    if (keys.length === 0) return [];
+    const { client, bucket } = getR2();
+    const failures: { key: string; error: string }[] = [];
+    // S3 caps DeleteObjects at 1000 keys per request.
+    for (let i = 0; i < keys.length; i += 1000) {
+      const batch = keys.slice(i, i + 1000);
+      try {
+        const res = await client.send(
+          new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: {
+              Objects: batch.map((k) => ({ Key: k })),
+              Quiet: true,
+            },
+          })
+        );
+        for (const err of res.Errors ?? []) {
+          if (err.Key) {
+            failures.push({
+              key: err.Key,
+              error: err.Message ?? err.Code ?? "unknown error",
+            });
+          }
+        }
+      } catch (err) {
+        // Whole-batch failure (network, auth, etc). Mark every key failed
+        // so the caller can decide whether to retry the whole pass.
+        const msg = (err as Error).message;
+        for (const k of batch) failures.push({ key: k, error: msg });
+      }
+    }
+    return failures;
   },
 };
