@@ -44,13 +44,23 @@ import { r2BlobStore, type BlobObject, type BlobStore } from "../r2-client";
 
 const CHUNK_PREFIX = "chunks/";
 const MANIFEST_PREFIX = "manifests/";
-const LOCAL_CACHE_DIR = path.join(
-  process.cwd(),
-  "lib",
-  "persistence",
-  "cache",
-  "shards"
-);
+function resolveLocalCacheDir(): string | null {
+  const explicit = process.env.LOCAL_CHUNK_CACHE_DIR?.trim();
+  if (explicit) return explicit;
+  if (process.env.DISABLE_LOCAL_CHUNK_CACHE === "1") return null;
+  // Vercel lambdas run from a read-only source tree (`/var/task`) and are
+  // ephemeral, so this cache both fails on write and has poor hit rates.
+  if (process.env.VERCEL === "1") return null;
+  return path.join(
+    /*turbopackIgnore: true*/ process.cwd(),
+    "lib",
+    "persistence",
+    "cache",
+    "shards"
+  );
+}
+
+const LOCAL_CACHE_DIR = resolveLocalCacheDir();
 
 // Read chunk-size knobs from env once. Bytes. Defaults are tuned for PDFs
 // (the dominant payload here): 64 KiB / 256 KiB / 1 MiB gives a healthy
@@ -95,13 +105,16 @@ function manifestKey(key: string): string {
   return `${MANIFEST_PREFIX}${key}.json`;
 }
 
-function localCachePath(hash: string): string {
+function localCachePath(hash: string): string | null {
+  if (!LOCAL_CACHE_DIR) return null;
   return path.join(LOCAL_CACHE_DIR, hash.slice(0, 2), hash.slice(2));
 }
 
 async function localCacheGet(hash: string): Promise<Buffer | null> {
+  const cachePath = localCachePath(hash);
+  if (!cachePath) return null;
   try {
-    return await fs.readFile(localCachePath(hash));
+    return await fs.readFile(cachePath);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
@@ -109,12 +122,14 @@ async function localCacheGet(hash: string): Promise<Buffer | null> {
 }
 
 async function localCachePut(hash: string, compressed: Buffer): Promise<void> {
-  const dir = path.join(LOCAL_CACHE_DIR, hash.slice(0, 2));
-  await fs.mkdir(dir, { recursive: true });
-  // Best-effort: fail silently for cache writes — the cache is just a
-  // latency optimization, not a correctness primitive.
+  const cachePath = localCachePath(hash);
+  if (!cachePath) return;
+  const dir = path.dirname(cachePath);
+  // Best-effort: fail silently for cache writes — the cache is just a latency
+  // optimization, not a correctness primitive.
   try {
-    await fs.writeFile(localCachePath(hash), compressed);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(cachePath, compressed);
   } catch {
     // Ignore — out of disk, permission denied, etc. R2 is the source of truth.
   }
