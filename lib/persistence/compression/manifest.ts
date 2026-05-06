@@ -19,6 +19,29 @@ export type ChunkRef = {
   n: number;
 };
 
+/**
+ * Optional content-aware pre-compression layer applied *before* chunking.
+ * For PDFs we re-emit the file with object streams + xref streams via
+ * pdf-lib, which is byte-altering but content-equivalent. The chunker sees
+ * the post-precompress bytes; on read we serve those same bytes verbatim,
+ * so the round-trip is identical to what we stored.
+ *
+ * Additive in v1 manifests: absent or null means "stored as uploaded".
+ */
+export type PrecompressMeta = {
+  /**
+   * `pdflib-objstreams`: pdf-lib re-save with object streams + xref streams.
+   * `mupdf-recompress`: MuPDF aggressive lossless recompress
+   * (garbage=deduplicate, objstms, compress-effort=100, lossless flate over
+   * all streams including fonts and images).
+   */
+  alg: "pdflib-objstreams" | "mupdf-recompress";
+  /** As-uploaded byte length. */
+  inSize: number;
+  /** Bytes actually handed to the chunker. */
+  outSize: number;
+};
+
 export type Manifest = {
   v: typeof MANIFEST_VERSION;
   /** Original filename (best-effort, may be undefined). */
@@ -42,6 +65,11 @@ export type Manifest = {
     level: number;
     dictId: string | null;
   };
+  /**
+   * Pre-chunk content-aware optimization, if any. Optional + nullable for
+   * backwards compatibility with manifests written before this layer existed.
+   */
+  precompress?: PrecompressMeta | null;
   /** Ordered list of chunks. Concatenating their plaintext yields the file. */
   chunks: ChunkRef[];
   /** Wall-clock time the manifest was written, ms since epoch. */

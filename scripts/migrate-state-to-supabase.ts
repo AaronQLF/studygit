@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { loadEnvConfig } from "@next/env";
 import { supabaseFileOperations } from "../lib/persistence/supabase";
-import { getSupabaseAdminClient } from "../lib/server/supabase/admin";
+import { getSupabaseAdminClient } from "../lib/server/supabase/admin-core";
 import type { AppState, CanvasNode, PdfNodeData } from "../lib/types";
 
 const projectDir = process.cwd();
