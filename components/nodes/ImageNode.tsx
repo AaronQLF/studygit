@@ -21,8 +21,24 @@ export function ImageNode({ id, data }: NodeProps) {
   };
 
   return (
-    <NodeShell id={id} accentColor="#6d7f5a" WatermarkIcon={ImageIcon} label="Image">
-      <div className="px-3 pb-3 pt-2 w-[280px]">
+    <NodeShell
+      id={id}
+      accentColor="#6d7f5a"
+      WatermarkIcon={ImageIcon}
+      label="Image"
+      actions={
+        !editing ? (
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+            onClick={() => openPanel(id)}
+            title="Open in panel"
+          >
+            Open <ArrowUpRight size={10} />
+          </button>
+        ) : null
+      }
+    >
+      <div className="px-3 pb-3 pt-2.5 w-[280px]">
         {editing ? (
           <div className="flex flex-col gap-2">
             <input
@@ -54,15 +70,6 @@ export function ImageNode({ id, data }: NodeProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                className="nodrag inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-                onClick={() => openPanel(id)}
-                title="Open in panel"
-              >
-                Open <ArrowUpRight size={10} />
-              </button>
-            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={d.url}

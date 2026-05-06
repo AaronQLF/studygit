@@ -83,17 +83,19 @@ export function PdfNode({ id, data }: NodeProps) {
       id={id}
       className="w-[332px]"
       accentColor="#a87234"
+      WatermarkIcon={FileText}
       label="PDF"
+      actions={
+        <button
+          className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+          onClick={() => openPanel(id)}
+          title="Open PDF"
+        >
+          Open
+        </button>
+      }
     >
-      <div className="space-y-3 px-4 pt-2 pb-3.5" onDoubleClick={() => openPanel(id)}>
-        <div className="flex items-center justify-end">
-          <button
-            className="nodrag rounded-md border border-[var(--pg-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--pg-muted)] transition-colors hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-            onClick={() => openPanel(id)}
-          >
-            Open
-          </button>
-        </div>
+      <div className="space-y-3 px-4 pt-2.5 pb-3.5" onDoubleClick={() => openPanel(id)}>
         <EditableTitle
           value={d.title || d.fileName || ""}
           onChange={(next) =>

@@ -16,6 +16,7 @@ export function NodeShell({
   WatermarkIcon,
   label,
   bare = false,
+  actions,
 }: {
   id: string;
   children: React.ReactNode;
@@ -25,6 +26,11 @@ export function NodeShell({
   WatermarkIcon?: React.ComponentType<{ size?: number }>;
   label?: string;
   bare?: boolean;
+  /**
+   * Optional inline controls rendered on the right side of the header,
+   * before the overflow menu. Use for primary affordances like "Open".
+   */
+  actions?: React.ReactNode;
 }) {
   const duplicateNode = useStore((s) => s.duplicateNode);
   const openPanel = useStore((s) => s.openPanel);
@@ -67,9 +73,9 @@ export function NodeShell({
   };
 
   const renderMenu = () => (
-    <div ref={menuRef} className="absolute right-2 top-2 z-20 nodrag">
+    <div ref={menuRef} className="nodrag">
       <button
-        className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-[var(--pg-bg)]/0 opacity-0 group-hover:opacity-100 hover:bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+        className="h-7 w-7 inline-flex items-center justify-center rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
         onClick={(event) => {
           event.stopPropagation();
           setOpen((v) => !v);
@@ -79,7 +85,7 @@ export function NodeShell({
         <MoreHorizontal size={14} />
       </button>
       {open && (
-        <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-1 shadow-[var(--pg-shadow)]">
+        <div className="absolute right-2 top-9 z-30 min-w-[160px] rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-1 shadow-[var(--pg-shadow)]">
           <button
             className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] flex items-center gap-2"
             onClick={(event) => {
@@ -125,7 +131,7 @@ export function NodeShell({
         onDoubleClick={onShellDoubleClick}
       >
         <Handle type="target" position={Position.Top} className="!w-2 !h-2" />
-        {renderMenu()}
+        <div className="absolute right-2 top-2 z-20">{renderMenu()}</div>
         {children}
         <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" />
       </div>
@@ -138,48 +144,61 @@ export function NodeShell({
     <div
       className="group relative pg-anim"
       onDoubleClick={onShellDoubleClick}
+      style={{ ["--node-accent" as string]: accent }}
     >
-      {/* Card body */}
       <div
         className={clsx(
-          "relative overflow-hidden rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-sm)] transition-[transform,box-shadow,border-color] duration-200 ease-out group-hover:-translate-y-[1px] group-hover:border-[var(--pg-border-strong)] group-hover:shadow-[var(--pg-shadow)]",
+          "pg-node-card relative overflow-visible rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-sm)]",
           className
         )}
       >
-        {/* Thin accent strip along the top edge */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-[3px]"
-          style={{
-            background: `linear-gradient(90deg, ${accent} 0%, color-mix(in srgb, ${accent} 35%, transparent) 100%)`,
-          }}
-        />
-
-        {/* Header row: label chip + reserved space for the menu button */}
+        {/* Header: monogram badge + label, with inline actions and overflow menu on the right */}
         {label ? (
-          <div className="flex items-center gap-1.5 px-3.5 pt-3 pr-10">
+          <div className="relative flex items-center gap-2 px-3 pt-2.5">
             <span
               aria-hidden
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: accent }}
-            />
-            <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--pg-muted)]">
+              className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-md transition-colors"
+              style={{
+                backgroundColor:
+                  "color-mix(in srgb, var(--node-accent) 11%, transparent)",
+                color:
+                  "color-mix(in srgb, var(--node-accent) 78%, var(--pg-fg) 22%)",
+                boxShadow:
+                  "inset 0 0 0 1px color-mix(in srgb, var(--node-accent) 22%, transparent)",
+              }}
+            >
+              {WatermarkIcon ? (
+                <WatermarkIcon size={12} />
+              ) : (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--node-accent)" }}
+                />
+              )}
+            </span>
+            <span
+              className="text-[10.5px] font-medium uppercase tracking-[0.14em]"
+              style={{
+                color:
+                  "color-mix(in srgb, var(--node-accent) 28%, var(--pg-muted) 72%)",
+              }}
+            >
               {label}
             </span>
-            {WatermarkIcon ? (
-              <span className="ml-auto text-[var(--pg-muted-soft)]">
-                <WatermarkIcon size={12} />
-              </span>
-            ) : null}
+            <div className="ml-auto flex items-center gap-0.5">
+              {actions ? <div className="nodrag">{actions}</div> : null}
+              {renderMenu()}
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="absolute right-2 top-2 z-20">{renderMenu()}</div>
+        )}
 
         <Handle
           type="target"
           position={Position.Top}
           className="!w-2 !h-2"
         />
-        {renderMenu()}
         {children}
         <Handle
           type="source"

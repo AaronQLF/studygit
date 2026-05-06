@@ -39,8 +39,24 @@ export function LinkNode({ id, data }: NodeProps) {
   }
 
   return (
-    <NodeShell id={id} accentColor="#2a4a6b" WatermarkIcon={Link2} label="Link">
-      <div className="px-3 pb-3 pt-2 min-w-[240px]">
+    <NodeShell
+      id={id}
+      accentColor="#2a4a6b"
+      WatermarkIcon={Link2}
+      label="Link"
+      actions={
+        !editing ? (
+          <button
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+            onClick={() => openPanel(id)}
+            title="Open in panel"
+          >
+            Open <ArrowUpRight size={10} />
+          </button>
+        ) : null
+      }
+    >
+      <div className="px-3 pb-3 pt-2.5 min-w-[240px]">
         {editing ? (
           <div className="flex flex-col gap-2">
             <input
@@ -87,15 +103,6 @@ export function LinkNode({ id, data }: NodeProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                className="nodrag inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-                onClick={() => openPanel(id)}
-                title="Open in panel"
-              >
-                Open <ArrowUpRight size={10} />
-              </button>
-            </div>
             <EditableTitle
               value={d.title}
               onChange={(next) =>

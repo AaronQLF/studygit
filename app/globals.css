@@ -138,8 +138,58 @@ select,
 }
 
 .react-flow__node.selected {
-  box-shadow: 0 0 0 1.5px var(--pg-border-strong);
   border-radius: var(--pg-radius-lg);
+}
+
+/* Card-style canvas nodes share this base treatment. The "atmosphere" of the
+   accent color (set per-node via --node-accent) signals type via subtle
+   hover/selection light, instead of a hard top stripe. */
+.pg-node-card {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.65, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.2, 0.65, 0.3, 1),
+    border-color 220ms cubic-bezier(0.2, 0.65, 0.3, 1);
+  will-change: transform;
+}
+
+.group:hover > .pg-node-card,
+.pg-node-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(
+    in srgb,
+    var(--node-accent, var(--pg-border-strong)) 32%,
+    var(--pg-border-strong) 68%
+  );
+  box-shadow:
+    var(--pg-shadow),
+    0 0 32px -10px
+      color-mix(
+        in srgb,
+        var(--node-accent, var(--pg-border-strong)) 40%,
+        transparent
+      );
+}
+
+.react-flow__node.selected .pg-node-card {
+  border-color: color-mix(
+    in srgb,
+    var(--node-accent, var(--pg-accent)) 60%,
+    var(--pg-border-strong) 40%
+  );
+  box-shadow:
+    var(--pg-shadow),
+    0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--node-accent, var(--pg-accent)) 55%,
+        transparent
+      ),
+    0 0 38px -12px
+      color-mix(
+        in srgb,
+        var(--node-accent, var(--pg-accent)) 55%,
+        transparent
+      );
 }
 
 .react-flow__controls {
@@ -1079,41 +1129,94 @@ select,
   box-sizing: border-box;
   display: inline-flex;
   align-items: baseline;
-  gap: 0.3rem;
+  gap: 0.4em;
   vertical-align: baseline;
-  padding: 1px 8px 1px 0;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--pg-accent-soft) 70%, transparent);
-  color: color-mix(in srgb, var(--pg-accent) 78%, var(--pg-fg) 22%);
+  padding: 0 9px 0 8px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--pg-citation-color, var(--pg-accent)) 11%,
+    transparent
+  );
+  color: color-mix(
+    in srgb,
+    var(--pg-citation-color, var(--pg-accent)) 50%,
+    var(--pg-fg) 50%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--pg-citation-color, var(--pg-accent)) 22%,
+      transparent
+    );
   font-family: var(--font-sans);
   font-size: 0.86em;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.5;
   cursor: pointer;
   text-decoration: none;
   position: relative;
-  transition: background 100ms ease, box-shadow 100ms ease;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
 }
 .pg-prose .pg-citation .pg-citation-pill::before,
 .pg-citation .pg-citation-pill::before {
   content: "";
   display: inline-block;
-  width: 3px;
-  align-self: stretch;
-  margin-right: 0.45rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  align-self: center;
   flex-shrink: 0;
   background: var(--pg-citation-color, var(--pg-accent));
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
+  box-shadow: 0 0 0 2px
+    color-mix(
+      in srgb,
+      var(--pg-citation-color, var(--pg-accent)) 16%,
+      transparent
+    );
 }
 .pg-prose .pg-citation .pg-citation-pill:hover,
 .pg-citation .pg-citation-pill:hover {
-  background: color-mix(in srgb, var(--pg-accent) 18%, var(--pg-bg) 82%);
-  box-shadow: 0 1px 0 var(--pg-accent-soft);
+  background: color-mix(
+    in srgb,
+    var(--pg-citation-color, var(--pg-accent)) 18%,
+    transparent
+  );
+  color: color-mix(
+    in srgb,
+    var(--pg-citation-color, var(--pg-accent)) 70%,
+    var(--pg-fg) 30%
+  );
+  box-shadow: inset 0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--pg-citation-color, var(--pg-accent)) 38%,
+        transparent
+      ),
+    0 1px 0
+      color-mix(
+        in srgb,
+        var(--pg-citation-color, var(--pg-accent)) 18%,
+        transparent
+      );
 }
 .pg-prose .pg-citation.is-selected .pg-citation-pill,
 .pg-citation.is-selected .pg-citation-pill {
-  box-shadow: 0 0 0 2px var(--pg-accent-soft);
+  box-shadow: inset 0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--pg-citation-color, var(--pg-accent)) 50%,
+        transparent
+      ),
+    0 0 0 2px
+      color-mix(
+        in srgb,
+        var(--pg-citation-color, var(--pg-accent)) 22%,
+        transparent
+      );
 }
 .pg-prose .pg-citation .pg-citation-pill:disabled,
 .pg-citation .pg-citation-pill:disabled {
@@ -1125,8 +1228,8 @@ select,
   background: transparent;
   color: var(--pg-muted);
   text-decoration: line-through;
-  border: 1px dashed var(--pg-border-strong);
-  padding: 0 7px;
+  box-shadow: inset 0 0 0 1px var(--pg-border-strong);
+  padding: 0 9px;
 }
 .pg-prose .pg-citation.is-broken .pg-citation-pill::before,
 .pg-citation.is-broken .pg-citation-pill::before {
@@ -1142,9 +1245,17 @@ select,
 .pg-prose .pg-citation .pg-citation-page,
 .pg-citation .pg-citation-page {
   font-family: var(--font-mono);
-  font-size: 0.85em;
-  font-weight: 400;
-  opacity: 0.72;
+  font-size: 0.78em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+  padding-left: 0.2em;
+  border-left: 1px solid
+    color-mix(
+      in srgb,
+      var(--pg-citation-color, var(--pg-accent)) 28%,
+      transparent
+    );
 }
 
 /* Code-block-lowlight syntax highlighting (highlight.js dark-ish). */
