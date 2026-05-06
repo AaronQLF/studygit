@@ -39,7 +39,9 @@ import {
   MANIFEST_VERSION,
   type ChunkRef,
   type Manifest,
+  type PrecompressMeta,
 } from "./manifest";
+import { maybePrecompressPdf } from "./pdf-precompress";
 import { r2BlobStore, type BlobObject, type BlobStore } from "../r2-client";
 
 const CHUNK_PREFIX = "chunks/";
@@ -142,8 +144,14 @@ export type StoreReport = {
   uploadedBytes: number;
   /** Total compressed footprint of the chunks (regardless of dedup). */
   compressedBytes: number;
-  /** Logical (plaintext) size. */
+  /** Logical (plaintext) size — bytes handed to the chunker. */
   plaintextBytes: number;
+  /** As-uploaded size, before any pre-compression layer. */
+  originalBytes: number;
+  /** Pre-chunk content-aware optimization applied (PDF only, today). */
+  precompress: PrecompressMeta | null;
+  /** Set when pre-compression was attempted but skipped/no-op. */
+  precompressSkipReason?: string;
   /** How many chunks were already present (cache or R2) and skipped. */
   dedupedChunks: number;
   /** Total chunks the file decomposed into. */
@@ -171,7 +179,17 @@ export async function storeFile(
   opts?: ChunkStoreOpts
 ): Promise<StoreReport> {
   const store = blob(opts);
-  const totalSha = sha256Hex(buffer);
+  const originalBytes = buffer.length;
+
+  // Content-aware pre-compression. For PDFs this re-emits the file with
+  // object streams + xref streams, which is the only layer that *actually*
+  // shrinks already-internally-compressed PDFs (zstd over JPEG/FlateDecode
+  // streams gives near-zero gain). Returns the original buffer untouched
+  // for non-PDFs, encrypted PDFs, parse errors, or when re-saving wouldn't
+  // be smaller — so this is a strict best-of(original, optimized).
+  const precompressed = await maybePrecompressPdf(buffer, mime);
+  const inputBuf = precompressed.buffer;
+  const totalSha = sha256Hex(inputBuf);
 
   const refs: ChunkRef[] = [];
   let uploadedBytes = 0;
@@ -179,9 +197,9 @@ export async function storeFile(
   let dedupedChunks = 0;
   let totalChunks = 0;
 
-  for (const { start, end } of chunkRanges(buffer, CHUNK_CONFIG)) {
+  for (const { start, end } of chunkRanges(inputBuf, CHUNK_CONFIG)) {
     totalChunks++;
-    const slice = buffer.subarray(start, end);
+    const slice = inputBuf.subarray(start, end);
     const h = sha256Hex(slice);
     refs.push({ h, n: slice.length });
 
@@ -216,7 +234,7 @@ export async function storeFile(
     v: MANIFEST_VERSION,
     name,
     mime,
-    size: buffer.length,
+    size: inputBuf.length,
     sha256: totalSha,
     chunker: {
       alg: "fastcdc",
@@ -225,12 +243,13 @@ export async function storeFile(
       max: CHUNK_CONFIG.maxSize,
     },
     compression: { ...COMPRESSION_INFO },
+    precompress: precompressed.applied,
     chunks: refs,
     createdAt: Date.now(),
   };
   const manifestBuf = encodeManifest(manifest);
   await store.put(manifestKey(key), manifestBuf, "application/json", {
-    "plaintext-size": String(buffer.length),
+    "plaintext-size": String(inputBuf.length),
     "chunk-count": String(refs.length),
   });
   uploadedBytes += manifestBuf.length;
@@ -240,7 +259,10 @@ export async function storeFile(
     manifest,
     uploadedBytes,
     compressedBytes,
-    plaintextBytes: buffer.length,
+    plaintextBytes: inputBuf.length,
+    originalBytes,
+    precompress: precompressed.applied,
+    precompressSkipReason: precompressed.skipReason,
     dedupedChunks,
     totalChunks,
   };

@@ -167,10 +167,13 @@ Find the user's UUID under **Authentication → Users** in the Supabase dashboar
 
 ## Storage: chunked, dedup-friendly compression on R2
 
+personalGIt is and will stay free to use. Storage was the single biggest obstacle to that promise — students upload tens to hundreds of megabytes of PDFs, and naively writing each upload as a fresh object on a paid-per-GiB store would burn through any free tier in days. The pipeline below is what makes the free-forever line credible: it never stores the same bytes twice and then compresses what's left aggressively, so ten students working from the same paper, or one student re-exporting the same deck twenty times, costs roughly the bytes of one copy.
+
 In `supabase` mode every uploaded PDF (and any future binary) takes a longer route than "PUT the bytes to S3 and hand back a presigned URL". The full pipeline lives under `lib/persistence/compression/` and `lib/persistence/r2-client.ts`:
 
 ```
 upload buffer
+  → PDF-aware lossless re-emit (best-of) (lib/persistence/compression/pdf-precompress.ts)
   → FastCDC content-defined chunker      (lib/persistence/compression/fastcdc.ts)
   → sha256(plaintext) per chunk          (content addressing)
   → cache lookup → R2 HEAD lookup        (cross-file / cross-user dedup)
@@ -179,7 +182,14 @@ upload buffer
   → R2 PUT manifests/<key>.json          (lib/persistence/compression/manifest.ts)
 ```
 
-The four ideas, briefly:
+The five ideas, briefly:
+
+0. **PDF-aware structural re-emit (pre-chunk).** PDFs are already compressed internally (FlateDecode/JPEG/JBIG2 streams), so a generic codec like zstd has almost nothing to remove. Before chunking, we re-emit the PDF through one of two pluggable strategies (selected with `PDF_PRECOMPRESS`):
+
+   - `pdflib` *(default)* — `pdf-lib` re-save with `useObjectStreams: true`, packing the object table into compressed object streams and writing a cross-reference *stream* instead of an ASCII xref table. Pure JS, no native deps, near-zero cold-start cost. Typical gain: 5–30% on unoptimized exports, near-zero on already-optimized PDFs.
+   - `mupdf` *(opt-in)* — the official MuPDF WASM build with `garbage=deduplicate,objstms=yes,compress=yes,compress-fonts=yes,compress-images=yes,compress-effort=100,regenerate-id=no`. Drops unreachable objects, removes byte-identical duplicate objects, and re-flate-compresses every stream (incl. fonts and images, lossless — does not re-encode JPEGs). Loaded lazily via dynamic `import()` so it pays a one-time ~10 MB WASM cost only when enabled. Typical gain: 10–40% even on already-optimized PDFs. Note: `mupdf` is **AGPL-3.0**; use the `pdflib` strategy if that license is a non-starter for your deployment.
+
+   Both strategies are byte-altering but content-equivalent. We keep whichever of `(original, re-emitted)` is smaller, so the layer is strictly never a regression. Re-saved bytes are deterministic for identical inputs (pdf-lib: `updateMetadata: false`; mupdf: `regenerate-id=no`), which preserves cross-user dedup at the chunk layer. Encrypted PDFs, parse errors, and "no size win" cases fall through to the original bytes transparently.
 
 1. **Content-defined chunking (FastCDC).** We split the buffer into variable-size chunks where the boundaries are decided by a rolling Gear hash over the bytes themselves, with a strict mask up to the average size and a loose mask up to the max — this is the normalized chunking trick from Xia et al., *FastCDC: a Fast and Efficient Content-Defined Chunking Approach for Data Deduplication* (USENIX ATC '16). Editing the front of a 50-MB PDF only invalidates the chunks around the edit instead of every chunk after it, the way fixed-size chunks would.
 2. **Content-addressable storage.** Each chunk is named by `sha256(plaintext)`. Two students who upload the same paper share its chunks for free. A student who re-exports a 200-slide deck after fixing a typo on slide 3 only re-uploads the chunk(s) covering slide 3. There's no coordination, no "is this a duplicate?" RPC — content addressing is globally consistent by definition.
@@ -194,12 +204,14 @@ Operational details worth knowing:
 
 Tunables (all optional, all read once at module load):
 
-| env var      | default   | meaning                                            |
-| ------------ | --------- | -------------------------------------------------- |
-| `ZSTD_LEVEL` | `19`      | zstd compression level (1–22).                     |
-| `CHUNK_MIN`  | `65536`   | FastCDC minimum chunk size, bytes.                 |
-| `CHUNK_AVG`  | `262144`  | FastCDC target average chunk size, bytes.          |
-| `CHUNK_MAX`  | `1048576` | FastCDC maximum chunk size, bytes.                 |
+| env var                      | default     | meaning                                                                |
+| ---------------------------- | ----------- | ---------------------------------------------------------------------- |
+| `ZSTD_LEVEL`                 | `19`        | zstd compression level (1–22).                                         |
+| `CHUNK_MIN`                  | `65536`     | FastCDC minimum chunk size, bytes.                                     |
+| `CHUNK_AVG`                  | `262144`    | FastCDC target average chunk size, bytes.                              |
+| `CHUNK_MAX`                  | `1048576`   | FastCDC maximum chunk size, bytes.                                     |
+| `PDF_PRECOMPRESS`            | `pdflib`    | `pdflib` (pure-JS, fast, default), `mupdf` (WASM, AGPL, max ratio), or `off`/`0`/`false` to disable. |
+| `PDF_PRECOMPRESS_MAX_BYTES`  | `268435456` | Skip the pre-compress pass for inputs larger than this (256 MiB).      |
 
 ## Project layout
 
@@ -236,7 +248,8 @@ lib/
     auth.ts                     getCurrentUser() + verifySession()
     supabase/browser.ts         Browser client (cookies, anon key)
     supabase/server.ts          RSC/route-handler/server-action client (cookies, anon key)
-    supabase/admin.ts           Service-role client (admin only — bypasses RLS)
+    supabase/admin.ts           Service-role client for Next.js (re-exports admin-core behind "server-only")
+    supabase/admin-core.ts      Same client, no "server-only" — used by scripts (gc, migration)
   persistence/
     types.ts                    Driver interface (state + file operations)
     file.ts                     Local filesystem driver

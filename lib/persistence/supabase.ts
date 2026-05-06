@@ -165,12 +165,24 @@ function logStoreReport(r: StoreReport): void {
     r.plaintextBytes > 0 ? r.compressedBytes / r.plaintextBytes : 1;
   const dedupPct =
     r.totalChunks > 0 ? (r.dedupedChunks / r.totalChunks) * 100 : 0;
+  // Pre-compress segment: only print when meaningful (a PDF was attempted).
+  let pre = "";
+  if (r.precompress) {
+    const p = r.precompress;
+    const preRatio = p.inSize > 0 ? p.outSize / p.inSize : 1;
+    pre =
+      ` precompress=${p.alg} ${p.inSize}→${p.outSize} (ratio=${preRatio.toFixed(3)})`;
+  } else if (r.precompressSkipReason && r.precompressSkipReason !== "not-pdf") {
+    pre = ` precompress=skip(${r.precompressSkipReason})`;
+  }
   console.log(
     `[r2-store] ${r.key}: ` +
+      `original=${r.originalBytes} ` +
       `plaintext=${r.plaintextBytes} ` +
       `compressed=${r.compressedBytes} (ratio=${ratio.toFixed(3)}) ` +
       `uploaded=${r.uploadedBytes} ` +
-      `chunks=${r.totalChunks} dedup=${r.dedupedChunks} (${dedupPct.toFixed(1)}%)`
+      `chunks=${r.totalChunks} dedup=${r.dedupedChunks} (${dedupPct.toFixed(1)}%)` +
+      pre
   );
 }
 

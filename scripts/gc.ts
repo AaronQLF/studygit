@@ -111,9 +111,10 @@ function formatDuration(ms: number): string {
 // require touching the GC.
 async function loadLiveKeysFromSupabase(): Promise<Set<string>> {
   // Lazy import so the chunks-only path doesn't require the supabase admin
-  // client to be configured (and doesn't pull in `server-only`).
+  // client to be configured. We pull from `admin-core` (not `admin`) so this
+  // script runs in plain Node without resolving Next's "server-only" guard.
   const { getSupabaseAdminClient } = await import(
-    "../lib/server/supabase/admin"
+    "../lib/server/supabase/admin-core"
   );
   const supabase = getSupabaseAdminClient();
 
