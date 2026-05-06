@@ -28,7 +28,7 @@ export const INITIAL_STATE: AppState = {
           '<li data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Add a Page (<code>B</code>) and try the slash menu</p></div></li>' +
           '<li data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Drag from one node\u2019s handle to another to connect ideas</p></div></li></ul>' +
           "<h2>Keyboard</h2>" +
-          "<ul><li><code>L I N B D P</code> on the canvas \u2014 add a link, image, note, page, doc, or pdf</li>" +
+          "<ul><li><code>L I N B P S</code> on the canvas \u2014 add a link, image, note, page, PDF, or shape</li>" +
           "<li><code>\u2318K</code> \u2014 command palette</li>" +
           "<li><code>[</code> \u2014 toggle sidebar</li>" +
           "<li><code>Enter</code> on a selected node \u2014 focus it</li></ul>",

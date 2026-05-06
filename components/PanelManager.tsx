@@ -8,7 +8,6 @@ import { LinkPanelBody } from "./panels/LinkPanelBody";
 import { ImagePanelBody } from "./panels/ImagePanelBody";
 import { NotePanelBody } from "./panels/NotePanelBody";
 import { PagePanelBody } from "./panels/PagePanelBody";
-import { DocumentPanelBody } from "./panels/DocumentPanelBody";
 import { PdfPanelBody } from "./panels/PdfPanelBody";
 
 function nodeTitle(node: CanvasNode | undefined): string {
@@ -31,8 +30,6 @@ function PanelBody({ node }: { node: CanvasNode }) {
     case "page":
     case "blog":
       return <PagePanelBody node={node} />;
-    case "document":
-      return <DocumentPanelBody node={node} />;
     case "pdf":
       return <PdfPanelBody node={node} />;
     default:

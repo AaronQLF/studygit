@@ -43,8 +43,6 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
     case "blog":
     case "page":
       return { kind: "page", title: "New page", content: "" };
-    case "document":
-      return { kind, title: "New document", content: "", highlights: [] };
     case "pdf":
       return { kind, title: "New PDF", src: "", highlights: [] };
     case "shape":

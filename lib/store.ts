@@ -10,7 +10,6 @@ import type {
   CanvasNode,
   Comment,
   FloatingPanel,
-  Highlight,
   PdfHighlight,
   PdfHighlightRect,
   Workspace,
@@ -90,20 +89,6 @@ type Store = AppState & {
 
   addEdge: (workspaceId: string, source: string, target: string) => void;
   deleteEdge: (id: string) => void;
-
-  addHighlight: (
-    nodeId: string,
-    start: number,
-    end: number,
-    color: string
-  ) => string;
-  deleteHighlight: (nodeId: string, highlightId: string) => void;
-  addComment: (nodeId: string, highlightId: string, text: string) => void;
-  deleteComment: (
-    nodeId: string,
-    highlightId: string,
-    commentId: string
-  ) => void;
 
   addPdfHighlight: (
     nodeId: string,
@@ -333,7 +318,7 @@ export const useStore = create<Store>((set, get) => ({
       const validWsIds = new Set(workspaces.map((w) => w.id));
       const fallbackWsId = workspaces[0].id;
 
-      let blogMigrated = false;
+      let nodesMigrated = false;
       const nodes: CanvasNode[] = incomingNodes.map((n) => {
         const wsId =
           n.workspaceId && validWsIds.has(n.workspaceId)
@@ -343,7 +328,7 @@ export const useStore = create<Store>((set, get) => ({
         void _legacy;
         const base: CanvasNode = { ...rest, workspaceId: wsId };
         const migrated = migrateNode(base);
-        if (migrated.changed) blogMigrated = true;
+        if (migrated.changed) nodesMigrated = true;
         return migrated.node;
       });
       const edges: CanvasEdge[] = incomingEdges.map((e) => {
@@ -378,7 +363,7 @@ export const useStore = create<Store>((set, get) => ({
       const needsMigration =
         hadFolders ||
         !data.workspaces ||
-        blogMigrated ||
+        nodesMigrated ||
         incomingNodes.some((n) => !n.workspaceId) ||
         incomingEdges.some((e) => !e.workspaceId);
       if (needsMigration) scheduleSave(get, set);
@@ -571,8 +556,6 @@ export const useStore = create<Store>((set, get) => ({
       width:
         data.kind === "blog" || data.kind === "page"
           ? 440
-          : data.kind === "document"
-          ? 360
           : data.kind === "pdf"
           ? 320
           : data.kind === "image"
@@ -684,96 +667,6 @@ export const useStore = create<Store>((set, get) => ({
 
   deleteEdge: (id) => {
     set((s) => ({ edges: s.edges.filter((e) => e.id !== id) }));
-    scheduleSave(get, set);
-  },
-
-  addHighlight: (nodeId, start, end, color) => {
-    const id = nanoid(8);
-    const highlight: Highlight = {
-      id,
-      start,
-      end,
-      color,
-      comments: [],
-      createdAt: Date.now(),
-    };
-    set((s) => ({
-      nodes: s.nodes.map((n) => {
-        if (n.id !== nodeId || n.data.kind !== "document") return n;
-        return {
-          ...n,
-          data: {
-            ...n.data,
-            highlights: [...n.data.highlights, highlight],
-          },
-        };
-      }),
-    }));
-    scheduleSave(get, set);
-    return id;
-  },
-
-  deleteHighlight: (nodeId, highlightId) => {
-    set((s) => ({
-      nodes: s.nodes.map((n) => {
-        if (n.id !== nodeId || n.data.kind !== "document") return n;
-        return {
-          ...n,
-          data: {
-            ...n.data,
-            highlights: n.data.highlights.filter((h) => h.id !== highlightId),
-          },
-        };
-      }),
-    }));
-    scheduleSave(get, set);
-  },
-
-  addComment: (nodeId, highlightId, text) => {
-    const comment: Comment = {
-      id: nanoid(8),
-      text,
-      createdAt: Date.now(),
-    };
-    set((s) => ({
-      nodes: s.nodes.map((n) => {
-        if (n.id !== nodeId || n.data.kind !== "document") return n;
-        return {
-          ...n,
-          data: {
-            ...n.data,
-            highlights: n.data.highlights.map((h) =>
-              h.id === highlightId
-                ? { ...h, comments: [...h.comments, comment] }
-                : h
-            ),
-          },
-        };
-      }),
-    }));
-    scheduleSave(get, set);
-  },
-
-  deleteComment: (nodeId, highlightId, commentId) => {
-    set((s) => ({
-      nodes: s.nodes.map((n) => {
-        if (n.id !== nodeId || n.data.kind !== "document") return n;
-        return {
-          ...n,
-          data: {
-            ...n.data,
-            highlights: n.data.highlights.map((h) =>
-              h.id === highlightId
-                ? {
-                    ...h,
-                    comments: h.comments.filter((c) => c.id !== commentId),
-                  }
-                : h
-            ),
-          },
-        };
-      }),
-    }));
     scheduleSave(get, set);
   },
 

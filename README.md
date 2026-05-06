@@ -1,6 +1,6 @@
 # personalGIt
 
-Your personal learning canvas — a "student second brain". Create independent workspaces, drop in links, images, sticky notes, rich block-edited Pages, documents, and PDFs you can highlight, annotate, and ask AI about — all on an infinite React Flow canvas.
+Your personal learning canvas — a "student second brain". Create independent workspaces, drop in links, images, sticky notes, rich block-edited Pages, shapes, and PDFs you can highlight, annotate, and ask AI about — all on an infinite React Flow canvas.
 
 ## Stack
 
@@ -273,10 +273,10 @@ data/
 - **Esc** closes the topmost panel; **⌘ / Ctrl + Shift + Esc** closes all panels
 - Drag a panel header to move; drag the bottom-right grip to resize; double-click the header (or hit `□`) to maximize
 - Drag nodes on the canvas to re-arrange; drag the handles to connect
-- Select a highlight in the document reader to view + add comments
+- Select a highlight in a PDF panel to view + add comments
 - `⌘+↵` / `Ctrl+↵` in the comment box to post
 
 ## Notes
 
 - Images are loaded from URLs (no upload pipeline yet). If you want local images, drop them in `public/` and reference `/your-image.png`.
-- Document content is plain text (supports newlines). Highlights are stored as `{start, end}` offsets, so re-editing the document may shift existing highlights — edit carefully.
+- Legacy plain-text **document** nodes are migrated to **Pages** on load (body text preserved; old offset-based highlights and comments are not carried over).

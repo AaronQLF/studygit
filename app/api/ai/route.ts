@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
   const systemContent = [
     "You are an assistant embedded in personalGIt, a personal learning canvas.",
-    "The user is reading a document and has highlighted an excerpt to discuss.",
+    "The user is reading a PDF or rich page and has highlighted an excerpt to discuss.",
     "Be concise (4–10 sentences unless asked to elaborate), honest about",
     "uncertainty, and explain like you would to a curious engineer.",
     "When helpful, quote short phrases from the excerpt in backticks.",
