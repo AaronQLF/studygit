@@ -189,7 +189,7 @@ The four ideas, briefly:
 Operational details worth knowing:
 
 - A small on-disk cache lives at `lib/persistence/cache/shards/` (gitignored). Cache hit → no R2 round-trip *and* no zstd pass on uploads, no R2 round-trip *and* a single zstd pass on reads.
-- Chunks are *never* deleted on file delete: the same chunk may back many manifests. Garbage collection is a periodic mark-and-sweep job (mark every chunk reachable from any manifest, sweep the orphans). That batch job is left as future work — it's straightforward but easier to do correctly when there's real production traffic to inform tuning.
+- Chunks are *never* deleted on file delete: the same chunk may back many manifests. Garbage collection is a periodic mark-and-sweep job (mark every chunk reachable from any manifest, sweep the orphans). It runs as `npm run gc` locally and as a weekly GitHub Action (`.github/workflows/gc.yml`, Sundays at 03:00 UTC, with manual `workflow_dispatch` for ad-hoc runs). The job needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the `R2_*` secrets configured in **Settings → Secrets and variables → Actions**.
 - An optional `npm run zstd:train` script samples R2 chunks (or a local directory) and trains a zstd dictionary, uploaded to `dicts/<id>` plus a `dicts/current` pointer. The dictionary path is wired into the manifest schema (`compression.dictId`) but not yet used by the runtime — `@mongodb-js/zstd` doesn't expose dict APIs. Swapping to a dict-aware codec (`zstd-napi` or Node 23.8+ native zstd) is a single-file change in `lib/persistence/compression/zstd.ts`.
 
 Tunables (all optional, all read once at module load):
