@@ -19,18 +19,18 @@ export function PageNode({ id, data }: NodeProps) {
       accentColor="#b53b1e"
       WatermarkIcon={FileText}
       label="Page"
-    >
-      <div className="flex items-center justify-end px-3.5 pt-2.5 pb-1">
+      actions={
         <button
-          className="nodrag flex items-center gap-1 text-[12px] px-2 py-1 rounded text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
           onClick={() => openPanel(id)}
+          title="Open page"
         >
-          <Pencil size={11} /> Open
+          <Pencil size={10} /> Open
         </button>
-      </div>
-
+      }
+    >
       <div
-        className="px-4 pt-1 pb-3 max-h-[420px] overflow-y-auto"
+        className="px-4 pt-2.5 pb-3.5 max-h-[420px] overflow-y-auto"
         onDoubleClick={() => openPanel(id)}
       >
         <EditableTitle
@@ -39,7 +39,7 @@ export function PageNode({ id, data }: NodeProps) {
             updateNodeData(id, { title: next } as Partial<PageNodeData>)
           }
           placeholder="Untitled page"
-          className="mb-2 text-[18px] font-semibold leading-tight text-[var(--pg-fg)]"
+          className="pg-serif mb-2 text-[20px] font-semibold leading-tight tracking-[-0.005em] text-[var(--pg-fg)]"
         />
         {d.content ? (
           <div
