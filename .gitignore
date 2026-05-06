@@ -43,3 +43,7 @@ next-env.d.ts
 
 # user-uploaded files (PDFs, etc.)
 /public/uploads
+
+# Local chunk cache for the content-addressable R2 store. Safe to delete.
+/lib/persistence/cache/shards/*
+!/lib/persistence/cache/shards/.gitkeep

@@ -11,7 +11,7 @@ Your personal learning canvas — a "student second brain". Create independent w
 - Tiptap (Notion-like block editor) with KaTeX math, Mermaid diagrams, code highlighting, slash menu
 - Persistence driver selected by `PERSISTENCE=file|supabase` (defaults to `file`)
 - Supabase Postgres stores `workspaces`/`nodes`/`edges`/`app_meta` in `supabase` mode
-- AWS S3 stores uploaded PDFs in `supabase` mode (`uploads/<nanoid>.pdf`)
+- Cloudflare R2 stores uploaded PDFs in `supabase` mode, behind a content-addressable, deduplicating, zstd-compressed chunk store — see [Storage: chunked, dedup-friendly compression on R2](#storage-chunked-dedup-friendly-compression-on-r2)
 
 ## Getting started
 
@@ -75,10 +75,15 @@ SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 # Optional: explicit origin for OAuth redirects
 # NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
-AWS_REGION=us-east-1
-AWS_S3_BUCKET=<bucket-name>
-AWS_ACCESS_KEY_ID=<access-key>
-AWS_SECRET_ACCESS_KEY=<secret-key>
+R2_ACCOUNT_ID=<r2-account-id>
+R2_BUCKET=<bucket-name>
+R2_ACCESS_KEY_ID=<r2-access-key>
+R2_SECRET_ACCESS_KEY=<r2-secret-key>
+# Optional knobs — see "Storage: chunked, dedup-friendly compression on R2"
+# ZSTD_LEVEL=19
+# CHUNK_MIN=65536
+# CHUNK_AVG=262144
+# CHUNK_MAX=1048576
 ```
 
 ### 2. Configure Supabase Auth
@@ -139,9 +144,9 @@ Then run `supabase/migrations/0002_auth_rls.sql`. It:
 
 If you already have data in `0001` and want to keep it, edit the top of `0002_auth_rls.sql` to backfill `user_id` to a chosen owner before the schema tightens. Otherwise the migration deletes pre-auth rows.
 
-### 4. S3 + run
+### 4. R2 + run
 
-Ensure your S3 bucket accepts put/get for the configured credentials, then `npm run dev`. Visit `/` for the landing page, `/signup` to create an account, or `/app` to jump straight to the canvas (the proxy redirects to `/login` if you're not signed in).
+Create an R2 bucket and an API token under **Cloudflare → R2 → Manage API Tokens** with read/write access to that bucket. Drop the four `R2_*` values into `.env.local` and `npm run dev`. Visit `/` for the landing page, `/signup` to create an account, or `/app` to jump straight to the canvas (the proxy redirects to `/login` if you're not signed in).
 
 ### Optional: one-shot migration from local state/uploads
 
@@ -149,16 +154,52 @@ Ensure your S3 bucket accepts put/get for the configured credentials, then `npm 
 npm run migrate:state -- --user-id <uuid>
 ```
 
-This uploads `public/uploads/*` assets referenced by PDF nodes, rewrites each PDF `src` to `/api/files/<key>`, and writes the resulting workspaces/nodes/edges into Supabase under the supplied `user_id` via the service-role client (RLS is enforced for app users; service-role bypasses it but must populate `user_id` because the column is `not null`).
+This uploads `public/uploads/*` assets referenced by PDF nodes through the same chunked R2 pipeline used at runtime (so duplicate PDFs across users still dedupe), rewrites each PDF `src` to `/api/files/<key>`, and writes the resulting workspaces/nodes/edges into Supabase under the supplied `user_id` via the service-role client (RLS is enforced for app users; service-role bypasses it but must populate `user_id` because the column is `not null`).
 
 Find the user's UUID under **Authentication → Users** in the Supabase dashboard.
 
 ### Notes
 
 - `PERSISTENCE=file` keeps the original auth-less behavior (`data/state.json` + `public/uploads`). Auth pages and the proxy session refresh only kick in when `PERSISTENCE=supabase`.
-- `PERSISTENCE=supabase` uses Supabase Auth + Postgres for state and S3 for PDF assets, with per-user RLS.
-- `/api/files/[key]` returns a `302` redirect to a short-lived presigned S3 GET URL (and 401s for unauthenticated callers in supabase mode).
+- `PERSISTENCE=supabase` uses Supabase Auth + Postgres for state and R2 for PDF assets, with per-user RLS.
+- `/api/files/[key]` streams reconstructed bytes (with `Range` + `ETag`/`If-None-Match` support) from the chunked R2 store; it 401s for unauthenticated callers in supabase mode.
 - `NEXT_PUBLIC_*` env vars are inlined into the client bundle; the anon key is safe to expose. The service-role key must remain server-only.
+
+## Storage: chunked, dedup-friendly compression on R2
+
+In `supabase` mode every uploaded PDF (and any future binary) takes a longer route than "PUT the bytes to S3 and hand back a presigned URL". The full pipeline lives under `lib/persistence/compression/` and `lib/persistence/r2-client.ts`:
+
+```
+upload buffer
+  → FastCDC content-defined chunker      (lib/persistence/compression/fastcdc.ts)
+  → sha256(plaintext) per chunk          (content addressing)
+  → cache lookup → R2 HEAD lookup        (cross-file / cross-user dedup)
+  → zstd compress on miss                (lib/persistence/compression/zstd.ts)
+  → R2 PUT chunks/<aa>/<rest-of-hash>
+  → R2 PUT manifests/<key>.json          (lib/persistence/compression/manifest.ts)
+```
+
+The four ideas, briefly:
+
+1. **Content-defined chunking (FastCDC).** We split the buffer into variable-size chunks where the boundaries are decided by a rolling Gear hash over the bytes themselves, with a strict mask up to the average size and a loose mask up to the max — this is the normalized chunking trick from Xia et al., *FastCDC: a Fast and Efficient Content-Defined Chunking Approach for Data Deduplication* (USENIX ATC '16). Editing the front of a 50-MB PDF only invalidates the chunks around the edit instead of every chunk after it, the way fixed-size chunks would.
+2. **Content-addressable storage.** Each chunk is named by `sha256(plaintext)`. Two students who upload the same paper share its chunks for free. A student who re-exports a 200-slide deck after fixing a typo on slide 3 only re-uploads the chunk(s) covering slide 3. There's no coordination, no "is this a duplicate?" RPC — content addressing is globally consistent by definition.
+3. **Per-chunk Zstandard at level 19.** Because dedup happens *before* compression, we only ever spend CPU on a chunk's zstd pass once across the entire system. That makes high compression levels (the slow, ratio-optimised end of zstd) economically reasonable.
+4. **Manifest-as-pointer.** A "logical file" is a tiny `manifests/<key>.json` listing the ordered chunk hashes. It's cheap to copy (rename a file, version a file, share a file with a colleague) and turns `Range: bytes=` requests into "find chunk index, decompress one chunk, slice" — which is what `/api/files/[key]` does for PDF.js range fetches.
+
+Operational details worth knowing:
+
+- A small on-disk cache lives at `lib/persistence/cache/shards/` (gitignored). Cache hit → no R2 round-trip *and* no zstd pass on uploads, no R2 round-trip *and* a single zstd pass on reads.
+- Chunks are *never* deleted on file delete: the same chunk may back many manifests. Garbage collection is a periodic mark-and-sweep job (mark every chunk reachable from any manifest, sweep the orphans). That batch job is left as future work — it's straightforward but easier to do correctly when there's real production traffic to inform tuning.
+- An optional `npm run zstd:train` script samples R2 chunks (or a local directory) and trains a zstd dictionary, uploaded to `dicts/<id>` plus a `dicts/current` pointer. The dictionary path is wired into the manifest schema (`compression.dictId`) but not yet used by the runtime — `@mongodb-js/zstd` doesn't expose dict APIs. Swapping to a dict-aware codec (`zstd-napi` or Node 23.8+ native zstd) is a single-file change in `lib/persistence/compression/zstd.ts`.
+
+Tunables (all optional, all read once at module load):
+
+| env var      | default   | meaning                                            |
+| ------------ | --------- | -------------------------------------------------- |
+| `ZSTD_LEVEL` | `19`      | zstd compression level (1–22).                     |
+| `CHUNK_MIN`  | `65536`   | FastCDC minimum chunk size, bytes.                 |
+| `CHUNK_AVG`  | `262144`  | FastCDC target average chunk size, bytes.          |
+| `CHUNK_MAX`  | `1048576` | FastCDC maximum chunk size, bytes.                 |
 
 ## Project layout
 
@@ -166,7 +207,7 @@ Find the user's UUID under **Authentication → Users** in the Supabase dashboar
 app/
   api/state/route.ts            GET/PUT the full app state (401 in supabase mode if no user)
   api/upload/route.ts           Multipart upload endpoint (delegates to active driver)
-  api/files/[key]/route.ts      Redirects to local file or presigned S3 URL
+  api/files/[key]/route.ts      Streams reconstructed bytes from R2 chunk store (Range/ETag); 302 to /uploads in file mode
   auth/callback/route.ts        OAuth + email-confirm code exchange
   (auth)/login/page.tsx         Login form (email + password, Google OAuth)
   (auth)/signup/page.tsx        Sign-up form (email + password, Google OAuth)
@@ -199,10 +240,18 @@ lib/
   persistence/
     types.ts                    Driver interface (state + file operations)
     file.ts                     Local filesystem driver
-    supabase.ts                 Supabase + S3 driver (uses authed server client)
+    supabase.ts                 Supabase Postgres + R2 chunked driver
+    r2-client.ts                Cloudflare R2 (S3-compat) BlobStore
     index.ts                    Driver selector using PERSISTENCE env
+    cache/shards/               Local on-disk chunk cache (gitignored)
+    compression/
+      fastcdc.ts                Content-defined chunker (Xia et al., USENIX ATC '16)
+      zstd.ts                   Zstandard compress/decompress wrapper
+      manifest.ts               manifests/<key>.json schema + (de)serializers
+      chunk-store.ts            Pipeline: chunk → dedup → compress → upload + range streaming
 scripts/
-  migrate-state-to-supabase.ts  One-shot local -> Supabase/S3 migration (--user-id <uuid>)
+  migrate-state-to-supabase.ts  One-shot local -> Supabase/R2 migration (--user-id <uuid>)
+  train-zstd-dict.ts            Train a zstd dictionary from R2 chunks (or a local dir)
 supabase/
   migrations/0001_init.sql      Supabase schema + initial save_state(payload) function
   migrations/0002_auth_rls.sql  Per-user RLS + auth-aware save_state rewrite
