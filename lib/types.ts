@@ -9,21 +9,11 @@ export type NodeKind =
   | "image"
   | "note"
   | "blog"
-  | "document"
   | "pdf"
   | "page"
   | "shape";
 
 export type ShapeVariant = "rectangle" | "rounded" | "ellipse" | "diamond";
-
-export type Highlight = {
-  id: string;
-  start: number;
-  end: number;
-  color: string;
-  comments: Comment[];
-  createdAt: number;
-};
 
 export type Comment = {
   id: string;
@@ -82,13 +72,6 @@ export type BlogNodeData = {
   markdown: string;
 };
 
-export type DocumentNodeData = {
-  kind: "document";
-  title: string;
-  content: string;
-  highlights: Highlight[];
-};
-
 export type PdfNodeData = {
   kind: "pdf";
   title: string;
@@ -130,7 +113,6 @@ export type AnyNodeData =
   | ImageNodeData
   | NoteNodeData
   | BlogNodeData
-  | DocumentNodeData
   | PdfNodeData
   | PageNodeData
   | ShapeNodeData;

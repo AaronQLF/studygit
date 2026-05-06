@@ -22,7 +22,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   FileSearch,
-  FileText,
   Image as ImageIcon,
   Link2,
   NotebookPen,
@@ -43,7 +42,6 @@ import { LinkNode } from "./nodes/LinkNode";
 import { ImageNode } from "./nodes/ImageNode";
 import { NoteNode } from "./nodes/NoteNode";
 import { PageNode } from "./nodes/PageNode";
-import { DocumentNode } from "./nodes/DocumentNode";
 import { PdfNode } from "./nodes/PdfNode";
 import { ShapeNode } from "./nodes/ShapeNode";
 
@@ -53,7 +51,6 @@ const nodeTypes = {
   note: NoteNode,
   page: PageNode,
   blog: PageNode,
-  document: DocumentNode,
   pdf: PdfNode,
   shape: ShapeNode,
 };
@@ -64,7 +61,6 @@ const KIND_LABELS: Record<NodeKind, string> = {
   note: "Note",
   page: "Page",
   blog: "Page",
-  document: "Document",
   pdf: "PDF",
   shape: "Shape",
 };
@@ -75,12 +71,11 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   note: StickyNote,
   page: NotebookPen,
   blog: NotebookPen,
-  document: FileText,
   pdf: FileSearch,
   shape: Shapes,
 };
 
-/** Add-from-canvas palette order; excludes legacy `blog` (same UX as page) and `document` (no longer created from UI). */
+/** Add-from-canvas palette order; excludes legacy `blog` (same UX as `page`). */
 const CONTEXT_MENU_KINDS: NodeKind[] = [
   "link",
   "image",
@@ -153,13 +148,6 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
         kind: "page",
         title: "New page",
         content: "",
-      };
-    case "document":
-      return {
-        kind,
-        title: "New document",
-        content: "",
-        highlights: [],
       };
     case "pdf":
       return {
