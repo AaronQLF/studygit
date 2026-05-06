@@ -3,7 +3,7 @@
 import { type DragEvent, useRef, useState } from "react";
 import type { NodeProps } from "@xyflow/react";
 import clsx from "clsx";
-import { FileText, Highlighter, MessageSquare, Sparkles, Upload } from "lucide-react";
+import { FileText, Upload } from "lucide-react";
 import { NodeShell } from "./NodeShell";
 import { PdfThumbnail } from "./PdfThumbnail";
 import { EditableTitle } from "./EditableTitle";
@@ -20,14 +20,7 @@ export function PdfNode({ id, data }: NodeProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewAttempt, setPreviewAttempt] = useState(0);
 
-  const commentCount = d.highlights.reduce(
-    (sum, h) => sum + h.comments.length,
-    0
-  );
-  const aiMessageCount = d.highlights.reduce(
-    (sum, h) => sum + h.aiThread.length,
-    0
-  );
+  const commentCount = d.highlights.reduce((sum, h) => sum + h.comments.length, 0);
 
   const handlePickedFile = (file: File | null | undefined) => {
     if (!file) return;
@@ -88,15 +81,14 @@ export function PdfNode({ id, data }: NodeProps) {
   return (
     <NodeShell
       id={id}
-      className="w-[320px]"
+      className="w-[332px]"
       accentColor="#a87234"
-      WatermarkIcon={FileText}
       label="PDF"
     >
-      <div className="px-3.5 pt-2 pb-3.5 space-y-2.5" onDoubleClick={() => openPanel(id)}>
+      <div className="space-y-3 px-4 pt-2 pb-3.5" onDoubleClick={() => openPanel(id)}>
         <div className="flex items-center justify-end">
           <button
-            className="nodrag rounded-md px-2 py-1 text-[12px] text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+            className="nodrag rounded-md border border-[var(--pg-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--pg-muted)] transition-colors hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             onClick={() => openPanel(id)}
           >
             Open
@@ -112,7 +104,7 @@ export function PdfNode({ id, data }: NodeProps) {
         />
         <div
           className={clsx(
-            "nodrag overflow-hidden rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] transition-colors",
+            "nodrag overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] transition-colors",
             isDragOver && "border-[var(--pg-accent)] bg-[var(--pg-accent-soft)]"
           )}
           onDragOver={handleDragOver}
@@ -149,12 +141,12 @@ export function PdfNode({ id, data }: NodeProps) {
           </div>
         </div>
         {d.src ? (
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-1.5">
             <div className="truncate text-[11px] text-[var(--pg-muted)]">
               {d.fileName ?? d.src}
             </div>
             <button
-              className="nodrag rounded-md px-1.5 py-0.5 text-[10px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+              className="nodrag rounded-md px-1.5 py-0.5 text-[10px] font-medium text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={(event) => {
                 event.stopPropagation();
                 fileInputRef.current?.click();
@@ -167,20 +159,26 @@ export function PdfNode({ id, data }: NodeProps) {
         {error ? (
           <div className="text-[11px] text-red-500">{error}</div>
         ) : null}
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--pg-muted)]">
-          {typeof d.pageCount === "number" ? (
-            <div className="inline-flex items-center gap-1 rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-0.5">
-              <FileText size={11} /> {d.pageCount} page{d.pageCount === 1 ? "" : "s"}
+        <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+          <div className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-1 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-[var(--pg-muted)]">
+              Pages
             </div>
-          ) : null}
-          <div className="inline-flex items-center gap-1 rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-0.5">
-            <Highlighter size={11} /> {d.highlights.length}
+            <div className="font-medium text-[var(--pg-fg)]">
+              {typeof d.pageCount === "number" ? d.pageCount : "—"}
+            </div>
           </div>
-          <div className="inline-flex items-center gap-1 rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-0.5">
-            <MessageSquare size={11} /> {commentCount}
+          <div className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-1 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-[var(--pg-muted)]">
+              Highlights
+            </div>
+            <div className="font-medium text-[var(--pg-fg)]">{d.highlights.length}</div>
           </div>
-          <div className="inline-flex items-center gap-1 rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-0.5">
-            <Sparkles size={11} /> {aiMessageCount}
+          <div className="rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2 py-1 text-center">
+            <div className="text-[10px] uppercase tracking-wide text-[var(--pg-muted)]">
+              Comments
+            </div>
+            <div className="font-medium text-[var(--pg-fg)]">{commentCount}</div>
           </div>
         </div>
         <input
