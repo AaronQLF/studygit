@@ -5,9 +5,32 @@ import { INITIAL_STATE } from "@/lib/defaults";
 import type { AppState } from "@/lib/types";
 import type { PersistenceDriver, UploadedFile } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// In Electron the install dir is read-only (inside an asar). The main
+// process sets STORAGE_ROOT to app.getPath('userData') so all writable
+// state lives under the user's OS-conventional app-data directory. In
+// `npm run dev` STORAGE_ROOT is unset and we fall back to the repo root,
+// preserving the original `data/state.json` + `public/uploads` layout.
+const STORAGE_ROOT = process.env.STORAGE_ROOT
+  ? path.resolve(process.env.STORAGE_ROOT)
+  : process.cwd();
+const USING_EXTERNAL_STORAGE = Boolean(process.env.STORAGE_ROOT);
+
+const DATA_DIR = path.join(STORAGE_ROOT, "data");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+// When STORAGE_ROOT is set we write uploads to <root>/uploads; otherwise we
+// keep the original public/uploads layout so Next can serve them statically
+// in dev. The route handler streams from disk in the external-storage case.
+const UPLOAD_DIR = USING_EXTERNAL_STORAGE
+  ? path.join(STORAGE_ROOT, "uploads")
+  : path.join(STORAGE_ROOT, "public", "uploads");
+
+export const FILE_STORAGE_PATHS = {
+  root: STORAGE_ROOT,
+  dataDir: DATA_DIR,
+  statePath: STATE_PATH,
+  uploadDir: UPLOAD_DIR,
+  external: USING_EXTERNAL_STORAGE,
+};
 
 function cloneInitialState(): AppState {
   return JSON.parse(JSON.stringify(INITIAL_STATE)) as AppState;
