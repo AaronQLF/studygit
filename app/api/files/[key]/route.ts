@@ -1,5 +1,9 @@
+import { promises as fs, createReadStream } from "node:fs";
+import path from "node:path";
+import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { getPersistenceMode } from "@/lib/persistence";
+import { FILE_STORAGE_PATHS } from "@/lib/persistence/file";
 import {
   loadManifest,
   streamFileBytes,
@@ -20,8 +24,13 @@ export async function GET(
     return NextResponse.json({ error: "missing file key" }, { status: 400 });
   }
 
-  // File-mode dev: no auth, no R2, just hand off to the public uploads dir.
+  // File-mode dev: no auth, no R2, just hand off to the local uploads dir.
   if (getPersistenceMode() !== "supabase") {
+    if (FILE_STORAGE_PATHS.external) {
+      // In Electron the uploads dir is outside the Next public/ tree, so we
+      // can't 302 to /uploads/<key>; stream the file from disk directly.
+      return serveLocalFile(key);
+    }
     const localUrl = `/uploads/${encodeURIComponent(key)}`;
     return NextResponse.redirect(new URL(localUrl, request.url), {
       status: 302,
@@ -143,6 +152,50 @@ function toReadableStream(
       } catch (err) {
         controller.error(err);
       }
+    },
+  });
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+};
+
+// Stream a file out of FILE_STORAGE_PATHS.uploadDir for the Electron build,
+// where uploads live outside the read-only install dir. The key has already
+// been routed through Next's URL parser so it can't escape the segment, but
+// we still resolve and assert containment as a defense-in-depth check
+// against `..` smuggled through alternate encodings.
+async function serveLocalFile(key: string): Promise<Response> {
+  const decoded = decodeURIComponent(key);
+  const fullPath = path.resolve(FILE_STORAGE_PATHS.uploadDir, decoded);
+  const root = path.resolve(FILE_STORAGE_PATHS.uploadDir) + path.sep;
+  if (fullPath !== path.resolve(FILE_STORAGE_PATHS.uploadDir) && !fullPath.startsWith(root)) {
+    return NextResponse.json({ error: "invalid key" }, { status: 400 });
+  }
+  let stat;
+  try {
+    stat = await fs.stat(fullPath);
+  } catch {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (!stat.isFile()) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const ext = path.extname(decoded).toLowerCase();
+  const contentType = MIME_BY_EXT[ext] ?? "application/octet-stream";
+  const nodeStream = createReadStream(fullPath);
+  return new Response(Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType,
+      "Content-Length": String(stat.size),
+      "Cache-Control": "private, max-age=300",
     },
   });
 }

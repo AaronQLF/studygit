@@ -53,6 +53,12 @@ function resolveLocalCacheDir(): string | null {
   // Vercel lambdas run from a read-only source tree (`/var/task`) and are
   // ephemeral, so this cache both fails on write and has poor hit rates.
   if (process.env.VERCEL === "1") return null;
+  // In Electron the install dir is read-only, so the cache must live under
+  // the per-user storage root the main process passes in.
+  const storageRoot = process.env.STORAGE_ROOT?.trim();
+  if (storageRoot) {
+    return path.join(path.resolve(storageRoot), "cache", "shards");
+  }
   return path.join(
     /*turbopackIgnore: true*/ process.cwd(),
     "lib",

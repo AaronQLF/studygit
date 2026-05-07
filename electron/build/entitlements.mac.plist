@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists/PropertyList.dtd">
+<plist version="1.0">
+<dict>
+  <!-- V8 needs JIT to function. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <!-- Native node_modules (notably @mongodb-js/zstd) load Mach-O binaries
+       not signed by Apple, which the hardened runtime would otherwise block. -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- electron-builder signs all framework dylibs after the fact, but a
+       few @mongodb-js native deps load via dlopen with a different code
+       signature flow; this allows that without weakening the hardened
+       runtime more than necessary. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!-- The forked Next standalone server is a child Node process with its
+       own arguments; the hardened runtime requires the parent to declare
+       this entitlement to spawn it. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>

@@ -37,6 +37,59 @@ Then open [http://localhost:3000](http://localhost:3000).
 - **Edges** — drag from a node's bottom handle to another node's top handle to connect them
 - **Persistence** — every change is debounced and saved through `/api/state`, which dispatches to the active persistence driver.
 
+## Desktop build (Electron)
+
+The `electron` branch wraps the same Next.js app in an Electron shell that runs entirely offline in `file` persistence mode. The Electron main process forks `.next/standalone/server.js` on a fixed loopback port (`47821`, falling back to an ephemeral port if it's taken) and points a `BrowserWindow` at it — the renderer is the same React app that runs in the browser, so React Flow, Tiptap, PDF.js, server actions, and API routes all behave identically.
+
+All writable state (the `data/state.json`, uploaded PDFs, the chunk cache) lives in the OS user-data directory rather than inside the read-only install dir:
+
+| OS      | Path                                                     |
+| ------- | -------------------------------------------------------- |
+| macOS   | `~/Library/Application Support/personalGit`              |
+| Windows | `%APPDATA%\personalGit`                                  |
+| Linux   | `~/.config/personalGit`                                  |
+
+This is plumbed via the `STORAGE_ROOT` env var that `electron/main.ts` sets to `app.getPath("userData")` before forking the Next server. The same env var works in plain Next runs if you want to relocate state outside the repo.
+
+### Scripts
+
+| Script                | Purpose                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run electron:dev`   | Launch `next dev` and Electron together; iterates as fast as a normal Next dev loop.           |
+| `npm run electron:build` | Produce `.next/standalone` + stitch in static/public + compile `electron/`. No installer.      |
+| `npm run dist`           | Build installers for the host OS (signed only if env vars below are set).                      |
+| `npm run dist:mac`       | macOS: `dmg` + `zip` for x64 and arm64.                                                        |
+| `npm run dist:win`       | Windows: `nsis` + `zip` for x64.                                                               |
+| `npm run dist:linux`     | Linux: `AppImage` + `deb` for x64.                                                             |
+| `npm run release`        | Same as `dist`, then publishes to GitHub Releases (requires `GH_TOKEN`).                       |
+
+Installers land in `release/`. Cross-platform builds work locally as long as the host OS can drive the target's signing tooling — practically that means macOS for `.dmg`, Windows or Wine for `.exe`, and any OS for `.AppImage`/`.deb`.
+
+### Native modules
+
+`@mongodb-js/zstd` ships a native Node addon. The `postinstall` script runs `electron-rebuild -f -w @mongodb-js/zstd` to rebuild it against Electron's Node ABI. If you ever switch Electron versions, re-run `npm install` (or `npx electron-rebuild`) to refresh the binary.
+
+### Code-signing & notarization
+
+Everything is driven by env vars; nothing is committed. Builds without these still succeed but produce unsigned artifacts (Gatekeeper / SmartScreen will warn end users).
+
+| Variable                       | Used for                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `CSC_LINK`                     | Path to `.p12` cert (macOS Developer ID Application or Windows code-sign) |
+| `CSC_KEY_PASSWORD`             | Password for the `.p12`                                                   |
+| `APPLE_ID`                     | Apple ID for macOS notarization                                           |
+| `APPLE_APP_SPECIFIC_PASSWORD`  | App-specific password for that Apple ID                                   |
+| `APPLE_TEAM_ID`                | Apple Developer Team ID                                                   |
+| `GH_TOKEN`                     | GitHub PAT with `repo` scope, used by `npm run release`                   |
+
+To enable notarization, also flip `mac.notarize: true` in `electron-builder.yml` once the Apple credentials are in your shell.
+
+### Auto-update
+
+`electron-updater` is wired against the GitHub Releases provider configured in `electron-builder.yml`. The packaged app polls 10 seconds after launch and every 6 hours thereafter; updates are downloaded silently and installed on next quit. The renderer can subscribe to status events through `window.personalGit.onUpdateStatus(...)` exposed in `electron/preload.ts`.
+
+In dev (`app.isPackaged === false`) the updater is disabled, so no network calls are made during local iteration.
+
 ## Migration
 
 Older `blog` nodes (markdown) auto-migrate to `page` nodes (Tiptap HTML) the first time the app hydrates against an old `data/state.json`. The conversion runs through `marked` once, then the new shape is persisted on the next save.

@@ -1,0 +1,88 @@
+appId: com.personalgit.app
+productName: personalGit
+copyright: Copyright (c) 2026 personalGit
+
+directories:
+  buildResources: electron/build
+  output: release
+
+# What lives inside the package. The standalone Next bundle plus the
+# Electron entry point is all the runtime needs; everything else (source
+# TS, Supabase scripts, dev env files, the local dev userData dir) is
+# excluded explicitly so it can't ship by accident.
+files:
+  - "electron/dist/**/*"
+  - "electron/splash.html"
+  - "electron/build/icon.png"
+  - "package.json"
+  - ".next/standalone/**/*"
+  - "!**/.git/**"
+  - "!**/.next/cache/**"
+  - "!.env*"
+  - "!data/**"
+  - "!.electron-userdata-dev/**"
+  - "!release/**"
+  - "!supabase/**"
+  - "!scripts/**"
+  - "!**/*.md"
+  - "!**/*.tsbuildinfo"
+  - "!**/tsconfig*.json"
+
+# child_process.fork can't load JS from inside an asar archive (the v8
+# loader can require asar paths but Node's fork() needs a real file on
+# disk). Unpacking standalone keeps it loadable. The native zstd addon
+# similarly has to live on the real filesystem so dlopen can find it.
+asar: true
+asarUnpack:
+  - ".next/standalone/**/*"
+  - "node_modules/@mongodb-js/zstd/**/*"
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip      # required by electron-updater on macOS (Squirrel.Mac)
+      arch: [x64, arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/build/entitlements.mac.plist
+  entitlementsInherit: electron/build/entitlements.mac.plist
+  # Notarization is gated on the env vars APPLE_ID,
+  # APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID being present in the
+  # build env; electron-builder discovers them automatically.
+  notarize: false
+
+dmg:
+  writeUpdateInfo: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  signAndEditExecutable: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+linux:
+  category: Office
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+# electron-updater reads latest.yml / latest-mac.yml / latest-linux.yml
+# alongside the binaries on the configured channel. `npm run release`
+# (electron-builder --publish always) requires GH_TOKEN with repo scope.
+# Local `npm run dist*` runs skip publishing entirely.
+publish:
+  - provider: github
+    releaseType: release

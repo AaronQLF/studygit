@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Emit a self-contained server bundle at .next/standalone/server.js so the
+  // Electron main process can fork it directly without dragging the full
+  // node_modules tree into the installer.
+  output: "standalone",
   experimental: {
     serverActions: {
       bodySizeLimit: "500mb",
@@ -8,7 +12,7 @@ const nextConfig: NextConfig = {
   },
   // Allow LAN dev access (e.g. opening the dev server from another device on
   // the same Wi-Fi). Add any additional hosts/IPs you want to use here.
-  allowedDevOrigins: ["10.121.52.26"],
+  allowedDevOrigins: ["127.0.0.1", "10.121.52.26"],
   // External packages with non-JS payloads that the bundler can't relocate:
   //   `@mongodb-js/zstd` — native Node addon (build/Release/zstd.node);
   //     Turbopack can't place a `.node` file in an ESM chunk, so we let
