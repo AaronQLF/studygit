@@ -1,17 +1,37 @@
-# Build and publish desktop installers to GitHub Releases.
+# Continuous release: every push to `main` produces a new desktop
+# release and ships it to existing installs via electron-updater.
 #
-# How to ship a release:
-#   1. Bump the version (this commits + tags v<x.y.z>):
-#        npm version 0.2.0
-#   2. Push the commit + tag together:
-#        git push --follow-tags
-#   3. This workflow runs in parallel on macOS and Windows runners,
-#      builds installers, and publishes them to a GitHub release named
-#      after the tag (e.g. `v0.2.0`). The first runner to finish creates
-#      the release; the second appends to the same one.
-#   4. The packaged app's electron-updater picks the release up via
-#      `latest.yml` / `latest-mac.yml` and pushes the update to
-#      existing installs ~10s after their next launch.
+# How it works:
+#   1. The `bump` job picks a new semver, commits the bump back to
+#      `main`, and exposes the version to downstream jobs.
+#        - default                    → patch  (0.2.1 → 0.2.2)
+#        - commit msg [release-minor] → minor  (0.2.1 → 0.3.0)
+#        - commit msg [release-major] → major  (0.2.1 → 1.0.0)
+#        - commit msg [skip release]  → no release this push
+#        - workflow_dispatch          → choose patch / minor / major
+#   2. The `build` matrix runs in parallel on macOS + Windows runners,
+#      builds installers, and `electron-builder --publish always`
+#      creates the GitHub Release `vX.Y.Z` and uploads assets +
+#      latest.yml / latest-mac.yml manifests. Existing installs poll
+#      every 6h and on launch; updates land automatically.
+#
+# Loop safety:
+#   - The bump commit is authored as `chore(release): vX.Y.Z [skip
+#     release]`. The `bump` job's `if:` skips that exact pattern so it
+#     can never re-bump itself.
+#   - GitHub also won't fire workflows for pushes made by
+#     `GITHUB_TOKEN` by default, so the [skip release] marker is
+#     belt-and-suspenders.
+#
+# Version-drift safety:
+#   - The tag and GitHub Release are created at PUBLISH time by
+#     electron-builder (not before the build starts). If the build
+#     fails, no tag is left dangling — the next push just bumps from
+#     the last successful release.
+#   - The bump commit IS pushed to `main` regardless of build outcome
+#     (otherwise we'd retry the same version on the next push and
+#     electron-updater would silently ignore it). On a build failure,
+#     the next successful build picks up wherever main is.
 #
 # Required secrets:
 #   GITHUB_TOKEN  — auto-provided to workflows; needs `contents: write`
@@ -42,24 +62,110 @@ name: release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    # Doc-only and meta changes shouldn't ship a 300 MB installer to
+    # every user. Touching anything else (incl. .github/workflows/**)
+    # does trigger a release — that's how we test changes to the
+    # pipeline itself end-to-end.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".editorconfig"
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options: [patch, minor, major]
 
-# Allow electron-builder to create / update GitHub releases via the
-# default GITHUB_TOKEN. Anything else stays read-only.
 permissions:
   contents: write
 
-# Don't double-publish if the same tag somehow gets pushed twice. We
-# wait for the in-flight run to finish rather than cancelling — half-
-# uploaded release assets would confuse electron-updater.
+# Serialize releases. If two pushes land in quick succession, the
+# second waits for the first to finish (rather than cancelling) —
+# half-uploaded GitHub Release assets would confuse electron-updater.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-main
   cancel-in-progress: false
 
 jobs:
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    # Don't recurse on the bump's own push, and respect explicit opt-
+    # out. `head_commit.message` is null for workflow_dispatch, in
+    # which case both contains() return false → we proceed.
+    if: |
+      !contains(github.event.head_commit.message, '[skip release]') &&
+      !contains(github.event.head_commit.message, 'chore(release):')
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Need write access to push the bump commit back; default
+          # GITHUB_TOKEN works because permissions.contents: write is
+          # set above.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Determine bump type
+        id: type
+        shell: bash
+        env:
+          DISPATCH_INPUT: ${{ inputs.bump_type }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -n "${DISPATCH_INPUT:-}" ]; then
+            echo "type=${DISPATCH_INPUT}" >> "$GITHUB_OUTPUT"
+            echo "Triggered by workflow_dispatch: ${DISPATCH_INPUT}"
+            exit 0
+          fi
+          if printf '%s' "${COMMIT_MSG}" | grep -qiE '\[release[ -]major\]'; then
+            BUMP=major
+          elif printf '%s' "${COMMIT_MSG}" | grep -qiE '\[release[ -]minor\]'; then
+            BUMP=minor
+          else
+            BUMP=patch
+          fi
+          echo "type=${BUMP}" >> "$GITHUB_OUTPUT"
+          echo "Inferred from commit message: ${BUMP}"
+
+      - name: Bump and push
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `--no-git-tag-version` updates package.json + package-lock.json
+          # but leaves tagging to electron-builder at publish time.
+          npm version ${{ steps.type.outputs.type }} --no-git-tag-version
+          VERSION="$(node -p "require('./package.json').version")"
+
+          git add package.json package-lock.json
+          git commit -m "chore(release): v${VERSION} [skip release]"
+          git push origin HEAD:main
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Release queued::Version bumped to v${VERSION}; build matrix will publish it shortly."
+
   build:
     name: build (${{ matrix.os }})
+    needs: bump
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -77,30 +183,18 @@ jobs:
             builder_flag: "--win"
 
     steps:
-      - name: Checkout
+      - name: Checkout (post-bump)
         uses: actions/checkout@v5
+        with:
+          # Pull the bumped commit, not the original trigger SHA, so
+          # package.json reflects the version we're about to publish.
+          ref: main
 
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
-
-      - name: Verify package.json version matches tag
-        # electron-updater treats `version` as the source of truth; if
-        # the tag is `v0.2.0` but package.json still says 0.1.0 (forgot
-        # to run `npm version`), the published release will be tagged
-        # v0.2.0 but advertise itself as 0.1.0 and existing installs
-        # will silently ignore the update. Fail loudly instead.
-        shell: bash
-        run: |
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          TAG="${GITHUB_REF_NAME}"
-          EXPECTED="v${PKG_VERSION}"
-          if [ "${TAG}" != "${EXPECTED}" ]; then
-            echo "::error::Tag ${TAG} doesn't match package.json version ${PKG_VERSION} (expected ${EXPECTED}). Did you forget \`npm version\`?"
-            exit 1
-          fi
 
       - name: Install dependencies
         # `npm ci` runs the postinstall hook which calls electron-
@@ -155,11 +249,12 @@ jobs:
 
       - name: Package and publish installers
         # `electron-builder --publish always` creates the GitHub
-        # release for the tag (or appends to one another runner just
-        # created), uploads the binaries + latest.yml manifests, and
-        # publishes it. Per electron-builder.yml, releaseType is
-        # `release` (not `draft`), so the release goes live as soon
-        # as the second runner finishes.
+        # release `v${{ needs.bump.outputs.version }}` (or appends to
+        # one another runner just created), uploads the binaries +
+        # latest.yml manifests, and publishes it. Per
+        # electron-builder.yml, releaseType is `release` (not `draft`),
+        # so the release goes live as soon as the second runner
+        # finishes.
         shell: bash
         env:
           # electron-builder reads GH_TOKEN for GitHub publishing; the
