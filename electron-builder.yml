@@ -57,10 +57,18 @@ dmg:
   writeUpdateInfo: false
 
 win:
+  # NSIS is the only target we ship: electron-updater on Windows
+  # consumes the .exe + its blockmap from latest.yml. A `zip` target
+  # was previously listed for portable installs, but on Windows
+  # runners 7zip races with npm's atomic-install temp directories
+  # (e.g. node_modules/<pkg>-<16hex>/) that briefly exist inside the
+  # standalone bundle, exits 1 on a "cannot open file" warning, and
+  # fails the build even though the archive itself is fine. If you
+  # need a portable build later, re-add `- target: zip` and add a
+  # cleanup step that prunes node_modules/*-[0-9a-f]{16}* before
+  # `electron-builder` runs.
   target:
     - target: nsis
-      arch: [x64]
-    - target: zip
       arch: [x64]
   signAndEditExecutable: true
 
