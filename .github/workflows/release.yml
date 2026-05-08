@@ -1,0 +1,137 @@
+# Build and publish desktop installers to GitHub Releases.
+#
+# How to ship a release:
+#   1. Bump the version (this commits + tags v<x.y.z>):
+#        npm version 0.2.0
+#   2. Push the commit + tag together:
+#        git push --follow-tags
+#   3. This workflow runs in parallel on macOS and Windows runners,
+#      builds installers, and publishes them to a GitHub release named
+#      after the tag (e.g. `v0.2.0`). The first runner to finish creates
+#      the release; the second appends to the same one.
+#   4. The packaged app's electron-updater picks the release up via
+#      `latest.yml` / `latest-mac.yml` and pushes the update to
+#      existing installs ~10s after their next launch.
+#
+# Required secrets:
+#   GITHUB_TOKEN  — auto-provided to workflows; needs `contents: write`
+#                   (set below in `permissions`). No PAT needed.
+#
+# Optional secrets (enable code-signing & notarization when ready):
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#                   — flip `mac.notarize: true` in electron-builder.yml
+#                     once these are set.
+#   CSC_LINK        — base64-encoded .p12 (mac Developer ID Application
+#                     or Windows code-signing cert). When `CSC_LINK`
+#                     starts with a path or URL electron-builder reads
+#                     it directly; for a base64 blob, decode it to a
+#                     file in a prior step and point CSC_LINK at it.
+#   CSC_KEY_PASSWORD — password for the .p12.
+#
+# Until those are wired, builds are unsigned. macOS users will need to
+# clear the quarantine flag once after install (the landing page
+# documents this). Windows users will see a SmartScreen prompt the
+# first time.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Allow electron-builder to create / update GitHub releases via the
+# default GITHUB_TOKEN. Anything else stays read-only.
+permissions:
+  contents: write
+
+# Don't double-publish if the same tag somehow gets pushed twice. We
+# wait for the in-flight run to finish rather than cancelling — half-
+# uploaded release assets would confuse electron-updater.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      # Don't abort the Windows build if Mac fails (or vice versa). Each
+      # platform's artifacts are independently useful.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            # macos-latest runners are arm64; electron-builder cross-
+            # compiles the x64 dmg from the same job per the
+            # `arch: [x64, arm64]` config in electron-builder.yml.
+            builder_flag: "--mac"
+          - os: windows-latest
+            builder_flag: "--win"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Verify package.json version matches tag
+        # electron-updater treats `version` as the source of truth; if
+        # the tag is `v0.2.0` but package.json still says 0.1.0 (forgot
+        # to run `npm version`), the published release will be tagged
+        # v0.2.0 but advertise itself as 0.1.0 and existing installs
+        # will silently ignore the update. Fail loudly instead.
+        shell: bash
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED="v${PKG_VERSION}"
+          if [ "${TAG}" != "${EXPECTED}" ]; then
+            echo "::error::Tag ${TAG} doesn't match package.json version ${PKG_VERSION} (expected ${EXPECTED}). Did you forget \`npm version\`?"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        # `npm ci` runs the postinstall hook which calls electron-
+        # rebuild for @mongodb-js/zstd against Electron's Node ABI on
+        # the runner. That's needed for the native zstd addon to load
+        # inside the packaged app.
+        run: npm ci
+
+      - name: Build Next.js + Electron bundle
+        # Produces .next/standalone (forked by electron/main.ts at
+        # runtime) and electron/dist (the main + preload JS).
+        run: npm run electron:build
+        env:
+          # Default persistence layer for the desktop build is local
+          # files; making this explicit keeps any stray Supabase env
+          # vars in the runner from changing build behaviour.
+          PERSISTENCE: file
+
+      - name: Package and publish installers
+        # `electron-builder --publish always` creates the GitHub
+        # release for the tag (or appends to one another runner just
+        # created), uploads the binaries + latest.yml manifests, and
+        # publishes it. Per electron-builder.yml, releaseType is
+        # `release` (not `draft`), so the release goes live as soon
+        # as the second runner finishes.
+        shell: bash
+        env:
+          # electron-builder reads GH_TOKEN for GitHub publishing; the
+          # workflow-scoped GITHUB_TOKEN already has contents:write.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass-through for code-signing / notarization. Empty when
+          # not configured; electron-builder skips signing in that
+          # case and still produces working (unsigned) artifacts.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx --no-install electron-builder ${{ matrix.builder_flag }} --publish always

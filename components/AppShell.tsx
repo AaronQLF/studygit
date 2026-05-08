@@ -36,10 +36,21 @@ export function AppShell({ user }: AppShellProps = {}) {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const openPanel = useStore((s) => s.openPanel);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // When running inside the Electron shell on macOS, reserve room at the
+  // top-left for the hover-revealed window controls (see electron/main.ts:
+  // titleBarStyle = "customButtonsOnHover"). Outside Electron (regular
+  // browser dev) this stays at zero so the layout doesn't shift.
+  const [macTitlebarPad, setMacTitlebarPad] = useState(0);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    const pg = (window as unknown as { personalGit?: { platform?: string } })
+      .personalGit;
+    if (pg?.platform === "darwin") setMacTitlebarPad(72);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -91,9 +102,12 @@ export function AppShell({ user }: AppShellProps = {}) {
 
   return (
     <div className="relative flex flex-col flex-1 h-screen bg-[var(--pg-bg)] text-[var(--pg-fg)]">
-      <header className="h-10 shrink-0 border-b border-[var(--pg-border)] bg-[var(--pg-bg)]">
+      <header
+        className="h-10 shrink-0 border-b border-[var(--pg-border)] bg-[var(--pg-bg)] [-webkit-app-region:drag]"
+        style={{ paddingLeft: macTitlebarPad }}
+      >
         <div className="h-full px-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 [-webkit-app-region:no-drag]">
             <button
               className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={toggleSidebar}
@@ -119,7 +133,7 @@ export function AppShell({ user }: AppShellProps = {}) {
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
             <span className="inline-flex h-7 items-center px-2 text-[11px] italic text-[var(--pg-muted)]">
               {saveStatus}
             </span>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
+  BezierEdge,
   ConnectionLineType,
   Controls,
   MarkerType,
@@ -53,6 +54,14 @@ const nodeTypes = {
   blog: PageNode,
   pdf: PdfNode,
   shape: ShapeNode,
+};
+
+// React Flow's built-in edge types are `default` (bezier-shaped),
+// `straight`, `step`, `smoothstep`, `simplebezier`. We use `type: "bezier"`
+// in our edge data for readability, so register it explicitly to avoid
+// the "Edge type 'bezier' not found" warning + fallback to `default`.
+const edgeTypes = {
+  bezier: BezierEdge,
 };
 
 const KIND_LABELS: Record<NodeKind, string> = {
@@ -437,6 +446,7 @@ function CanvasInner() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

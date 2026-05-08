@@ -2,6 +2,7 @@
   "name": "personalgit",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/dist/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +10,16 @@
     "lint": "eslint",
     "migrate:state": "tsx scripts/migrate-state-to-supabase.ts",
     "zstd:train": "tsx scripts/train-zstd-dict.ts",
-    "gc": "tsx scripts/gc.ts"
+    "gc": "tsx scripts/gc.ts",
+    "electron:tsc": "tsc -p electron/tsconfig.json",
+    "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"cross-env STORAGE_ROOT=./.electron-userdata-dev next dev\" \"npm run electron:tsc && wait-on http://127.0.0.1:3000 && cross-env ELECTRON_DEV_URL=http://127.0.0.1:3000 STORAGE_ROOT=./.electron-userdata-dev electron .\"",
+    "electron:build": "next build && node electron/postbuild.mjs && npm run electron:tsc",
+    "postinstall": "electron-rebuild -f -w @mongodb-js/zstd || true",
+    "dist": "npm run electron:build && electron-builder",
+    "dist:mac": "npm run electron:build && electron-builder --mac",
+    "dist:win": "npm run electron:build && electron-builder --win",
+    "dist:linux": "npm run electron:build && electron-builder --linux",
+    "release": "npm run electron:build && electron-builder --publish always"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",
@@ -51,14 +61,21 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^42.0.0",
+    "electron-builder": "^26.8.1",
+    "electron-updater": "^6.8.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.5"
   }
 }
