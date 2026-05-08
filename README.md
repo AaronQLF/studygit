@@ -90,6 +90,22 @@ To enable notarization, also flip `mac.notarize: true` in `electron-builder.yml`
 
 In dev (`app.isPackaged === false`) the updater is disabled, so no network calls are made during local iteration.
 
+### Continuous release
+
+Every push to `main` ships a new release. `.github/workflows/release.yml` bumps `package.json`, builds installers on macOS + Windows runners in parallel, and publishes them to GitHub Releases. Existing installs auto-update within ~6h.
+
+Default behaviour is a **patch** bump (`0.2.1 → 0.2.2`). Override per-commit by including one of these markers in the commit message:
+
+| Marker             | Effect                                                                |
+| ------------------ | --------------------------------------------------------------------- |
+| `[release-minor]`  | Minor bump (`0.2.1 → 0.3.0`).                                         |
+| `[release-major]`  | Major bump (`0.2.1 → 1.0.0`).                                         |
+| `[skip release]`   | Don't release this push.                                              |
+
+Pushes that only touch markdown, `docs/**`, `LICENSE`, or `.gitignore` are ignored automatically — see `paths-ignore` in the workflow. To trigger a release manually (e.g. to retry a failed publish without making a new commit), use **Actions → release → Run workflow** on GitHub and pick the bump type.
+
+The bump commit lands on `main` as `chore(release): vX.Y.Z [skip release]`, signed by `github-actions[bot]`. The tag and GitHub Release are created at publish time by `electron-builder`, so a build failure leaves no orphan tag — the next push just bumps from the last successful release.
+
 ## Migration
 
 Older `blog` nodes (markdown) auto-migrate to `page` nodes (Tiptap HTML) the first time the app hydrates against an old `data/state.json`. The conversion runs through `marked` once, then the new shape is persisted on the next save.
