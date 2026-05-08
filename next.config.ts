@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "500mb",
     },
+    // Next 16 buffers the request body through `proxy.ts` with a 10MB
+    // default cap; anything over the cap is truncated, which corrupts the
+    // multipart boundary and fails `/api/upload` with "expected boundary
+    // after body". PDFs uploaded via the PDF node can easily exceed 10MB,
+    // so we raise the cap to match the server-action limit above.
+    proxyClientMaxBodySize: "500mb",
   },
   // Allow LAN dev access (e.g. opening the dev server from another device on
   // the same Wi-Fi). Add any additional hosts/IPs you want to use here.

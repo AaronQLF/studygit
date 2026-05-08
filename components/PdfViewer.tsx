@@ -383,7 +383,12 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           await textLayer.render();
         } catch (err) {
           const name = (err as { name?: string })?.name;
-          if (name !== "RenderingCancelledException") {
+          // Cancellations are expected when the user pans/zooms or the
+          // page unmounts mid-render: pdf.js raises
+          // `RenderingCancelledException` for canvas tasks and
+          // `AbortException` (e.g. "TextLayer task cancelled") for the
+          // text-layer stream. Neither is actionable.
+          if (name !== "RenderingCancelledException" && name !== "AbortException") {
             console.warn("pdf render error", err);
           }
         }
