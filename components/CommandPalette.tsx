@@ -19,6 +19,7 @@ import {
 import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { cycleTheme, readThemePreference, writeThemePreference } from "./ThemeToggle";
 import { useStore } from "@/lib/store";
+import { NEW_WORKSPACE_EVENT } from "./Sidebar";
 import type { AnyNodeData, NodeKind } from "@/lib/types";
 
 type PaletteItem = {
@@ -71,9 +72,9 @@ export function CommandPalette({
   const workspaces = useStore((s) => s.workspaces);
   const selectedWorkspaceId = useStore((s) => s.selectedWorkspaceId);
   const addNode = useStore((s) => s.addNode);
-  const createWorkspace = useStore((s) => s.createWorkspace);
   const selectWorkspace = useStore((s) => s.selectWorkspace);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
+  const setSidebarCollapsed = useStore((s) => s.setSidebarCollapsed);
   const openPanel = useStore((s) => s.openPanel);
 
   const items = useMemo<PaletteItem[]>(() => {
@@ -98,9 +99,13 @@ export function CommandPalette({
         label: "New workspace",
         icon: Plus,
         onSelect: () => {
-          const name = window.prompt("Workspace name");
-          if (!name?.trim()) return;
-          createWorkspace(name.trim());
+          // Reveal the sidebar so the inline name input is visible, then ask
+          // it to enter "creating" mode. We avoid window.prompt() because
+          // Electron's renderer does not support it.
+          setSidebarCollapsed(false);
+          requestAnimationFrame(() => {
+            window.dispatchEvent(new CustomEvent(NEW_WORKSPACE_EVENT));
+          });
         },
       },
       ...workspaces
@@ -149,11 +154,11 @@ export function CommandPalette({
     return [...addItems, ...workspaceActions, ...viewItems];
   }, [
     addNode,
-    createWorkspace,
     openPanel,
     selectWorkspace,
     selectedNodeId,
     selectedWorkspaceId,
+    setSidebarCollapsed,
     toggleSidebar,
     workspaces,
   ]);

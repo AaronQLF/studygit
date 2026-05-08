@@ -1,10 +1,14 @@
 import Link from "next/link";
 import {
+  Apple,
   ArrowRight,
+  Download,
   FileText,
   Highlighter,
+  Info,
   Layers,
   Layout,
+  Monitor,
   Notebook,
   Sparkles,
   Workflow,
@@ -24,6 +28,7 @@ export default async function LandingPage() {
       <SiteNav user={user} />
       <main className="flex-1">
         <Hero primaryHref={primaryHref} primaryLabel={primaryLabel} />
+        <DownloadSection />
         <Features />
         <HowItWorks />
         <Faq />
@@ -55,6 +60,12 @@ function SiteNav({ user }: { user: { email: string | null } | null }) {
             className="hidden sm:inline-flex h-7 items-center px-2.5 text-[12.5px] text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
           >
             How it works
+          </a>
+          <a
+            href="#download"
+            className="hidden sm:inline-flex h-7 items-center px-2.5 text-[12.5px] text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+          >
+            Download
           </a>
           <a
             href="#faq"
@@ -124,15 +135,16 @@ function Hero({
                 {primaryLabel}
                 <ArrowRight size={14} />
               </Link>
-              <Link
-                href="/login"
-                className="inline-flex h-10 items-center px-4 rounded-[var(--pg-radius)] border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] text-[14px] font-medium text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+              <a
+                href="#download"
+                className="inline-flex h-10 items-center gap-2 px-4 rounded-[var(--pg-radius)] border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] text-[14px] font-medium text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
               >
-                I have an account
-              </Link>
+                <Download size={14} />
+                Download desktop app
+              </a>
             </div>
             <p className="mt-4 text-[12px] text-[var(--pg-muted)]">
-              Free during early access. Email + Google sign-in.
+              Free during early access · Available for macOS and Windows.
             </p>
           </div>
           <div className="lg:col-span-5">
@@ -216,6 +228,136 @@ function HeroIllustration() {
         />
       </svg>
     </div>
+  );
+}
+
+function DownloadSection() {
+  // Three native builds, fronted by `/api/download/<platform>` so the URL
+  // stays stable as we ship new releases (the route resolves the latest
+  // GitHub Release asset at request time).
+  const builds = [
+    {
+      id: "mac-arm64",
+      icon: Apple,
+      label: "Download for macOS",
+      sub: "Apple Silicon · .dmg",
+      href: "/api/download/mac-arm64",
+    },
+    {
+      id: "mac-x64",
+      icon: Apple,
+      label: "Download for macOS",
+      sub: "Intel · .dmg",
+      href: "/api/download/mac-x64",
+    },
+    {
+      id: "win",
+      icon: Monitor,
+      label: "Download for Windows",
+      sub: "64-bit · installer",
+      href: "/api/download/win",
+    },
+  ];
+  return (
+    <section
+      id="download"
+      className="border-t border-[var(--pg-border)]"
+    >
+      <div className="max-w-6xl mx-auto px-4 py-16 sm:py-20">
+        <div className="max-w-2xl">
+          <p className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
+            Download
+          </p>
+          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] italic leading-tight tracking-tight text-[var(--pg-fg)]">
+            Native desktop app for macOS and Windows.
+          </h2>
+          <p className="mt-3 text-[14px] text-[var(--pg-fg-soft)]">
+            Run personalGit as a real desktop app. Your canvases, pages, and
+            PDFs live on your machine — no browser tab to lose.
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {builds.map(({ id, icon: Icon, label, sub, href }) => (
+            <a
+              key={id}
+              href={href}
+              className="group flex items-center gap-3 rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)] p-4 hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)] transition-colors"
+            >
+              <div className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-[var(--pg-radius)] bg-[var(--pg-accent-soft)] text-[var(--pg-accent)]">
+                <Icon size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px] font-medium text-[var(--pg-fg)] truncate">
+                  {label}
+                </div>
+                <div className="text-[11.5px] text-[var(--pg-muted)] truncate">
+                  {sub}
+                </div>
+              </div>
+              <Download
+                size={14}
+                className="text-[var(--pg-muted)] group-hover:text-[var(--pg-accent)] transition-colors"
+              />
+            </a>
+          ))}
+        </div>
+
+        <div className="mt-6 flex items-start gap-2.5 rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] p-4">
+          <Info
+            size={14}
+            className="mt-0.5 shrink-0 text-[var(--pg-accent)]"
+          />
+          <div className="text-[12.5px] leading-relaxed text-[var(--pg-fg-soft)]">
+            <span className="font-medium text-[var(--pg-fg)]">
+              Heads up — no cross-device sync yet.
+            </span>{" "}
+            Each desktop install keeps its workspaces, pages, and PDFs locally
+            on that machine. If you install personalGit on both your Mac and
+            your Windows PC, they won't share data with each other (or with
+            the web app). Cloud sync is on the roadmap.
+          </div>
+        </div>
+
+        <details className="group mt-3 rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)] open:bg-[var(--pg-bg-elevated)] transition-colors">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[12.5px] font-medium text-[var(--pg-fg)]">
+            On macOS, the app says &ldquo;personalGit is damaged&rdquo; — what
+            do I do?
+            <span className="text-[var(--pg-muted)] group-open:rotate-45 transition-transform text-[18px] leading-none">
+              +
+            </span>
+          </summary>
+          <div className="px-4 pb-4 text-[12.5px] leading-relaxed text-[var(--pg-fg-soft)]">
+            <p>
+              Early-access builds aren&rsquo;t notarized by Apple yet, so
+              Gatekeeper quarantines the .app on first launch. After dragging
+              personalGit into <code>/Applications</code>, run this once in
+              Terminal to clear the quarantine flag:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-[12px] text-[var(--pg-fg)]">
+              <code>xattr -dr com.apple.quarantine /Applications/personalGit.app</code>
+            </pre>
+            <p className="mt-2">
+              Windows installs work out of the box; SmartScreen may show a
+              &ldquo;Don&rsquo;t run&rdquo; warning the first time — click
+              <em> More info → Run anyway</em>.
+            </p>
+          </div>
+        </details>
+
+        <p className="mt-4 text-[11.5px] text-[var(--pg-muted)]">
+          Builds are published to GitHub Releases. Linux build available on
+          request. Prefer the browser? Just{" "}
+          <Link
+            href="/signup"
+            className="underline underline-offset-2 hover:text-[var(--pg-fg)]"
+          >
+            sign up
+          </Link>{" "}
+          and use the web app.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -358,7 +500,11 @@ function Faq() {
     },
     {
       q: "How is my data stored?",
-      a: "App state lives in Supabase Postgres. Uploaded PDFs are stored privately in S3 and served through short-lived signed URLs.",
+      a: "In the web app, state lives in Supabase Postgres and uploaded PDFs are stored privately in object storage and served through short-lived signed URLs. In the desktop app, everything is stored locally on your machine — workspaces, pages, and uploaded PDFs all live in your OS user-data directory.",
+    },
+    {
+      q: "Does the desktop app sync with the web app, or between my Mac and Windows?",
+      a: "Not yet. Each install of the desktop app keeps its data locally and does not sync with the web app or with other desktop installs (so your Mac and your Windows machine each have their own canvases). Cross-device sync is planned but not available today.",
     },
     {
       q: "Does it work in dark mode?",
@@ -452,6 +598,12 @@ function SiteFooter() {
             className="hover:text-[var(--pg-fg)]"
           >
             Features
+          </a>
+          <a
+            href="#download"
+            className="hover:text-[var(--pg-fg)]"
+          >
+            Download
           </a>
         </nav>
       </div>

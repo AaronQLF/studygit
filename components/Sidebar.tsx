@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { useStore } from "@/lib/store";
+
+export const NEW_WORKSPACE_EVENT = "studygit:new-workspace";
 
 export function Sidebar() {
   const workspaces = useStore((s) => s.workspaces);
@@ -17,15 +19,55 @@ export function Sidebar() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createValue, setCreateValue] = useState("");
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(
+    null
+  );
+
+  const handleNew = () => {
+    setCreating(true);
+    setCreateValue("");
+  };
+
+  const commitCreate = () => {
+    const trimmed = createValue.trim();
+    if (trimmed) createWorkspace(trimmed);
+    setCreating(false);
+    setCreateValue("");
+  };
+
+  const cancelCreate = () => {
+    setCreating(false);
+    setCreateValue("");
+  };
+
+  // Allow other parts of the app (e.g. the command palette) to trigger the
+  // inline create flow without using window.prompt(), which Electron's
+  // renderer process does not support.
+  useEffect(() => {
+    const onNew = () => {
+      setCreating(true);
+      setCreateValue("");
+    };
+    window.addEventListener(NEW_WORKSPACE_EVENT, onNew);
+    return () => window.removeEventListener(NEW_WORKSPACE_EVENT, onNew);
+  }, []);
+
+  // Reset pending delete confirmation whenever the row menu changes so a
+  // stale "Click again to confirm" state never carries over to a different
+  // workspace or a re-opened menu.
+  useEffect(() => {
+    if (menuOpenId === null) {
+      setConfirmingDeleteId(null);
+    } else if (confirmingDeleteId && confirmingDeleteId !== menuOpenId) {
+      setConfirmingDeleteId(null);
+    }
+  }, [menuOpenId, confirmingDeleteId]);
 
   // Toggle hides the sidebar entirely. The header toggle button remains
   // visible so the user can bring it back.
   if (sidebarCollapsed) return null;
-
-  const handleNew = () => {
-    const name = window.prompt("Workspace name");
-    if (name && name.trim()) createWorkspace(name.trim());
-  };
 
   return (
     <aside className="shrink-0 border-r border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] flex flex-col h-full w-56">
@@ -43,6 +85,27 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-1.5 pt-1 pb-2">
+        {creating ? (
+          <div className="px-0.5 py-0.5">
+            <input
+              autoFocus
+              placeholder="Workspace name"
+              className="w-full rounded-md border border-[var(--pg-accent)] bg-[var(--pg-bg)] px-2 py-1 text-[12px] text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
+              value={createValue}
+              onChange={(e) => setCreateValue(e.target.value)}
+              onBlur={commitCreate}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitCreate();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelCreate();
+                }
+              }}
+            />
+          </div>
+        ) : null}
         {workspaces.map((ws) => {
           const isSelected = ws.id === selectedWorkspaceId;
           const isEditing = renamingId === ws.id;
@@ -117,6 +180,7 @@ export function Sidebar() {
                       setRenameValue(ws.name);
                       setRenamingId(ws.id);
                       setMenuOpenId(null);
+                      setConfirmingDeleteId(null);
                     }}
                   >
                     <Pencil size={12} className="text-[var(--pg-muted)]" />
@@ -126,18 +190,19 @@ export function Sidebar() {
                     <button
                       className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-red-500 hover:bg-red-500/10"
                       onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete workspace "${ws.name}" and everything in it? This cannot be undone.`
-                          )
-                        ) {
+                        if (confirmingDeleteId === ws.id) {
                           deleteWorkspace(ws.id);
+                          setConfirmingDeleteId(null);
+                          setMenuOpenId(null);
+                        } else {
+                          setConfirmingDeleteId(ws.id);
                         }
-                        setMenuOpenId(null);
                       }}
                     >
                       <Trash2 size={12} />
-                      Delete
+                      {confirmingDeleteId === ws.id
+                        ? "Click again to confirm"
+                        : "Delete"}
                     </button>
                   ) : null}
                 </div>
