@@ -203,32 +203,24 @@ jobs:
         # inside the packaged app.
         run: npm ci
 
-      - name: Prune npm atomic-install temp dirs (Windows)
-        # npm 10+ extracts each tarball into `<pkg>-<16hex>/` then
-        # renames it to `<pkg>/` atomically. On Windows + Defender the
-        # rename succeeds but the old directory entry can linger, get
-        # traced into .next/standalone/ by @vercel/nft, and then
-        # crash electron-builder's 7zip pass (scan sees them, read
-        # fails, exit 1). Sweep them out before `next build` runs so
-        # nft never sees them. postbuild.mjs also cleans the
-        # standalone tree as a second line of defence.
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $candidates = Get-ChildItem -Path node_modules -Recurse -Force `
-            -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '-[0-9a-f]{16}$' }
-          if ($candidates) {
-            Write-Host "Removing $($candidates.Count) npm atomic-install temp entr$(if ($candidates.Count -eq 1){'y'}else{'ies'}):"
-            $candidates | ForEach-Object { Write-Host "  $($_.FullName)" }
-            $candidates | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          } else {
-            Write-Host "No atomic-install temp entries found."
-          }
-
       - name: Build Next.js + Electron bundle
-        # Produces .next/standalone (forked by electron/main.ts at
-        # runtime) and electron/dist (the main + preload JS).
+        # `npm run electron:build` does, in order:
+        #   1. scripts/prune-npm-temp-dirs.mjs   — clear stray
+        #      `<pkg>-<16hex>/` entries left over from npm's atomic
+        #      install (otherwise Turbopack bakes the temp-dir name
+        #      into the compiled chunks and the packaged app 500s on
+        #      every request — this is the v0.2.3 macOS regression).
+        #   2. next build                         — produces
+        #      .next/standalone (forked by electron/main.ts at
+        #      runtime).
+        #   3. scripts/check-bundle-for-temp-dir-refs.mjs — scan the
+        #      compiled chunks for any leaked `-<16hex>` references
+        #      and fail the build before publish if any survived.
+        #   4. electron/postbuild.mjs             — copy static/public
+        #      into the standalone tree, prune any temp entries that
+        #      slipped into .next/standalone/.
+        #   5. tsc -p electron/                   — compile the
+        #      Electron main + preload TS.
         run: npm run electron:build
         env:
           # Default persistence layer for the desktop build is local
