@@ -144,7 +144,7 @@ function Hero({
               </a>
             </div>
             <p className="mt-4 text-[12px] text-[var(--pg-muted)]">
-              Free during early access · Available for macOS and Windows.
+              Free Forever. Available for macOS and Windows.
             </p>
           </div>
           <div className="lg:col-span-5">
