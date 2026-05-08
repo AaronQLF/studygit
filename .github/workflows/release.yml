@@ -28,6 +28,11 @@
 #                     file in a prior step and point CSC_LINK at it.
 #   CSC_KEY_PASSWORD — password for the .p12.
 #
+# Important: GitHub Actions substitutes missing secrets with empty
+# strings. Passing CSC_LINK="" breaks electron-builder (it treats the
+# value like a path and fails with "<workspace> not a file"). The job
+# below maps *_INPUT aliases onto CSC_* only when those secrets exist.
+#
 # Until those are wired, builds are unsigned. macOS users will need to
 # clear the quarantine flag once after install (the landing page
 # documents this). Windows users will see a SmartScreen prompt the
@@ -126,12 +131,29 @@ jobs:
           # electron-builder reads GH_TOKEN for GitHub publishing; the
           # workflow-scoped GITHUB_TOKEN already has contents:write.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pass-through for code-signing / notarization. Empty when
-          # not configured; electron-builder skips signing in that
-          # case and still produces working (unsigned) artifacts.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx --no-install electron-builder ${{ matrix.builder_flag }} --publish always
+          # Never set CSC_* / APPLE_* directly from secrets — missing
+          # secrets become "" and electron-builder mis-handles empty
+          # CSC_LINK (repo root "not a file"). Copy through bash below.
+          CSC_LINK_INPUT: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_INPUT: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID_INPUT: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_INPUT: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_INPUT: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${CSC_LINK_INPUT:-}" ]]; then
+            export CSC_LINK="$CSC_LINK_INPUT"
+          fi
+          if [[ -n "${CSC_KEY_PASSWORD_INPUT:-}" ]]; then
+            export CSC_KEY_PASSWORD="$CSC_KEY_PASSWORD_INPUT"
+          fi
+          if [[ -n "${APPLE_ID_INPUT:-}" ]]; then
+            export APPLE_ID="$APPLE_ID_INPUT"
+          fi
+          if [[ -n "${APPLE_APP_SPECIFIC_PASSWORD_INPUT:-}" ]]; then
+            export APPLE_APP_SPECIFIC_PASSWORD="$APPLE_APP_SPECIFIC_PASSWORD_INPUT"
+          fi
+          if [[ -n "${APPLE_TEAM_ID_INPUT:-}" ]]; then
+            export APPLE_TEAM_ID="$APPLE_TEAM_ID_INPUT"
+          fi
+          npx --no-install electron-builder ${{ matrix.builder_flag }} --publish always
