@@ -119,6 +119,17 @@ jobs:
           # vars in the runner from changing build behaviour.
           PERSISTENCE: file
 
+      - name: Verify Electron runtime deps are not in devDependencies
+        # Static check: every package require()d by electron/dist/{main,
+        # preload}.js must be declared in package.json `dependencies`.
+        # electron-builder prunes devDependencies from the packaged app,
+        # so a misplaced runtime dep results in "Cannot find module ..."
+        # at first launch (this is exactly the v0.2.0 incident with
+        # electron-updater). Failing here costs seconds; failing in
+        # production costs a recall.
+        shell: bash
+        run: node scripts/check-electron-runtime-deps.mjs
+
       - name: Package and publish installers
         # `electron-builder --publish always` creates the GitHub
         # release for the tag (or appends to one another runner just
