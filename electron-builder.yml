@@ -86,3 +86,4 @@ linux:
 publish:
   - provider: github
     releaseType: release
+
