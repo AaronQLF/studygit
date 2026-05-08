@@ -59,4 +59,48 @@ if (existsSync(zstdSrc) && !existsSync(zstdDst)) {
   await copyDir(zstdSrc, zstdDst);
 }
 
+// npm 10+ atomic install leaves directory entries named `<pkg>-<16hex>`
+// briefly after extraction; on Windows + Defender they can outlive the
+// rename and get traced into the standalone bundle by @vercel/nft. They
+// then race with electron-builder's 7zip step (scan finds them, read
+// fails, 7zip exits 1, NSIS/zip target dies). Strip them here so the
+// packaging stage sees a clean tree.
+//
+// Pattern: literal "-" followed by exactly 16 hex chars at the end of
+// the basename. Real package names don't end this way; npm's tempdirs
+// always do.
+const ATOMIC_TEMP_RE = /-[0-9a-f]{16}$/;
+async function pruneAtomicTempEntries(root) {
+  let removed = 0;
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (ATOMIC_TEMP_RE.test(entry.name)) {
+        await fs.rm(full, { recursive: true, force: true });
+        removed++;
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await walk(full);
+      }
+    }
+  }
+  await walk(root);
+  return removed;
+}
+
+const prunedCount = await pruneAtomicTempEntries(standaloneDir);
+if (prunedCount > 0) {
+  console.log(
+    `[postbuild] pruned ${prunedCount} npm atomic-install temp ` +
+      `entr${prunedCount === 1 ? "y" : "ies"} from .next/standalone/`
+  );
+}
+
 console.log("[postbuild] done");
