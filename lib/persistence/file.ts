@@ -46,7 +46,8 @@ function sanitizeExtension(extension: string): string {
 async function ensureStateFile(): Promise<AppState> {
   try {
     const raw = await fs.readFile(STATE_PATH, "utf8");
-    return JSON.parse(raw) as AppState;
+    const state = JSON.parse(raw) as AppState;
+    return await migrateLegacyUploadUrls(state);
   } catch (error) {
     const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
     if (!missing) throw error;
@@ -55,6 +56,40 @@ async function ensureStateFile(): Promise<AppState> {
     await fs.writeFile(STATE_PATH, JSON.stringify(initial, null, 2));
     return initial;
   }
+}
+
+// State written before the file driver learned about external storage layout
+// has PDF/image refs of the form `/uploads/<key>`. In Electron those URLs
+// 404 because the bytes live outside `public/`. Rewrite them in-place to
+// `/api/files/<key>`, which is served by `serveLocalFile` from the upload
+// dir. No-op for the in-repo `npm run dev` layout where /uploads/* is
+// served statically.
+async function migrateLegacyUploadUrls(state: AppState): Promise<AppState> {
+  if (!USING_EXTERNAL_STORAGE) return state;
+  const PREFIX = "/uploads/";
+  let changed = false;
+  const nodes = state.nodes.map((node) => {
+    const data = node.data;
+    if (data.kind === "pdf" && data.src?.startsWith(PREFIX)) {
+      changed = true;
+      return {
+        ...node,
+        data: { ...data, src: `/api/files/${data.src.slice(PREFIX.length)}` },
+      };
+    }
+    if (data.kind === "image" && data.url?.startsWith(PREFIX)) {
+      changed = true;
+      return {
+        ...node,
+        data: { ...data, url: `/api/files/${data.url.slice(PREFIX.length)}` },
+      };
+    }
+    return node;
+  });
+  if (!changed) return state;
+  const migrated: AppState = { ...state, nodes };
+  await saveStateFile(migrated);
+  return migrated;
 }
 
 async function saveStateFile(state: AppState): Promise<void> {
@@ -73,7 +108,16 @@ async function saveUploadFile(
 }
 
 async function getLocalFileUrl(key: string): Promise<string> {
-  return `/uploads/${encodeURIComponent(key)}`;
+  // When uploads live inside `public/uploads/` (the classic `npm run dev`
+  // layout), Next.js can serve them statically at /uploads/<key>. In the
+  // Electron flow STORAGE_ROOT points outside the install dir, so the
+  // upload bytes aren't reachable via static serving — we route through
+  // the /api/files/<key> handler, which streams the file from disk via
+  // `serveLocalFile`.
+  const encoded = encodeURIComponent(key);
+  return USING_EXTERNAL_STORAGE
+    ? `/api/files/${encoded}`
+    : `/uploads/${encoded}`;
 }
 
 export function createFileDriver(): PersistenceDriver {

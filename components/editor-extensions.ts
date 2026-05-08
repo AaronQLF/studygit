@@ -47,6 +47,10 @@ export function createBaseExtensions({
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       codeBlock: false,
+      // StarterKit ships its own Link extension since v3 — disable it so
+      // our explicit `Link.configure(...)` below wins (otherwise both run
+      // and Tiptap warns: "Duplicate extension names found: ['link']").
+      link: false,
     }),
     Placeholder.configure({
       placeholder,
