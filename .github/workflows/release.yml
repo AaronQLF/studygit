@@ -205,22 +205,26 @@ jobs:
 
       - name: Build Next.js + Electron bundle
         # `npm run electron:build` does, in order:
-        #   1. scripts/prune-npm-temp-dirs.mjs   — clear stray
-        #      `<pkg>-<16hex>/` entries left over from npm's atomic
-        #      install (otherwise Turbopack bakes the temp-dir name
-        #      into the compiled chunks and the packaged app 500s on
-        #      every request — this is the v0.2.3 macOS regression).
-        #   2. next build                         — produces
-        #      .next/standalone (forked by electron/main.ts at
-        #      runtime).
-        #   3. scripts/check-bundle-for-temp-dir-refs.mjs — scan the
-        #      compiled chunks for any leaked `-<16hex>` references
+        #   1. next build --webpack — produces .next/standalone.
+        #      Why --webpack: Turbopack (the default in Next 16)
+        #      generates hashed external-module names like
+        #      `@mongodb-js/zstd-5b2bb1aa46db9d26` and resolves them
+        #      via symlinks at `.next/node_modules/<name-hash>`. asar
+        #      packaging strips symlinks, so the packaged app 500s on
+        #      first request with `Cannot find module ...` (vercel/
+        #      next.js#87737, #89037, #89851 — this is the v0.2.3
+        #      macOS regression). Webpack inlines/copies externals
+        #      without the symlink indirection. Switch back when
+        #      those issues are fixed upstream.
+        #   2. scripts/check-bundle-for-temp-dir-refs.mjs — scan the
+        #      compiled .next/server/ for any `<pkg>-<16hex>` strings
         #      and fail the build before publish if any survived.
-        #   4. electron/postbuild.mjs             — copy static/public
-        #      into the standalone tree, prune any temp entries that
-        #      slipped into .next/standalone/.
-        #   5. tsc -p electron/                   — compile the
-        #      Electron main + preload TS.
+        #      Catches a future Turbopack regression in case someone
+        #      drops the --webpack flag without realising why it was
+        #      there.
+        #   3. electron/postbuild.mjs — copy static/public into the
+        #      standalone tree.
+        #   4. tsc -p electron/ — compile the Electron main + preload TS.
         run: npm run electron:build
         env:
           # Default persistence layer for the desktop build is local

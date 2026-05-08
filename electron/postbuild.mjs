@@ -59,16 +59,15 @@ if (existsSync(zstdSrc) && !existsSync(zstdDst)) {
   await copyDir(zstdSrc, zstdDst);
 }
 
-// npm 10+ atomic install leaves directory entries named `<pkg>-<16hex>`
-// briefly after extraction; on Windows + Defender they can outlive the
-// rename and get traced into the standalone bundle by @vercel/nft. They
-// then race with electron-builder's 7zip step (scan finds them, read
-// fails, 7zip exits 1, NSIS/zip target dies). Strip them here so the
-// packaging stage sees a clean tree.
-//
-// Pattern: literal "-" followed by exactly 16 hex chars at the end of
-// the basename. Real package names don't end this way; npm's tempdirs
-// always do.
+// Defensive cleanup: strip any `<pkg>-<16hex>` entries from the
+// standalone tree before electron-builder packages it. We've seen this
+// pattern from two unrelated sources — npm's atomic install temp dirs
+// (rare; cleaned up by the OS shortly after extraction) and Turbopack's
+// `serverExternalPackages` symlinks (the actual cause of the v0.2.3
+// regression — fixed upstream by switching `electron:build` to
+// `next build --webpack`). Either way, an entry matching this pattern
+// inside the standalone bundle has caused real shipping bugs and never
+// represents a real package, so we just remove them.
 const ATOMIC_TEMP_RE = /-[0-9a-f]{16}$/;
 async function pruneAtomicTempEntries(root) {
   let removed = 0;
