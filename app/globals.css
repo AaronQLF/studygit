@@ -59,6 +59,172 @@
   color-scheme: dark;
 }
 
+/* ---------------------------------------------------------------------
+   Theme presets. The `:root` and `.dark` rules above define the "paper"
+   preset (current default). Additional presets attach their palette to
+   `[data-theme-preset="…"]`; the data attribute is written by the
+   pre-paint init script in app/layout.tsx and by ThemeSettingsDialog,
+   so the swap costs zero JS and can't flash on first load.
+
+   Geometry vars (`--pg-radius*`, `--pg-shadow*`) stay constant across
+   presets — they're set by the base rules and aren't overridden here.
+   ------------------------------------------------------------------ */
+
+[data-theme-preset="slate"] {
+  --pg-bg: #f6f7f9;
+  --pg-bg-subtle: #eceef2;
+  --pg-bg-elevated: #e1e4ea;
+  --pg-bg-canvas: #eef1f5;
+  --pg-fg: #15181d;
+  --pg-fg-soft: #39414e;
+  --pg-muted: #6b7280;
+  --pg-muted-soft: #c1c6cf;
+  --pg-border: #d2d6dd;
+  --pg-border-strong: #a8aeba;
+  --pg-accent: #1f4e79;
+  --pg-accent-soft: rgba(31, 78, 121, 0.1);
+  --pg-marker: #bee2ff;
+}
+[data-theme-preset="slate"].dark {
+  --pg-bg: #14171c;
+  --pg-bg-subtle: #1a1e24;
+  --pg-bg-elevated: #222730;
+  --pg-bg-canvas: #10131a;
+  --pg-fg: #e3e7ee;
+  --pg-fg-soft: #c0c7d3;
+  --pg-muted: #8b94a3;
+  --pg-muted-soft: #4a525f;
+  --pg-border: #2d333d;
+  --pg-border-strong: #3d4452;
+  --pg-accent: #5fa1d6;
+  --pg-accent-soft: rgba(95, 161, 214, 0.2);
+  --pg-marker: #345880;
+}
+
+[data-theme-preset="mocha"] {
+  --pg-bg: #f6efe3;
+  --pg-bg-subtle: #ede4d2;
+  --pg-bg-elevated: #e0d3b9;
+  --pg-bg-canvas: #ebe1cd;
+  --pg-fg: #2b1d12;
+  --pg-fg-soft: #4e3c2a;
+  --pg-muted: #8a7560;
+  --pg-muted-soft: #c6b59a;
+  --pg-border: #d6c5a8;
+  --pg-border-strong: #b59d7a;
+  --pg-accent: #8b4513;
+  --pg-accent-soft: rgba(139, 69, 19, 0.1);
+  --pg-marker: #ffd58a;
+}
+[data-theme-preset="mocha"].dark {
+  --pg-bg: #1d150e;
+  --pg-bg-subtle: #251c12;
+  --pg-bg-elevated: #322517;
+  --pg-bg-canvas: #17110a;
+  --pg-fg: #efe2cf;
+  --pg-fg-soft: #d3c2a8;
+  --pg-muted: #a48d72;
+  --pg-muted-soft: #5a4733;
+  --pg-border: #3e2f20;
+  --pg-border-strong: #54402c;
+  --pg-accent: #d18b5a;
+  --pg-accent-soft: rgba(209, 139, 90, 0.2);
+  --pg-marker: #8a6320;
+}
+
+[data-theme-preset="forest"] {
+  --pg-bg: #f1f4ea;
+  --pg-bg-subtle: #e6ebd9;
+  --pg-bg-elevated: #d8e0c1;
+  --pg-bg-canvas: #eaefdd;
+  --pg-fg: #1c2310;
+  --pg-fg-soft: #3a4524;
+  --pg-muted: #73815c;
+  --pg-muted-soft: #bfc8a2;
+  --pg-border: #cad4ad;
+  --pg-border-strong: #a8b482;
+  --pg-accent: #2f5d2a;
+  --pg-accent-soft: rgba(47, 93, 42, 0.1);
+  --pg-marker: #e1f0a0;
+}
+[data-theme-preset="forest"].dark {
+  --pg-bg: #131811;
+  --pg-bg-subtle: #191f15;
+  --pg-bg-elevated: #22291c;
+  --pg-bg-canvas: #0f140d;
+  --pg-fg: #d4dec3;
+  --pg-fg-soft: #b6c19f;
+  --pg-muted: #8a9772;
+  --pg-muted-soft: #4a533c;
+  --pg-border: #2c3424;
+  --pg-border-strong: #3d4831;
+  --pg-accent: #6f9d65;
+  --pg-accent-soft: rgba(111, 157, 101, 0.2);
+  --pg-marker: #445d27;
+}
+
+[data-theme-preset="ink"] {
+  --pg-bg: #ffffff;
+  --pg-bg-subtle: #f3f3f3;
+  --pg-bg-elevated: #e6e6e6;
+  --pg-bg-canvas: #fafafa;
+  --pg-fg: #0a0a0a;
+  --pg-fg-soft: #2b2b2b;
+  --pg-muted: #666666;
+  --pg-muted-soft: #bdbdbd;
+  --pg-border: #d4d4d4;
+  --pg-border-strong: #9a9a9a;
+  --pg-accent: #0a0a0a;
+  --pg-accent-soft: rgba(10, 10, 10, 0.08);
+  --pg-marker: #fff175;
+}
+[data-theme-preset="ink"].dark {
+  --pg-bg: #0a0a0a;
+  --pg-bg-subtle: #141414;
+  --pg-bg-elevated: #1f1f1f;
+  --pg-bg-canvas: #050505;
+  --pg-fg: #f5f5f5;
+  --pg-fg-soft: #cfcfcf;
+  --pg-muted: #8c8c8c;
+  --pg-muted-soft: #3a3a3a;
+  --pg-border: #262626;
+  --pg-border-strong: #3f3f3f;
+  --pg-accent: #f5f5f5;
+  --pg-accent-soft: rgba(245, 245, 245, 0.16);
+  --pg-marker: #5a5024;
+}
+
+[data-theme-preset="plum"] {
+  --pg-bg: #f8f3f6;
+  --pg-bg-subtle: #efe5ec;
+  --pg-bg-elevated: #e3d3df;
+  --pg-bg-canvas: #f2e8ee;
+  --pg-fg: #1f1422;
+  --pg-fg-soft: #3f2c44;
+  --pg-muted: #8a7a8c;
+  --pg-muted-soft: #c8b5c5;
+  --pg-border: #d7c5d2;
+  --pg-border-strong: #b59cb0;
+  --pg-accent: #5a2a6b;
+  --pg-accent-soft: rgba(90, 42, 107, 0.1);
+  --pg-marker: #f0d5ff;
+}
+[data-theme-preset="plum"].dark {
+  --pg-bg: #161018;
+  --pg-bg-subtle: #1d161f;
+  --pg-bg-elevated: #281f2c;
+  --pg-bg-canvas: #100c12;
+  --pg-fg: #e6dbeb;
+  --pg-fg-soft: #c8b8d0;
+  --pg-muted: #9b899e;
+  --pg-muted-soft: #54465a;
+  --pg-border: #322631;
+  --pg-border-strong: #453349;
+  --pg-accent: #b07cc4;
+  --pg-accent-soft: rgba(176, 124, 196, 0.2);
+  --pg-marker: #5a3e6a;
+}
+
 html,
 body {
   height: 100%;

@@ -16,11 +16,36 @@ export const metadata: Metadata = {
   description: "Your personal learning canvas",
 };
 
-// Runs before React hydration. Reads the stored theme preference (or falls
-// back to the system color scheme) and toggles the `dark`/`light` class on
-// <html> so styling is correct on first paint with no flash. The matching
-// React component is `ThemeToggle`.
-const themeInitScript = `(function(){try{var k='personalgit-theme';var t=localStorage.getItem(k);if(t!=='light'&&t!=='dark'&&t!=='system'){t='system';}var resolved=t==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;var root=document.documentElement;root.classList.remove('dark');root.classList.remove('light');root.classList.add(resolved);root.dataset.themePref=t;root.style.colorScheme=resolved;}catch(e){}})();`;
+// Runs before React hydration. Reads the stored theme preference and the
+// chosen palette preset (Paper, Slate, …) plus any accent override, and
+// applies them on <html> so the first paint is correct with no flash.
+// The matching React components are `ThemeToggle` and
+// `ThemeSettingsDialog`.
+const themeInitScript = `(function(){
+  try {
+    var root = document.documentElement;
+    var t = localStorage.getItem('personalgit-theme');
+    if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'system';
+    var resolved = t === 'system'
+      ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : t;
+    root.classList.remove('dark');
+    root.classList.remove('light');
+    root.classList.add(resolved);
+    root.dataset.themePref = t;
+    root.style.colorScheme = resolved;
+    var preset = localStorage.getItem('personalgit-theme-preset');
+    var valid = ['paper','slate','mocha','forest','ink','plum'];
+    if (valid.indexOf(preset) < 0) preset = 'paper';
+    root.dataset.themePreset = preset;
+    var acc = localStorage.getItem('personalgit-accent-override');
+    if (acc && /^#[0-9a-f]{6}$/i.test(acc)) {
+      root.style.setProperty('--pg-accent', acc);
+      root.style.setProperty('--pg-accent-soft', 'color-mix(in srgb, ' + acc + ' 12%, transparent)');
+      root.dataset.accentOverride = acc;
+    }
+  } catch (e) {}
+})();`;
 
 export default function RootLayout({
   children,

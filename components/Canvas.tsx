@@ -32,7 +32,7 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
-import { extractCitedPdfIds } from "@/lib/citations";
+import { extractCitedNodeIds } from "@/lib/citations";
 import type {
   AnyNodeData,
   CanvasNode,
@@ -103,26 +103,45 @@ type CitationEdge = {
   target: string;
 };
 
+// Every node kind that can be the *target* of a citation pill — i.e. that
+// hosts highlight-anchored citations. PDFs and link/reader-view nodes
+// qualify; pages, notes, etc. do not.
+function isCitableTarget(node: CanvasNode): boolean {
+  return node.data.kind === "pdf" || node.data.kind === "link";
+}
+
+// Every place inside a node where citation pills can be authored. Pages
+// store their body as `content`; PDFs and links keep their notes in a
+// separate `notes` field driven by the same RichTextEditor.
+function citationSourceHtmls(node: CanvasNode): string[] {
+  const data = node.data;
+  if (data.kind === "page") return data.content ? [data.content] : [];
+  if (data.kind === "pdf") return data.notes ? [data.notes] : [];
+  if (data.kind === "link") return data.notes ? [data.notes] : [];
+  return [];
+}
+
 function buildCitationEdges(wsNodes: CanvasNode[]): CitationEdge[] {
-  const pdfIds = new Set<string>();
+  const citableIds = new Set<string>();
   for (const n of wsNodes) {
-    if (n.data.kind === "pdf") pdfIds.add(n.id);
+    if (isCitableTarget(n)) citableIds.add(n.id);
   }
-  if (pdfIds.size === 0) return [];
+  if (citableIds.size === 0) return [];
   const edges: CitationEdge[] = [];
   const seen = new Set<string>();
   for (const n of wsNodes) {
-    if (n.data.kind !== "page") continue;
-    const html = n.data.content;
-    if (!html) continue;
-    const targets = extractCitedPdfIds(html);
-    for (const target of targets) {
-      if (target === n.id) continue;
-      if (!pdfIds.has(target)) continue;
-      const id = `${CITATION_EDGE_PREFIX}${n.id}->${target}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      edges.push({ id, source: n.id, target });
+    const sources = citationSourceHtmls(n);
+    if (sources.length === 0) continue;
+    for (const html of sources) {
+      const targets = extractCitedNodeIds(html);
+      for (const target of targets) {
+        if (target === n.id) continue;
+        if (!citableIds.has(target)) continue;
+        const id = `${CITATION_EDGE_PREFIX}${n.id}->${target}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        edges.push({ id, source: n.id, target });
+      }
     }
   }
   return edges;
@@ -131,10 +150,14 @@ function buildCitationEdges(wsNodes: CanvasNode[]): CitationEdge[] {
 function citationSignature(wsNodes: CanvasNode[]): string {
   const parts: string[] = [];
   for (const n of wsNodes) {
-    if (n.data.kind !== "page" || !n.data.content) continue;
-    const ids = extractCitedPdfIds(n.data.content);
-    if (ids.length === 0) continue;
-    parts.push(`${n.id}:${ids.sort().join(",")}`);
+    const sources = citationSourceHtmls(n);
+    if (sources.length === 0) continue;
+    const all = new Set<string>();
+    for (const html of sources) {
+      for (const id of extractCitedNodeIds(html)) all.add(id);
+    }
+    if (all.size === 0) continue;
+    parts.push(`${n.id}:${Array.from(all).sort().join(",")}`);
   }
   return parts.sort().join("|");
 }
