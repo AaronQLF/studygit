@@ -8,7 +8,7 @@ export default function AuthLayout({
     <div className="min-h-screen flex flex-col bg-[var(--pg-bg)] text-[var(--pg-fg)]">
       <header className="h-12 px-4 flex items-center justify-between border-b border-[var(--pg-border)]">
         <Link href="/" className="flex items-center gap-2 group">
-          <span className="pg-serif text-[18px] italic font-medium tracking-tight text-[var(--pg-fg)] group-hover:text-[var(--pg-accent)] transition-colors">
+          <span className="pg-serif text-[18px] font-medium tracking-tight text-[var(--pg-fg)] group-hover:text-[var(--pg-accent)] transition-colors">
             personalGit
           </span>
         </Link>

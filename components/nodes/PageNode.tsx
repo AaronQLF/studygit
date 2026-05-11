@@ -47,7 +47,7 @@ export function PageNode({ id, data }: NodeProps) {
             dangerouslySetInnerHTML={{ __html: d.content }}
           />
         ) : (
-          <div className="text-[13px] italic text-[var(--pg-muted)]">
+          <div className="text-[13px] text-[var(--pg-muted)]">
             Empty page. Open it and press <code>/</code> to start.
           </div>
         )}

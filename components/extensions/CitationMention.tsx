@@ -12,17 +12,44 @@ import clsx from "clsx";
 import { Extension, type Editor } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
-import { Search } from "lucide-react";
+import { FileText, Link2, Search } from "lucide-react";
 import { useStore } from "@/lib/store";
-import type { PdfHighlight, PdfNodeData } from "@/lib/types";
+import type {
+  LinkNodeData,
+  PdfHighlight,
+  PdfNodeData,
+  WebHighlight,
+} from "@/lib/types";
 import type { CitationAttrs } from "./Citation";
 import { CITATION_PICKER_EVENT } from "./SlashMenu";
 
-type Row = {
-  pdfNodeId: string;
-  pdfTitle: string;
-  highlight: PdfHighlight;
-};
+// One row per highlight, whether it lives on a PDF or a link node. The
+// `locator` is the short chip shown after the source title (page number for
+// PDFs, hostname for web articles).
+type Row =
+  | {
+      kind: "pdf";
+      sourceNodeId: string;
+      sourceTitle: string;
+      locator: string;
+      highlight: PdfHighlight;
+    }
+  | {
+      kind: "web";
+      sourceNodeId: string;
+      sourceTitle: string;
+      locator: string;
+      highlight: WebHighlight;
+    };
+
+function hostnameOf(url: string | undefined | null): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
 
 type PickerProps = {
   rows: Row[];
@@ -62,9 +89,9 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
       const q = query.trim().toLowerCase();
       if (!q) return rows;
       return rows.filter((row) => {
-        if (row.pdfTitle.toLowerCase().includes(q)) return true;
+        if (row.sourceTitle.toLowerCase().includes(q)) return true;
         if (row.highlight.text.toLowerCase().includes(q)) return true;
-        if (`p${row.highlight.page}`.includes(q)) return true;
+        if (row.locator.toLowerCase().includes(q)) return true;
         return false;
       });
     }, [rows, query]);
@@ -133,7 +160,7 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Cite a PDF highlight…"
+            placeholder="Cite a highlight…"
             spellCheck={false}
             className="pg-citation-menu-input"
           />
@@ -147,9 +174,9 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
           <div className="pg-citation-empty">
             {rows.length === 0 ? (
               <>
-                No PDF highlights in this workspace yet
+                No highlights in this workspace yet
                 <span className="pg-citation-empty-hint">
-                  Highlight a passage in any PDF to cite it here
+                  Highlight a passage in any PDF or article to cite it here
                 </span>
               </>
             ) : (
@@ -163,35 +190,45 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
           </div>
         ) : (
           <div className="pg-citation-list" ref={listRef}>
-            {filtered.map((row, i) => (
-              <button
-                key={`${row.pdfNodeId}:${row.highlight.id}`}
-                type="button"
-                className={clsx(
-                  "pg-citation-row",
-                  i === activeIndex && "is-active"
-                )}
-                onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => commit(i)}
-              >
-                <span
-                  className="pg-citation-row-bar"
-                  style={{ backgroundColor: row.highlight.color }}
-                  aria-hidden
-                />
-                <span className="pg-citation-row-body">
-                  <span className="pg-citation-row-meta">
-                    <span className="pg-citation-row-doc">{row.pdfTitle}</span>
-                    <span className="pg-citation-row-page">
-                      p{row.highlight.page}
+            {filtered.map((row, i) => {
+              const Icon = row.kind === "pdf" ? FileText : Link2;
+              return (
+                <button
+                  key={`${row.sourceNodeId}:${row.highlight.id}`}
+                  type="button"
+                  className={clsx(
+                    "pg-citation-row",
+                    i === activeIndex && "is-active"
+                  )}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => commit(i)}
+                >
+                  <span
+                    className="pg-citation-row-bar"
+                    style={{ backgroundColor: row.highlight.color }}
+                    aria-hidden
+                  />
+                  <span className="pg-citation-row-body">
+                    <span className="pg-citation-row-meta">
+                      <Icon
+                        size={11}
+                        className="pg-citation-row-kind"
+                        aria-hidden
+                      />
+                      <span className="pg-citation-row-doc">
+                        {row.sourceTitle}
+                      </span>
+                      <span className="pg-citation-row-page">
+                        {row.locator}
+                      </span>
+                    </span>
+                    <span className="pg-citation-row-text">
+                      {clampExcerpt(row.highlight.text) || <em>(no text)</em>}
                     </span>
                   </span>
-                  <span className="pg-citation-row-text">
-                    {clampExcerpt(row.highlight.text) || <em>(no text)</em>}
-                  </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -225,16 +262,41 @@ function buildRows(workspaceId: string | null, sourceNodeId: string | null): Row
   const rows: Row[] = [];
   for (const node of state.nodes) {
     if (workspaceId && node.workspaceId !== workspaceId) continue;
-    if (node.data.kind !== "pdf") continue;
     if (sourceNodeId && node.id === sourceNodeId) continue;
-    const data = node.data as PdfNodeData;
-    const title = data.title || "Untitled PDF";
-    for (const highlight of data.highlights) {
-      rows.push({
-        pdfNodeId: node.id,
-        pdfTitle: title,
-        highlight,
-      });
+
+    if (node.data.kind === "pdf") {
+      const data = node.data as PdfNodeData;
+      const title = data.title || "Untitled PDF";
+      for (const highlight of data.highlights) {
+        rows.push({
+          kind: "pdf",
+          sourceNodeId: node.id,
+          sourceTitle: title,
+          locator: `p${highlight.page}`,
+          highlight,
+        });
+      }
+      continue;
+    }
+
+    if (node.data.kind === "link") {
+      const data = node.data as LinkNodeData;
+      const highlights: WebHighlight[] = data.highlights ?? [];
+      if (highlights.length === 0) continue;
+      const host =
+        hostnameOf(data.extractedFinalUrl ?? data.url) || "link";
+      const title =
+        data.extractedTitle || data.title || host || "Untitled link";
+      for (const highlight of highlights) {
+        rows.push({
+          kind: "web",
+          sourceNodeId: node.id,
+          sourceTitle: title,
+          locator: host,
+          highlight,
+        });
+      }
+      continue;
     }
   }
   rows.sort((a, b) => b.highlight.createdAt - a.highlight.createdAt);
@@ -284,10 +346,13 @@ export const CitationMention = Extension.create<CitationMentionOptions>({
 
     const handleSelect = (row: Row) => {
       const attrs: CitationAttrs = {
-        nodeId: row.pdfNodeId,
+        nodeId: row.sourceNodeId,
         highlightId: row.highlight.id,
-        label: row.pdfTitle,
-        page: row.highlight.page,
+        label: row.sourceTitle,
+        // `page` is only meaningful for PDFs; web rows leave it null so the
+        // citation pill renders without the locator chip until the live
+        // node-view replaces it with the hostname.
+        page: row.kind === "pdf" ? row.highlight.page : null,
         excerpt: row.highlight.text,
       };
       editor.chain().focus().insertCitation(attrs).run();

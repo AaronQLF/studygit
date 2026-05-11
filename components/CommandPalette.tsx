@@ -36,7 +36,7 @@ type PaletteItem = {
 function defaultDataFor(kind: NodeKind): AnyNodeData {
   switch (kind) {
     case "link":
-      return { kind, title: "New link", url: "", embed: true };
+      return { kind, title: "New link", url: "", highlights: [] };
     case "image":
       return { kind, url: "" };
     case "note":
@@ -175,16 +175,20 @@ export function CommandPalette({
 
   useEffect(() => {
     if (!open) return;
-    setQuery("");
-    setActiveIndex(0);
+    // Defer the state resets out of the effect body to avoid a
+    // synchronous cascading render.
+    queueMicrotask(() => {
+      setQuery("");
+      setActiveIndex(0);
+    });
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [open]);
 
-  useEffect(() => {
-    if (activeIndex >= filtered.length) {
-      setActiveIndex(Math.max(0, filtered.length - 1));
-    }
-  }, [activeIndex, filtered.length]);
+  // Clamp the active index to the filtered list during render rather than
+  // via an effect+setState (avoids the set-state-in-effect anti-pattern
+  // and skips a redundant render). The select-side handler reads the
+  // clamped value via `clampedActiveIndex`.
+  const clampedActiveIndex = Math.min(activeIndex, Math.max(0, filtered.length - 1));
 
   useEffect(() => {
     if (!open) return;
@@ -199,7 +203,7 @@ export function CommandPalette({
         );
       } else if (event.key === "Enter") {
         event.preventDefault();
-        const target = filtered[activeIndex];
+        const target = filtered[clampedActiveIndex];
         if (!target || target.disabled) return;
         target.onSelect();
         onClose();
@@ -210,7 +214,7 @@ export function CommandPalette({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeIndex, filtered, onClose, open]);
+  }, [clampedActiveIndex, filtered, onClose, open]);
 
   if (!open) return null;
 
@@ -249,14 +253,14 @@ export function CommandPalette({
               return (
                 <div key={item.id}>
                   {showSection ? (
-                    <div className="pg-serif px-2 pt-2 pb-1 text-[11px] italic uppercase tracking-[0.08em] text-[var(--pg-muted)]">
+                    <div className="pg-section-label px-2 pt-2 pb-1">
                       {item.section}
                     </div>
                   ) : null}
                   <button
                     className={clsx(
                       "w-full rounded-md px-2 py-1.5 text-left flex items-center justify-between",
-                      index === activeIndex
+                      index === clampedActiveIndex
                         ? "bg-[color-mix(in_srgb,var(--pg-marker)_58%,transparent)]"
                         : "hover:bg-[var(--pg-bg-elevated)]",
                       item.disabled && "opacity-45"
@@ -273,7 +277,7 @@ export function CommandPalette({
                       {Icon ? (
                         <Icon
                           size={14}
-                          className={index === activeIndex ? "text-[var(--pg-accent)]" : "text-[var(--pg-muted)]"}
+                          className={index === clampedActiveIndex ? "text-[var(--pg-accent)]" : "text-[var(--pg-muted)]"}
                         />
                       ) : null}
                       {item.label}

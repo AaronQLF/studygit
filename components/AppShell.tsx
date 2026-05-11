@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Command, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+// CSS only needed inside the app: KaTeX renders math in TipTap nodes and
+// in the web-article reader, tippy.js styles the slash/citation menus.
+// Importing here (instead of in app/layout.tsx) keeps these off the
+// landing/marketing routes.
+import "katex/dist/katex.min.css";
+import "tippy.js/dist/tippy.css";
 import { useStore } from "@/lib/store";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
@@ -49,7 +55,11 @@ export function AppShell({ user }: AppShellProps = {}) {
   useEffect(() => {
     const pg = (window as unknown as { personalGit?: { platform?: string } })
       .personalGit;
-    if (pg?.platform === "darwin") setMacTitlebarPad(72);
+    if (pg?.platform === "darwin") {
+      // Defer to a microtask so we don't run a setState synchronously
+      // during the effect's render phase.
+      queueMicrotask(() => setMacTitlebarPad(72));
+    }
   }, []);
 
   useEffect(() => {
@@ -120,7 +130,7 @@ export function AppShell({ user }: AppShellProps = {}) {
               )}
             </button>
             <div className="flex items-center gap-2 pl-1 min-w-0">
-              <span className="pg-serif text-[17px] italic font-medium tracking-tight text-[var(--pg-fg)]">
+              <span className="pg-serif text-[17px] font-medium tracking-tight text-[var(--pg-fg)]">
                 personalGit
               </span>
               {currentWorkspace ? (
@@ -134,7 +144,7 @@ export function AppShell({ user }: AppShellProps = {}) {
             </div>
           </div>
           <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
-            <span className="inline-flex h-7 items-center px-2 text-[11px] italic text-[var(--pg-muted)]">
+            <span className="pg-section-label inline-flex h-7 items-center px-2">
               {saveStatus}
             </span>
             <button

@@ -29,6 +29,7 @@ import {
   Shapes,
   StickyNote,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { extractCitedPdfIds } from "@/lib/citations";
@@ -141,7 +142,7 @@ function citationSignature(wsNodes: CanvasNode[]): string {
 function defaultDataFor(kind: NodeKind): AnyNodeData {
   switch (kind) {
     case "link":
-      return { kind, url: "", title: "New link", embed: true };
+      return { kind, url: "", title: "New link", highlights: [] };
     case "image":
       return { kind, url: "" };
     case "note":
@@ -179,8 +180,20 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
 
 function CanvasInner() {
   const selectedWorkspaceId = useStore((s) => s.selectedWorkspaceId);
-  const storeNodes = useStore((s) => s.nodes);
-  const storeEdges = useStore((s) => s.edges);
+  // Workspace-filtered shallow subscriptions: only re-render when nodes or
+  // edges *in the active workspace* change shape. The full store contains
+  // every workspace's content; filtering here keeps switching workspaces
+  // fast and stops noise from other workspaces from churning the canvas.
+  const storeNodes = useStore(
+    useShallow((s) =>
+      s.nodes.filter((n) => n.workspaceId === s.selectedWorkspaceId)
+    )
+  );
+  const storeEdges = useStore(
+    useShallow((s) =>
+      s.edges.filter((e) => e.workspaceId === s.selectedWorkspaceId)
+    )
+  );
   const addNodeStore = useStore((s) => s.addNode);
   const updateNode = useStore((s) => s.updateNode);
   const deleteNodeWithSnapshot = useStore((s) => s.deleteNodeWithSnapshot);
@@ -211,12 +224,9 @@ function CanvasInner() {
       lastSignatureRef.current = `${selectedWorkspaceId}`;
       return;
     }
-    const wsNodes = storeNodes.filter(
-      (n) => n.workspaceId === selectedWorkspaceId
-    );
-    const wsEdges = storeEdges.filter(
-      (e) => e.workspaceId === selectedWorkspaceId
-    );
+    // Already workspace-filtered upstream.
+    const wsNodes = storeNodes;
+    const wsEdges = storeEdges;
     const citationEdges = buildCitationEdges(wsNodes);
     const signature =
       selectedWorkspaceId +
@@ -234,16 +244,22 @@ function CanvasInner() {
       citationSignature(wsNodes);
 
     if (signature === lastSignatureRef.current) {
-      setNodes((prev) =>
-        prev.map((n) => {
+      // Fast path: structure hasn't changed, only `data` references did
+      // (e.g. text edits, highlight added). Reuse the existing React Flow
+      // nodes array and only swap the per-node `data` refs whose identity
+      // actually changed.
+      setNodes((prev) => {
+        let changed = false;
+        const next = prev.map((n) => {
           const src = wsNodes.find((x) => x.id === n.id);
           if (!src) return n;
-          return {
-            ...n,
-            data: src.data as unknown as Record<string, unknown>,
-          };
-        })
-      );
+          const srcData = src.data as unknown as Record<string, unknown>;
+          if (n.data === srcData) return n;
+          changed = true;
+          return { ...n, data: srcData };
+        });
+        return changed ? next : prev;
+      });
       return;
     }
     lastSignatureRef.current = signature;

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "katex/dist/katex.min.css";
-import "tippy.js/dist/tippy.css";
+// `katex.min.css` and `tippy.css` are only needed by the canvas (math
+// blocks in TipTap, tippy popovers for slash/citation menus). They used
+// to live here, which forced the marketing landing page to ship ~30 KB
+// of CSS + a font fetch it never uses. Imported inside AppShell now.
 import "./globals.css";
 
 const inter = Inter({

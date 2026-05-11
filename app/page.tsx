@@ -44,7 +44,7 @@ function SiteNav({ user }: { user: { email: string | null } | null }) {
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[color-mix(in_srgb,var(--pg-bg)_88%,transparent)] border-b border-[var(--pg-border)]">
       <div className="max-w-6xl mx-auto h-12 px-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group">
-          <span className="pg-serif text-[18px] italic font-medium tracking-tight text-[var(--pg-fg)] group-hover:text-[var(--pg-accent)] transition-colors">
+          <span className="pg-serif text-[18px] font-medium tracking-tight text-[var(--pg-fg)] group-hover:text-[var(--pg-accent)] transition-colors">
             personalGit
           </span>
         </Link>
@@ -119,7 +119,7 @@ function Hero({
               <Sparkles size={12} className="text-[var(--pg-accent)]" />
               A student second brain
             </div>
-            <h1 className="mt-5 pg-serif text-[40px] sm:text-[56px] leading-[1.05] italic font-medium tracking-tight text-[var(--pg-fg)]">
+            <h1 className="mt-5 pg-serif text-[40px] sm:text-[56px] leading-[1.05] font-medium tracking-tight text-[var(--pg-fg)]">
               Your personal learning canvas.
             </h1>
             <p className="mt-5 max-w-xl text-[15px] text-[var(--pg-fg-soft)]">
@@ -172,7 +172,7 @@ function HeroIllustration() {
         <div className="flex items-center gap-1.5 text-[10px] text-[var(--pg-muted)] uppercase tracking-wider">
           <Notebook size={11} /> Page
         </div>
-        <div className="mt-2 pg-serif italic text-[14px] text-[var(--pg-fg)] leading-snug">
+        <div className="mt-2 pg-serif text-[14px] text-[var(--pg-fg)] leading-snug">
           Transformers are sequence models that…
         </div>
         <div className="mt-2 space-y-1.5">
@@ -268,7 +268,7 @@ function DownloadSection() {
           <p className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
             Download
           </p>
-          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] italic leading-tight tracking-tight text-[var(--pg-fg)]">
+          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] leading-tight tracking-tight text-[var(--pg-fg)]">
             Native desktop app for macOS and Windows.
           </h2>
           <p className="mt-3 text-[14px] text-[var(--pg-fg-soft)]">
@@ -314,7 +314,7 @@ function DownloadSection() {
             </span>{" "}
             Each desktop install keeps its workspaces, pages, and PDFs locally
             on that machine. If you install personalGit on both your Mac and
-            your Windows PC, they won't share data with each other (or with
+            your Windows PC, they won&rsquo;t share data with each other (or with
             the web app). Cloud sync is on the roadmap.
           </div>
         </div>
@@ -404,7 +404,7 @@ function Features() {
           <p className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
             Features
           </p>
-          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] italic leading-tight tracking-tight text-[var(--pg-fg)]">
+          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] leading-tight tracking-tight text-[var(--pg-fg)]">
             Everything in one place. Yours.
           </h2>
           <p className="mt-3 text-[14px] text-[var(--pg-fg-soft)]">
@@ -457,8 +457,8 @@ function HowItWorks() {
           <p className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
             How it works
           </p>
-          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] italic leading-tight tracking-tight text-[var(--pg-fg)]">
-            Three steps, then you're studying.
+          <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] leading-tight tracking-tight text-[var(--pg-fg)]">
+            Three steps, then you&rsquo;re studying.
           </h2>
         </div>
         <ol className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -467,7 +467,7 @@ function HowItWorks() {
               key={step.title}
               className="rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] p-5"
             >
-              <div className="pg-serif italic text-[28px] font-medium text-[var(--pg-accent)]">
+              <div className="pg-serif text-[28px] font-medium text-[var(--pg-accent)] tabular-nums">
                 {String(i + 1).padStart(2, "0")}
               </div>
               <h3 className="mt-2 text-[15px] font-medium text-[var(--pg-fg)]">
@@ -520,7 +520,7 @@ function Faq() {
         <p className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
           FAQ
         </p>
-        <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] italic leading-tight tracking-tight text-[var(--pg-fg)]">
+        <h2 className="mt-2 pg-serif text-[32px] sm:text-[40px] leading-tight tracking-tight text-[var(--pg-fg)]">
           Questions, answered.
         </h2>
         <div className="mt-8 divide-y divide-[var(--pg-border)] rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)]">
@@ -553,7 +553,7 @@ function FinalCta({
   return (
     <section className="border-t border-[var(--pg-border)]">
       <div className="max-w-3xl mx-auto px-4 py-20 sm:py-24 text-center">
-        <h2 className="pg-serif text-[36px] sm:text-[48px] italic leading-[1.05] tracking-tight text-[var(--pg-fg)]">
+        <h2 className="pg-serif text-[36px] sm:text-[48px] leading-[1.05] tracking-tight text-[var(--pg-fg)]">
           Start your canvas.
         </h2>
         <p className="mt-3 text-[14px] text-[var(--pg-fg-soft)] max-w-xl mx-auto">
@@ -580,7 +580,7 @@ function SiteFooter() {
     <footer className="border-t border-[var(--pg-border)] bg-[var(--pg-bg-subtle)]">
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--pg-muted)]">
         <div className="flex items-center gap-2">
-          <span className="pg-serif italic text-[14px] text-[var(--pg-fg-soft)]">
+          <span className="pg-serif text-[14px] text-[var(--pg-fg-soft)]">
             personalGit
           </span>
           <span aria-hidden>·</span>

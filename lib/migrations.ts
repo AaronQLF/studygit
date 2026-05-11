@@ -2,6 +2,7 @@ import { marked } from "marked";
 import type {
   BlogNodeData,
   CanvasNode,
+  LinkNodeData,
   PageNodeData,
 } from "./types";
 
@@ -86,6 +87,21 @@ export function migrateNode(node: CanvasNode): {
       },
       changed: true,
     };
+  }
+
+  // Link nodes gained a `highlights` array when reader-view annotations
+  // shipped. Backfill so the array is always non-undefined.
+  if (kind === "link") {
+    const data = node.data as LinkNodeData;
+    if (!Array.isArray(data.highlights)) {
+      return {
+        node: {
+          ...node,
+          data: { ...data, highlights: [] },
+        },
+        changed: true,
+      };
+    }
   }
 
   return { node, changed: false };

@@ -101,7 +101,7 @@ export function PdfThumbnail({
     return (
       <div className={`${placeholderClass} flex-col gap-2 px-3 text-center`}>
         <FileText size={18} className="text-[var(--pg-muted)]" />
-        <div className="pg-serif text-[11px] italic text-[var(--pg-muted)]">
+        <div className="pg-serif text-[11px] text-[var(--pg-muted)]">
           Preview unavailable
         </div>
         {onRetry ? (

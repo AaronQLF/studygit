@@ -14,7 +14,20 @@ import {
   DetailsSummary,
 } from "@tiptap/extension-details";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import { createLowlight, common } from "lowlight";
+import { createLowlight } from "lowlight";
+// Curated language set. `lowlight`'s `common` bundle pulls ~190 grammars
+// (~150 KB minzipped); the list below covers the languages students
+// actually paste into code blocks. Add more here as needed.
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import python from "highlight.js/lib/languages/python";
+import bash from "highlight.js/lib/languages/bash";
+import json from "highlight.js/lib/languages/json";
+import xml from "highlight.js/lib/languages/xml";
+import css from "highlight.js/lib/languages/css";
+import markdown from "highlight.js/lib/languages/markdown";
+import sql from "highlight.js/lib/languages/sql";
+import rust from "highlight.js/lib/languages/rust";
 import type { AnyExtension } from "@tiptap/core";
 
 import { MathInline } from "./extensions/MathInline";
@@ -25,7 +38,18 @@ import { SlashMenu } from "./extensions/SlashMenu";
 import { Citation } from "./extensions/Citation";
 import { CitationMention } from "./extensions/CitationMention";
 
-const lowlight = createLowlight(common);
+const lowlight = createLowlight({
+  javascript,
+  typescript,
+  python,
+  bash,
+  json,
+  xml,
+  css,
+  markdown,
+  sql,
+  rust,
+});
 
 export type CitationContext = {
   sourceNodeId: string | null;
