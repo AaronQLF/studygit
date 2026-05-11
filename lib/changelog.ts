@@ -37,7 +37,7 @@ export const CHANGELOG: ChangelogEntry[] = [
           {
             tag: "new",
             text:
-              "Six built-in palettes — Paper (default), Slate, Mocha, Forest, Ink, and Plum — each with light and dark variants.",
+              "Seven built-in palettes — Paper (default), Slate, Mocha, Forest, Ink, Plum, and Retro — each with light and dark variants. Retro reads as a yellowed paperback in light mode and an amber-CRT terminal in dark mode.",
           },
           {
             tag: "new",

@@ -225,6 +225,37 @@
   --pg-marker: #5a3e6a;
 }
 
+[data-theme-preset="retro"] {
+  --pg-bg: #f4eccb;
+  --pg-bg-subtle: #ece2b5;
+  --pg-bg-elevated: #e0d496;
+  --pg-bg-canvas: #ede4c0;
+  --pg-fg: #2d1f0e;
+  --pg-fg-soft: #4d3b1f;
+  --pg-muted: #8c7a4a;
+  --pg-muted-soft: #c2b287;
+  --pg-border: #d4c189;
+  --pg-border-strong: #b39b5e;
+  --pg-accent: #b8590f;
+  --pg-accent-soft: rgba(184, 89, 15, 0.1);
+  --pg-marker: #ffd24a;
+}
+[data-theme-preset="retro"].dark {
+  --pg-bg: #120e08;
+  --pg-bg-subtle: #1a1410;
+  --pg-bg-elevated: #25190e;
+  --pg-bg-canvas: #0d0905;
+  --pg-fg: #e4d2a4;
+  --pg-fg-soft: #c4b080;
+  --pg-muted: #8a7548;
+  --pg-muted-soft: #4a3a1f;
+  --pg-border: #3a2c14;
+  --pg-border-strong: #503e1c;
+  --pg-accent: #ffb000;
+  --pg-accent-soft: rgba(255, 176, 0, 0.18);
+  --pg-marker: #6a4a0f;
+}
+
 html,
 body {
   height: 100%;
