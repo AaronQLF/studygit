@@ -206,6 +206,24 @@ export function RichTextEditor({
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  // See PageEditor — debounce keystrokes so we don't trigger the store
+  // update / canvas re-render cascade on every character.
+  const pendingRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    html: string;
+    dirty: boolean;
+  }>({ timer: null, html: "", dirty: false });
+
+  const flushPending = () => {
+    if (!pendingRef.current.dirty) return;
+    if (pendingRef.current.timer) {
+      clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = null;
+    }
+    pendingRef.current.dirty = false;
+    onChangeRef.current(pendingRef.current.html);
+  };
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: createBaseExtensions({
@@ -224,9 +242,27 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
-      onChangeRef.current(html === "<p></p>" ? "" : html);
+      pendingRef.current.html = html === "<p></p>" ? "" : html;
+      pendingRef.current.dirty = true;
+      if (pendingRef.current.timer) clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = setTimeout(() => {
+        pendingRef.current.timer = null;
+        if (!pendingRef.current.dirty) return;
+        pendingRef.current.dirty = false;
+        onChangeRef.current(pendingRef.current.html);
+      }, 180);
+    },
+    onBlur: () => {
+      flushPending();
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    return () => {
+      flushPending();
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -234,6 +270,11 @@ export function RichTextEditor({
     const incoming = value || "";
     const normalizedCurrent = current === "<p></p>" ? "" : current;
     if (normalizedCurrent === incoming) return;
+    if (pendingRef.current.timer) {
+      clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = null;
+    }
+    pendingRef.current.dirty = false;
     editor.commands.setContent(incoming || "", { emitUpdate: false });
   }, [value, editor]);
 

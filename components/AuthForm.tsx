@@ -31,7 +31,7 @@ export function AuthForm({ mode, next = "/app" }: AuthFormProps) {
 
   return (
     <div className="rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] shadow-[var(--pg-shadow)] p-6">
-      <h1 className="pg-serif text-[28px] italic font-medium tracking-tight text-[var(--pg-fg)] mb-1">
+      <h1 className="pg-serif text-[28px] font-medium tracking-tight text-[var(--pg-fg)] mb-1">
         {title}
       </h1>
       <p className="text-[12.5px] text-[var(--pg-muted)] mb-5">

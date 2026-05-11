@@ -173,9 +173,9 @@ const ALL_ITEMS: SlashItem[] = [
   },
   {
     title: "Citation",
-    description: "Cite a PDF highlight from this workspace",
+    description: "Cite a highlight from this workspace",
     icon: Link2,
-    keywords: ["cite", "citation", "ref", "reference", "pdf", "quote", "source"],
+    keywords: ["cite", "citation", "ref", "reference", "pdf", "article", "web", "blog", "quote", "source"],
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run();
       // Defer one frame so the editor selection has settled after the

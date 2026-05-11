@@ -21,16 +21,21 @@
   --pg-fg-soft: #423d36;
   --pg-muted: #8b8275;
   --pg-muted-soft: #c9bfa9;
-  --pg-border: #e3dac6;
-  --pg-border-strong: #c8baa0;
-  --pg-accent: #b53b1e;
-  --pg-accent-soft: rgba(181, 59, 30, 0.1);
+  /* Slightly stronger borders than before so the whole layout reads like
+     ruled-paper sections rather than soft-rounded cards. */
+  --pg-border: #d8cdb4;
+  --pg-border-strong: #b9a988;
+  --pg-accent: #8a2a17;
+  --pg-accent-soft: rgba(138, 42, 23, 0.1);
   --pg-marker: #ffe98a;
-  --pg-shadow-sm: 0 1px 0 rgba(28, 26, 23, 0.04);
-  --pg-shadow: 0 1px 0 rgba(28, 26, 23, 0.04), 0 8px 22px rgba(28, 26, 23, 0.06);
-  --pg-shadow-lg: 0 1px 0 rgba(28, 26, 23, 0.06), 0 14px 38px rgba(28, 26, 23, 0.12);
-  --pg-radius: 6px;
-  --pg-radius-lg: 8px;
+  /* Single-pixel rules instead of soft drop-shadows. Floating panels get
+     a slightly more prominent halo (still flat, no blur) to feel like a
+     reprinted page on top of another. */
+  --pg-shadow-sm: 0 1px 0 rgba(28, 26, 23, 0.06);
+  --pg-shadow: 0 1px 0 rgba(28, 26, 23, 0.06), 0 2px 0 -1px rgba(28, 26, 23, 0.04);
+  --pg-shadow-lg: 0 1px 0 rgba(28, 26, 23, 0.08), 0 4px 0 -2px rgba(28, 26, 23, 0.05), 0 12px 24px -10px rgba(28, 26, 23, 0.18);
+  --pg-radius: 3px;
+  --pg-radius-lg: 4px;
   color-scheme: light;
 }
 
@@ -43,14 +48,14 @@
   --pg-fg-soft: #d4c8b2;
   --pg-muted: #a9997f;
   --pg-muted-soft: #5f5343;
-  --pg-border: #3a3128;
-  --pg-border-strong: #4a3d31;
-  --pg-accent: #b53b1e;
-  --pg-accent-soft: rgba(181, 59, 30, 0.2);
+  --pg-border: #463a2e;
+  --pg-border-strong: #5c4d3d;
+  --pg-accent: #c44a2b;
+  --pg-accent-soft: rgba(196, 74, 43, 0.2);
   --pg-marker: #8a6a2f;
-  --pg-shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.28);
-  --pg-shadow: 0 1px 0 rgba(0, 0, 0, 0.36), 0 10px 26px rgba(0, 0, 0, 0.35);
-  --pg-shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.42), 0 18px 42px rgba(0, 0, 0, 0.45);
+  --pg-shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.42);
+  --pg-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 2px 0 -1px rgba(0, 0, 0, 0.35);
+  --pg-shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.55), 0 4px 0 -2px rgba(0, 0, 0, 0.4), 0 14px 28px -10px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -63,17 +68,9 @@ body {
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
+  /* Flat paper surface: no radial haze. Keeps the cream tone but removes
+     the soft "glow" that competed with the new ruled-paper aesthetic. */
   background-color: var(--pg-bg);
-  background-image: radial-gradient(
-      circle at 20% 10%,
-      color-mix(in srgb, var(--pg-muted-soft) 14%, transparent),
-      transparent 34%
-    ),
-    radial-gradient(
-      circle at 82% 78%,
-      color-mix(in srgb, var(--pg-muted-soft) 10%, transparent),
-      transparent 36%
-    );
   color: var(--pg-fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -85,8 +82,38 @@ body {
   color: var(--pg-fg);
 }
 
+/* Upright Fraunces by default. Slightly negative tracking gives the
+   typeset feel of an academic journal cover instead of a bookplate. */
 .pg-serif {
   font-family: var(--font-serif);
+  font-style: normal;
+  letter-spacing: -0.005em;
+}
+.pg-serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+}
+
+/* Section labels (uppercase, letter-spaced, monospace numerals) used
+   above headings in pages and the reader. Mirrors how journals tag
+   sections: "I.", "ABSTRACT", "METHODS". */
+.pg-section-label {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--pg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin rule used to separate page sections / panel headers. Pairs with
+   the new shadow style; reads like a printed underscore. */
+.pg-rule {
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+  width: 100%;
+  margin: 0;
 }
 
 .pg-command-search::placeholder {
@@ -363,6 +390,200 @@ select,
   outline-offset: 1px;
 }
 
+/* Reader view for annotated web articles. Mirrors the typography of a
+   thoughtful long-form post; the typography plugin handles base styles, this
+   layer just tightens spacing and gives the article its own surface. */
+.pg-web-article {
+  color: var(--pg-fg);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.7;
+  letter-spacing: 0.005em;
+  /* Justify + hyphenate so paragraphs flush both edges, like a typeset
+     academic article. The browser still respects manual line breaks. */
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.pg-web-article :is(h1, h2, h3, h4) {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--pg-fg);
+  line-height: 1.22;
+  margin-top: 1.7em;
+  margin-bottom: 0.55em;
+  letter-spacing: -0.012em;
+  /* Headings stay flush-left for scannability even when body is justified. */
+  text-align: left;
+  hyphens: manual;
+}
+
+/* H1 doubles as the article title; thin rule below evokes a section
+   break in a scholarly print layout. */
+.pg-web-article h1 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-web-article h1 { font-size: 28px; }
+.pg-web-article h2 { font-size: 22px; }
+.pg-web-article h3 { font-size: 18px; }
+.pg-web-article h4 { font-size: 16px; }
+
+.pg-web-article p,
+.pg-web-article ul,
+.pg-web-article ol,
+.pg-web-article blockquote,
+.pg-web-article pre,
+.pg-web-article figure {
+  margin-top: 0.9em;
+  margin-bottom: 0.9em;
+}
+
+.pg-web-article ul,
+.pg-web-article ol {
+  padding-left: 1.4em;
+}
+
+.pg-web-article ul { list-style: disc; }
+.pg-web-article ol { list-style: decimal; }
+.pg-web-article li { margin: 0.25em 0; }
+
+.pg-web-article blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--pg-border-strong);
+  color: var(--pg-fg-soft);
+  font-style: italic;
+}
+
+.pg-web-article hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-web-article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--pg-radius);
+  border: 1px solid var(--pg-border);
+}
+
+.pg-web-article figcaption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pg-muted);
+  margin-top: 0.5em;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  hyphens: manual;
+}
+
+/* Block quotes get a thicker rule and stop justifying so longer pulled
+   quotations sit like a real epigraph rather than a stretched line. */
+.pg-web-article blockquote {
+  text-align: left;
+  hyphens: manual;
+}
+
+.pg-web-article code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--pg-bg-subtle);
+  border: 1px solid var(--pg-border);
+}
+
+.pg-web-article pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 0.85em 1em;
+  border-radius: var(--pg-radius);
+  background: var(--pg-bg-subtle);
+  border: 1px solid var(--pg-border);
+  overflow-x: auto;
+}
+
+.pg-web-article pre code {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+/* Per product call: external links in the reader view are non-interactive.
+   Keep them visually distinct so the user knows the underlying source had a
+   link, but never let them navigate away. */
+.pg-web-article a,
+.pg-web-article a[href] {
+  color: var(--pg-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: text;
+  pointer-events: none;
+}
+
+.pg-web-article ::selection {
+  background: color-mix(in srgb, var(--pg-marker) 65%, transparent);
+}
+
+.pg-web-article mark[data-pg-highlight="true"] {
+  border-radius: 2px;
+  padding: 0.05em 0;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: filter 120ms ease, outline-color 120ms ease;
+  outline: 0 solid transparent;
+  color: inherit;
+}
+
+.pg-web-article mark[data-pg-highlight="true"]:hover {
+  filter: brightness(1.04);
+}
+
+.pg-web-article mark[data-pg-highlight="true"].is-active {
+  outline: 2px solid color-mix(in srgb, var(--pg-fg) 35%, transparent);
+  outline-offset: 1px;
+}
+
+/* Server-pre-rendered KaTeX inside the reader view. The KaTeX HTML brings
+   its own typography, so we just frame block math nicely and allow inline
+   math to flow with text. */
+.pg-web-article .pg-math-inline-rendered {
+  display: inline;
+}
+.pg-web-article .pg-math-inline-rendered .katex {
+  font-size: 1em;
+}
+.pg-web-article .pg-math-block-rendered {
+  display: block;
+  text-align: center;
+  margin: 1.1em auto;
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+  background: var(--pg-bg-subtle);
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+}
+.pg-web-article .pg-math-block-rendered .katex-display {
+  margin: 0;
+}
+.pg-web-article .pg-math-error {
+  font-family: var(--font-mono);
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
 /* Preview card slide-in animation */
 @keyframes pg-slide-up-fade {
   from {
@@ -410,26 +631,37 @@ select,
   margin-top: 0.6em;
 }
 
+/* Pages read like typeset notes: serif headings, slight negative
+   tracking, a thin rule under H1 to evoke a paper section title. The
+   body remains sans-serif for editing speed (changing it would be a
+   bigger pass than this aesthetic batch). */
+.pg-prose h1,
+.pg-prose h2,
+.pg-prose h3 {
+  font-family: var(--font-serif);
+  font-style: normal;
+  letter-spacing: -0.01em;
+  color: var(--pg-fg);
+}
 .pg-prose h1 {
-  font-size: 1.6rem;
-  line-height: 1.2;
+  font-size: 1.7rem;
+  line-height: 1.18;
   font-weight: 600;
   margin-top: 1em;
-  color: var(--pg-fg);
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--pg-border);
 }
 .pg-prose h2 {
-  font-size: 1.3rem;
-  line-height: 1.25;
+  font-size: 1.35rem;
+  line-height: 1.22;
   font-weight: 600;
-  margin-top: 0.9em;
-  color: var(--pg-fg);
+  margin-top: 1em;
 }
 .pg-prose h3 {
-  font-size: 1.1rem;
+  font-size: 1.12rem;
   line-height: 1.3;
   font-weight: 600;
-  margin-top: 0.75em;
-  color: var(--pg-fg);
+  margin-top: 0.85em;
 }
 
 .pg-prose p {
@@ -1039,6 +1271,10 @@ select,
   align-items: center;
   gap: 0.4rem;
   min-width: 0;
+}
+.pg-citation-row-kind {
+  flex-shrink: 0;
+  color: var(--pg-muted);
 }
 .pg-citation-row-doc {
   font-weight: 500;

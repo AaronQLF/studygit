@@ -46,12 +46,46 @@ export type PdfHighlight = {
   createdAt: number;
 };
 
+// Text-anchored highlight for the article reader view. We re-find the anchor
+// inside the cached `extractedHtml` snapshot on every render, so the snapshot
+// is the source of truth for highlight positioning.
+export type WebHighlight = {
+  id: string;
+  // The highlighted text exactly as it appears in the snapshot, whitespace
+  // collapsed to single spaces.
+  text: string;
+  // Up to ~32 chars of context on each side, used to disambiguate when the
+  // same phrase appears multiple times in the article.
+  prefix: string;
+  suffix: string;
+  color: string;
+  comments: Comment[];
+  aiThread: AiMessage[];
+  createdAt: number;
+};
+
 export type LinkNodeData = {
   kind: "link";
   url: string;
   title: string;
   description?: string;
+  // Legacy iframe-embed toggle. No longer read by the panel/card; kept so
+  // older saved nodes deserialize cleanly.
   embed?: boolean;
+  // Snapshot of the extracted article. Stable across reopens so highlight
+  // anchors don't drift. Populated by /api/web/extract.
+  extractedHtml?: string;
+  extractedTitle?: string;
+  extractedByline?: string;
+  extractedSiteName?: string;
+  extractedExcerpt?: string;
+  extractedAt?: number;
+  // URL after redirects, if different from the user-entered url.
+  extractedFinalUrl?: string;
+  highlights: WebHighlight[];
+  // Free-form rich-text notes alongside the article (HTML, edited via the
+  // same RichTextEditor as page nodes and PDF notes).
+  notes?: string;
 };
 
 export type ImageNodeData = {
@@ -133,6 +167,21 @@ export type CanvasEdge = {
   target: string;
 };
 
+// Windows-11-style snap layouts. When set, the panel ignores its x/y/w/h
+// (which are kept as the "restore" values) and renders into a slot inside
+// the named grid. Two panels can share the same layout to tile beside each
+// other; snapping a panel into an already-occupied slot evicts the prior
+// occupant back to its restore geometry.
+export type PanelSnap = {
+  layout:
+    | "full"
+    | "halves-h"
+    | "halves-v"
+    | "thirds-h"
+    | "quads";
+  slot: number;
+};
+
 export type FloatingPanel = {
   id: string;
   nodeId: string;
@@ -142,6 +191,7 @@ export type FloatingPanel = {
   height: number;
   z: number;
   maximized?: boolean;
+  snap?: PanelSnap;
 };
 
 export type AppState = {

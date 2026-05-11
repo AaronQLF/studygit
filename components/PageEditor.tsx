@@ -223,6 +223,26 @@ export function PageEditor({
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  // Debounce keystroke → store propagation so we don't trigger the
+  // canvas/panel re-render cascade and full-state JSON.stringify on every
+  // character. We flush on blur and on editor destroy so the last burst is
+  // never dropped.
+  const pendingRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    html: string;
+    dirty: boolean;
+  }>({ timer: null, html: "", dirty: false });
+
+  const flushPending = () => {
+    if (!pendingRef.current.dirty) return;
+    if (pendingRef.current.timer) {
+      clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = null;
+    }
+    pendingRef.current.dirty = false;
+    onChangeRef.current(pendingRef.current.html);
+  };
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: createBaseExtensions({
@@ -241,9 +261,29 @@ export function PageEditor({
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
-      onChangeRef.current(html === "<p></p>" ? "" : html);
+      pendingRef.current.html = html === "<p></p>" ? "" : html;
+      pendingRef.current.dirty = true;
+      if (pendingRef.current.timer) clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = setTimeout(() => {
+        pendingRef.current.timer = null;
+        if (!pendingRef.current.dirty) return;
+        pendingRef.current.dirty = false;
+        onChangeRef.current(pendingRef.current.html);
+      }, 180);
+    },
+    onBlur: () => {
+      flushPending();
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    return () => {
+      // Flush any in-flight debounce before the editor instance goes away
+      // (e.g. when the panel closes mid-typing-burst).
+      flushPending();
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -251,6 +291,13 @@ export function PageEditor({
     const incoming = value || "";
     const normalizedCurrent = current === "<p></p>" ? "" : current;
     if (normalizedCurrent === incoming) return;
+    // External value change (e.g. hydration / undo from another path) —
+    // drop any pending debounced flush so we don't clobber the new content.
+    if (pendingRef.current.timer) {
+      clearTimeout(pendingRef.current.timer);
+      pendingRef.current.timer = null;
+    }
+    pendingRef.current.dirty = false;
     editor.commands.setContent(incoming || "", { emitUpdate: false });
   }, [value, editor]);
 

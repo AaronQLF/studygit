@@ -31,11 +31,16 @@ export function AddDock({ onAdd }: { onAdd: (kind: NodeKind) => void }) {
   const [showTip, setShowTip] = useState(false);
 
   useEffect(() => {
-    try {
-      setShowTip(!window.localStorage.getItem(TIP_KEY));
-    } catch {
-      setShowTip(false);
-    }
+    // Defer to a microtask so the setState doesn't fire synchronously
+    // during the effect body — same pattern used elsewhere for the
+    // "read from localStorage on mount" idiom.
+    queueMicrotask(() => {
+      try {
+        setShowTip(!window.localStorage.getItem(TIP_KEY));
+      } catch {
+        setShowTip(false);
+      }
+    });
   }, []);
 
   const dismissTip = () => {
@@ -76,7 +81,7 @@ export function AddDock({ onAdd }: { onAdd: (kind: NodeKind) => void }) {
         })}
       </div>
       {showTip ? (
-        <span className="pg-serif text-[11px] italic tracking-wide text-[var(--pg-muted)]">
+        <span className="pg-section-label">
           press · to add
         </span>
       ) : null}

@@ -56,14 +56,14 @@ export function Sidebar() {
 
   // Reset pending delete confirmation whenever the row menu changes so a
   // stale "Click again to confirm" state never carries over to a different
-  // workspace or a re-opened menu.
-  useEffect(() => {
-    if (menuOpenId === null) {
-      setConfirmingDeleteId(null);
-    } else if (confirmingDeleteId && confirmingDeleteId !== menuOpenId) {
-      setConfirmingDeleteId(null);
-    }
-  }, [menuOpenId, confirmingDeleteId]);
+  // workspace or a re-opened menu. Derived during render to avoid a
+  // cascading setState from inside an effect.
+  const effectiveConfirmingDeleteId =
+    menuOpenId === null
+      ? null
+      : confirmingDeleteId && confirmingDeleteId !== menuOpenId
+      ? null
+      : confirmingDeleteId;
 
   // Toggle hides the sidebar entirely. The header toggle button remains
   // visible so the user can bring it back.
@@ -72,7 +72,7 @@ export function Sidebar() {
   return (
     <aside className="shrink-0 border-r border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] flex flex-col h-full w-56">
       <div className="h-9 flex items-center justify-between px-2 mt-1">
-        <div className="pg-serif pl-1 text-[13px] italic text-[var(--pg-muted)]">
+        <div className="pg-section-label pl-1 text-[12px]">
           Workspaces
         </div>
         <button
@@ -190,7 +190,7 @@ export function Sidebar() {
                     <button
                       className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-red-500 hover:bg-red-500/10"
                       onClick={() => {
-                        if (confirmingDeleteId === ws.id) {
+                        if (effectiveConfirmingDeleteId === ws.id) {
                           deleteWorkspace(ws.id);
                           setConfirmingDeleteId(null);
                           setMenuOpenId(null);
@@ -200,7 +200,7 @@ export function Sidebar() {
                       }}
                     >
                       <Trash2 size={12} />
-                      {confirmingDeleteId === ws.id
+                      {effectiveConfirmingDeleteId === ws.id
                         ? "Click again to confirm"
                         : "Delete"}
                     </button>

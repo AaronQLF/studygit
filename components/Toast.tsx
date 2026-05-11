@@ -51,7 +51,7 @@ export function ToastViewport() {
           key={item.id}
           className="pointer-events-auto inline-flex min-w-[280px] items-center justify-between gap-3 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 py-1.5 shadow-[var(--pg-shadow-lg)]"
         >
-          <div className="pg-serif text-[12px] italic text-[var(--pg-fg)]">{item.message}</div>
+          <div className="pg-serif text-[12px] text-[var(--pg-fg)]">{item.message}</div>
           <div className="flex items-center gap-1">
             {item.actionLabel && item.onAction && (
               <button

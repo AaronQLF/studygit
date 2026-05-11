@@ -8,7 +8,12 @@ import {
 } from "@tiptap/react";
 import { useMemo } from "react";
 import { useStore } from "@/lib/store";
-import type { CanvasNode, PdfNodeData } from "@/lib/types";
+import type {
+  CanvasNode,
+  LinkNodeData,
+  PdfNodeData,
+  WebHighlight,
+} from "@/lib/types";
 
 export type CitationAttrs = {
   nodeId: string | null;
@@ -32,6 +37,66 @@ function clampExcerpt(text: string | null | undefined): string {
   return single.length > 140 ? `${single.slice(0, 140)}…` : single;
 }
 
+function hostnameOf(url: string | undefined | null): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+type ResolvedSource = {
+  title: string;
+  // What to show as the secondary chip on the pill: page number (PDFs) or
+  // hostname (web articles), or null if there's nothing to show.
+  locator: { kind: "page"; page: number } | { kind: "host"; host: string } | null;
+  highlightText: string | null;
+  highlightColor: string | null;
+  // True when the source exists but the referenced highlight no longer does.
+  orphan: boolean;
+};
+
+function resolveSource(
+  sourceNode: CanvasNode | null,
+  highlightId: string | null
+): ResolvedSource | null {
+  if (!sourceNode) return null;
+  if (sourceNode.data.kind === "pdf") {
+    const data = sourceNode.data as PdfNodeData;
+    const highlight =
+      highlightId != null
+        ? data.highlights.find((h) => h.id === highlightId) ?? null
+        : null;
+    return {
+      title: data.title || "Untitled PDF",
+      locator: highlight
+        ? { kind: "page", page: highlight.page }
+        : null,
+      highlightText: highlight?.text ?? null,
+      highlightColor: highlight?.color ?? null,
+      orphan: highlightId != null && highlight == null,
+    };
+  }
+  if (sourceNode.data.kind === "link") {
+    const data = sourceNode.data as LinkNodeData;
+    const highlights: WebHighlight[] = data.highlights ?? [];
+    const highlight =
+      highlightId != null
+        ? highlights.find((h) => h.id === highlightId) ?? null
+        : null;
+    const host = hostnameOf(data.extractedFinalUrl ?? data.url);
+    return {
+      title: data.extractedTitle || data.title || host || "Untitled link",
+      locator: host ? { kind: "host", host } : null,
+      highlightText: highlight?.text ?? null,
+      highlightColor: highlight?.color ?? null,
+      orphan: highlightId != null && highlight == null,
+    };
+  }
+  return null;
+}
+
 function CitationView({ node, selected }: NodeViewProps) {
   const attrs = node.attrs as CitationAttrs;
   const nodeId = attrs.nodeId;
@@ -41,28 +106,21 @@ function CitationView({ node, selected }: NodeViewProps) {
     nodeId ? s.nodes.find((n) => n.id === nodeId) ?? null : null
   ) as CanvasNode | null;
 
-  const live = useMemo(() => {
-    if (!sourceNode || sourceNode.data.kind !== "pdf") return null;
-    const data = sourceNode.data as PdfNodeData;
-    const highlight =
-      highlightId != null
-        ? data.highlights.find((h) => h.id === highlightId) ?? null
-        : null;
-    return {
-      title: data.title || "Untitled PDF",
-      highlight,
-    };
-  }, [sourceNode, highlightId]);
+  const live = useMemo(
+    () => resolveSource(sourceNode, highlightId),
+    [sourceNode, highlightId]
+  );
 
   const isMissingSource = nodeId != null && sourceNode == null;
-  const isMissingHighlight =
-    sourceNode != null && highlightId != null && live?.highlight == null;
+  const isMissingHighlight = live?.orphan ?? false;
   const isBroken = isMissingSource;
 
   const docTitle = live?.title ?? attrs.label ?? "Missing source";
-  const page = live?.highlight?.page ?? attrs.page ?? null;
-  const excerpt = clampExcerpt(live?.highlight?.text ?? attrs.excerpt);
-  const color = live?.highlight?.color ?? "var(--pg-accent)";
+  const locator =
+    live?.locator ??
+    (attrs.page != null ? { kind: "page" as const, page: attrs.page } : null);
+  const excerpt = clampExcerpt(live?.highlightText ?? attrs.excerpt);
+  const color = live?.highlightColor ?? "var(--pg-accent)";
 
   const handleClick = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -72,15 +130,21 @@ function CitationView({ node, selected }: NodeViewProps) {
       useStore.getState().openPanel(nodeId);
       return;
     }
-    useStore.getState().requestPdfHighlightJump(nodeId, highlightId);
+    useStore.getState().requestHighlightJump(nodeId, highlightId);
   };
 
   const handleMouseDown = (event: React.MouseEvent) => {
     event.preventDefault();
   };
 
+  const locatorLabel =
+    locator?.kind === "page"
+      ? `p${locator.page}`
+      : locator?.kind === "host"
+      ? locator.host
+      : null;
   const titleAttr = excerpt
-    ? `${docTitle}${page != null ? ` · p${page}` : ""} — "${excerpt}"`
+    ? `${docTitle}${locatorLabel ? ` · ${locatorLabel}` : ""} — "${excerpt}"`
     : docTitle;
 
   return (
@@ -102,8 +166,8 @@ function CitationView({ node, selected }: NodeViewProps) {
         style={{ ["--pg-citation-color" as string]: color }}
       >
         <span className="pg-citation-doc">{docTitle}</span>
-        {page != null ? (
-          <span className="pg-citation-page">p{page}</span>
+        {locatorLabel ? (
+          <span className="pg-citation-page">{locatorLabel}</span>
         ) : null}
       </button>
     </NodeViewWrapper>
@@ -168,17 +232,21 @@ export const Citation = Node.create({
     const attrs = node.attrs as CitationAttrs;
     const docLabel = attrs.label ?? "Missing source";
     const excerpt = clampExcerpt(attrs.excerpt);
+    // For server-rendered citations we don't know if the source is a PDF or
+    // a web article, so fall back to the stored `page` attr (PDFs).
+    // Once mounted, the React node view replaces this with the live locator.
+    const locatorLabel = attrs.page != null ? `p${attrs.page}` : null;
     const titleAttr = excerpt
-      ? `${docLabel}${attrs.page != null ? ` · p${attrs.page}` : ""} — "${excerpt}"`
+      ? `${docLabel}${locatorLabel ? ` · ${locatorLabel}` : ""} — "${excerpt}"`
       : docLabel;
     const pillChildren: Array<string | (string | object)[]> = [
       ["span", { class: "pg-citation-doc" }, docLabel],
     ];
-    if (attrs.page != null) {
+    if (locatorLabel) {
       pillChildren.push([
         "span",
         { class: "pg-citation-page" },
-        `p${attrs.page}`,
+        locatorLabel,
       ]);
     }
     return [

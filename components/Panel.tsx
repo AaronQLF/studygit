@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { LayoutGrid, Maximize2, Minimize2 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useStore } from "@/lib/store";
 import type { CanvasNode, FloatingPanel } from "@/lib/types";
+import {
+  SNAP_LAYOUTS,
+  SNAP_LAYOUT_ORDER,
+  snapGeom,
+  type SnapLayoutId,
+} from "@/lib/snap-layouts";
 
 const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_HEIGHT = 280;
@@ -48,26 +55,64 @@ export function Panel({
   const resizePanel = useStore((s) => s.resizePanel);
   const closePanel = useStore((s) => s.closePanel);
   const togglePanelMaximize = useStore((s) => s.togglePanelMaximize);
+  const snapPanel = useStore((s) => s.snapPanel);
+  const unsnapPanel = useStore((s) => s.unsnapPanel);
   const bringPanelFront = useStore((s) => s.bringPanelFront);
   const totalPanels = useStore((s) => s.panels.length);
+  // Only resubscribe when another panel's snap *assignment* changes. The
+  // chooser uses these to grey out occupied slots; we don't care about
+  // move/resize/z changes from siblings.
+  const otherSnaps = useStore(
+    useShallow((s) =>
+      s.panels
+        .filter((p) => p.id !== panel.id && p.snap)
+        .map((p) => `${p.snap!.layout}:${p.snap!.slot}`)
+    )
+  );
 
   const [drag, setDrag] = useState<DragState>({ type: "idle" });
   const [pendingGeom, setPendingGeom] = useState<Geom | null>(null);
+  const [snapChooserOpen, setSnapChooserOpen] = useState(false);
+
+  // Track the viewport size so snapped panels recompute their geometry on
+  // window resize. We only need this when the panel is snapped/maximized;
+  // for free panels we skip the listener.
+  const [viewport, setViewport] = useState(() =>
+    typeof window === "undefined"
+      ? { vw: 1280, vh: 800 }
+      : { vw: window.innerWidth, vh: window.innerHeight }
+  );
+  useEffect(() => {
+    if (!panel.maximized && !panel.snap) return;
+    const onResize = () =>
+      setViewport({ vw: window.innerWidth, vh: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [panel.maximized, panel.snap]);
 
   const stateRef = useRef({ drag, pendingGeom, panel });
-  stateRef.current = { drag, pendingGeom, panel };
+  useEffect(() => {
+    stateRef.current = { drag, pendingGeom, panel };
+  });
 
   const visibleGeom: Geom = useMemo(() => {
+    if (panel.snap) {
+      const g = snapGeom(panel.snap.layout, panel.snap.slot, viewport.vw, viewport.vh);
+      if (g) {
+        return {
+          x: g.x,
+          y: g.y,
+          width: Math.max(PANEL_MIN_WIDTH, g.width),
+          height: Math.max(PANEL_MIN_HEIGHT, g.height),
+        };
+      }
+    }
     if (panel.maximized) {
-      const vw =
-        typeof window !== "undefined" ? window.innerWidth : panel.width;
-      const vh =
-        typeof window !== "undefined" ? window.innerHeight : panel.height;
       return {
         x: VIEWPORT_MARGIN,
         y: VIEWPORT_MARGIN,
-        width: Math.max(PANEL_MIN_WIDTH, vw - 2 * VIEWPORT_MARGIN),
-        height: Math.max(PANEL_MIN_HEIGHT, vh - 2 * VIEWPORT_MARGIN),
+        width: Math.max(PANEL_MIN_WIDTH, viewport.vw - 2 * VIEWPORT_MARGIN),
+        height: Math.max(PANEL_MIN_HEIGHT, viewport.vh - 2 * VIEWPORT_MARGIN),
       };
     }
     if (pendingGeom) return pendingGeom;
@@ -77,7 +122,7 @@ export function Panel({
       width: panel.width,
       height: panel.height,
     };
-  }, [panel, pendingGeom]);
+  }, [panel, pendingGeom, viewport.vw, viewport.vh]);
 
   // Drag handlers (document-level so the cursor can leave the header)
   useEffect(() => {
@@ -146,16 +191,40 @@ export function Panel({
       if (target.closest("[data-panel-control]")) return;
       bringPanelFront(panel.id);
       if (panel.maximized) return;
+      // If the panel is snapped, materialize the snap rectangle as the
+      // panel's free coords first so the drag starts from where it sits
+      // on screen. movePanel + resizePanel both clear `snap`.
+      let startX = panel.x;
+      let startY = panel.y;
+      if (panel.snap) {
+        startX = visibleGeom.x;
+        startY = visibleGeom.y;
+        resizePanel(panel.id, visibleGeom.width, visibleGeom.height);
+        movePanel(panel.id, startX, startY);
+      }
       setDrag({
         type: "move",
         pointerStartX: event.clientX,
         pointerStartY: event.clientY,
-        panelStartX: panel.x,
-        panelStartY: panel.y,
+        panelStartX: startX,
+        panelStartY: startY,
       });
       event.preventDefault();
     },
-    [bringPanelFront, panel.id, panel.maximized, panel.x, panel.y]
+    [
+      bringPanelFront,
+      movePanel,
+      panel.id,
+      panel.maximized,
+      panel.snap,
+      panel.x,
+      panel.y,
+      resizePanel,
+      visibleGeom.height,
+      visibleGeom.width,
+      visibleGeom.x,
+      visibleGeom.y,
+    ]
   );
 
   const onResizeMouseDown = useCallback(
@@ -163,17 +232,40 @@ export function Panel({
       if (event.button !== 0) return;
       bringPanelFront(panel.id);
       if (panel.maximized) return;
+      // Same materialize-on-grab trick as move: unsnap and start the
+      // resize from the slot's pixel dimensions.
+      let startW = panel.width;
+      let startH = panel.height;
+      if (panel.snap) {
+        startW = visibleGeom.width;
+        startH = visibleGeom.height;
+        movePanel(panel.id, visibleGeom.x, visibleGeom.y);
+        resizePanel(panel.id, startW, startH);
+      }
       setDrag({
         type: "resize",
         pointerStartX: event.clientX,
         pointerStartY: event.clientY,
-        panelStartW: panel.width,
-        panelStartH: panel.height,
+        panelStartW: startW,
+        panelStartH: startH,
       });
       event.preventDefault();
       event.stopPropagation();
     },
-    [bringPanelFront, panel.id, panel.maximized, panel.width, panel.height]
+    [
+      bringPanelFront,
+      movePanel,
+      panel.id,
+      panel.maximized,
+      panel.snap,
+      panel.width,
+      panel.height,
+      resizePanel,
+      visibleGeom.height,
+      visibleGeom.width,
+      visibleGeom.x,
+      visibleGeom.y,
+    ]
   );
 
   const kindLabel = node?.data.kind ?? "unknown";
@@ -209,13 +301,13 @@ export function Panel({
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="pg-serif text-[12px] italic text-[var(--pg-muted)]">
+          <span className="pg-section-label">
             {formattedKind}
           </span>
           {title ? (
             <>
               <span className="text-[var(--pg-muted-soft)]">·</span>
-              <span className="pg-serif truncate text-[13px] italic text-[var(--pg-fg)]">
+              <span className="pg-serif truncate text-[13px] text-[var(--pg-fg)]">
                 {title}
               </span>
             </>
@@ -235,14 +327,62 @@ export function Panel({
               {totalPanels} open
             </span>
           ) : null}
+          <div className="relative" data-panel-control>
+            <button
+              data-panel-control
+              type="button"
+              onClick={() => setSnapChooserOpen((v) => !v)}
+              className={clsx(
+                "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]",
+                (panel.snap || snapChooserOpen) &&
+                  "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+              )}
+              title="Snap layout"
+            >
+              <LayoutGrid size={13} />
+            </button>
+            {snapChooserOpen ? (
+              <SnapChooserPopover
+                activeSnap={panel.snap ?? null}
+                otherSnaps={otherSnaps.map((key) => {
+                  const [layout, slot] = key.split(":");
+                  return {
+                    layout: layout as SnapLayoutId,
+                    slot: Number(slot),
+                  };
+                })}
+                onPick={(layout, slot) => {
+                  snapPanel(panel.id, layout, slot);
+                  setSnapChooserOpen(false);
+                }}
+                onUnsnap={() => {
+                  unsnapPanel(panel.id);
+                  setSnapChooserOpen(false);
+                }}
+                onClose={() => setSnapChooserOpen(false)}
+              />
+            ) : null}
+          </div>
           <button
             data-panel-control
             type="button"
-            onClick={() => togglePanelMaximize(panel.id)}
+            onClick={() => {
+              if (panel.snap) {
+                unsnapPanel(panel.id);
+                return;
+              }
+              togglePanelMaximize(panel.id);
+            }}
             className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-            title={panel.maximized ? "Restore" : "Maximize"}
+            title={
+              panel.snap ? "Unsnap" : panel.maximized ? "Restore" : "Maximize"
+            }
           >
-            {panel.maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {panel.maximized || panel.snap ? (
+              <Minimize2 size={13} />
+            ) : (
+              <Maximize2 size={13} />
+            )}
           </button>
           <button
             data-panel-control
@@ -260,7 +400,7 @@ export function Panel({
         {children}
       </div>
 
-      {!panel.maximized ? (
+      {!panel.maximized && !panel.snap ? (
         <div
           onMouseDown={onResizeMouseDown}
           className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
@@ -278,6 +418,132 @@ export function Panel({
           />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// Windows-11-style snap layout picker. Each layout renders as a thumbnail
+// grid: hover a slot to preview, click to snap. The chooser closes after
+// any pick or when the user clicks outside it.
+type SnapPickHandler = (layout: SnapLayoutId, slot: number) => void;
+
+function SnapChooserPopover({
+  activeSnap,
+  otherSnaps,
+  onPick,
+  onUnsnap,
+  onClose,
+}: {
+  activeSnap: { layout: SnapLayoutId; slot: number } | null;
+  otherSnaps: Array<{ layout: SnapLayoutId; slot: number }>;
+  onPick: SnapPickHandler;
+  onUnsnap: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (ref.current && !ref.current.contains(target)) onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      data-panel-control
+      onMouseDown={(event) => event.stopPropagation()}
+      className="absolute right-0 top-[calc(100%+6px)] z-[200] w-[280px] rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-elevated)] p-3 shadow-[var(--pg-shadow-lg)]"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
+          Snap layout
+        </span>
+        {activeSnap ? (
+          <button
+            type="button"
+            onClick={onUnsnap}
+            className="rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg)] hover:text-[var(--pg-fg)]"
+          >
+            Unsnap
+          </button>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {SNAP_LAYOUT_ORDER.map((layoutId) => (
+          <SnapLayoutThumb
+            key={layoutId}
+            layoutId={layoutId}
+            activeSnap={activeSnap}
+            otherSnaps={otherSnaps}
+            onPick={onPick}
+          />
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--pg-muted)]">
+        Click a cell to fill that quadrant. Dragging the panel unsnaps it.
+      </p>
+    </div>
+  );
+}
+
+function SnapLayoutThumb({
+  layoutId,
+  activeSnap,
+  otherSnaps,
+  onPick,
+}: {
+  layoutId: SnapLayoutId;
+  activeSnap: { layout: SnapLayoutId; slot: number } | null;
+  otherSnaps: Array<{ layout: SnapLayoutId; slot: number }>;
+  onPick: SnapPickHandler;
+}) {
+  const def = SNAP_LAYOUTS[layoutId];
+  const [hoverSlot, setHoverSlot] = useState<number | null>(null);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[10.5px] text-[var(--pg-muted)]">{def.label}</div>
+      <div
+        className="relative aspect-[16/10] overflow-hidden rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg)]"
+        onMouseLeave={() => setHoverSlot(null)}
+      >
+        {def.slots.map((slot, slotIndex) => {
+          const isActive =
+            activeSnap?.layout === layoutId && activeSnap.slot === slotIndex;
+          const isOtherOccupied = otherSnaps.some(
+            (o) => o.layout === layoutId && o.slot === slotIndex
+          );
+          const isHover = hoverSlot === slotIndex;
+          return (
+            <button
+              key={slotIndex}
+              type="button"
+              onMouseEnter={() => setHoverSlot(slotIndex)}
+              onClick={() => onPick(layoutId, slotIndex)}
+              className={clsx(
+                "absolute border transition-colors",
+                isActive
+                  ? "border-[var(--pg-accent)] bg-[color-mix(in_srgb,var(--pg-accent)_25%,transparent)]"
+                  : isHover
+                  ? "border-[var(--pg-accent)] bg-[color-mix(in_srgb,var(--pg-accent)_15%,transparent)]"
+                  : isOtherOccupied
+                  ? "border-[var(--pg-border-strong)] bg-[var(--pg-bg-subtle)]"
+                  : "border-[var(--pg-border)] bg-transparent hover:border-[var(--pg-border-strong)]"
+              )}
+              style={{
+                left: `calc(${slot.x * 100}% + 2px)`,
+                top: `calc(${slot.y * 100}% + 2px)`,
+                width: `calc(${slot.w * 100}% - 4px)`,
+                height: `calc(${slot.h * 100}% - 4px)`,
+              }}
+              title={`Slot ${slotIndex + 1}`}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

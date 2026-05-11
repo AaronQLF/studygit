@@ -10,10 +10,14 @@ import type {
   CanvasNode,
   Comment,
   FloatingPanel,
+  LinkNodeData,
+  PanelSnap,
   PdfHighlight,
   PdfHighlightRect,
+  WebHighlight,
   Workspace,
 } from "./types";
+import type { SnapLayoutId } from "./snap-layouts";
 import { DEFAULT_WORKSPACE_ID, INITIAL_STATE } from "./defaults";
 import { migrateNode } from "./migrations";
 
@@ -69,6 +73,8 @@ type Store = AppState & {
   movePanel: (panelId: string, x: number, y: number) => void;
   resizePanel: (panelId: string, width: number, height: number) => void;
   togglePanelMaximize: (panelId: string) => void;
+  snapPanel: (panelId: string, layout: SnapLayoutId, slot: number) => void;
+  unsnapPanel: (panelId: string) => void;
 
   createWorkspace: (name: string) => string;
   renameWorkspace: (id: string, name: string) => void;
@@ -114,6 +120,41 @@ type Store = AppState & {
     message: AiMessage
   ) => void;
 
+  addWebHighlight: (
+    nodeId: string,
+    text: string,
+    prefix: string,
+    suffix: string,
+    color: string
+  ) => string | null;
+  deleteWebHighlight: (nodeId: string, highlightId: string) => void;
+  addWebComment: (
+    nodeId: string,
+    highlightId: string,
+    text: string
+  ) => void;
+  deleteWebComment: (
+    nodeId: string,
+    highlightId: string,
+    commentId: string
+  ) => void;
+  setLinkExtraction: (
+    nodeId: string,
+    snapshot: {
+      finalUrl?: string;
+      title?: string | null;
+      byline?: string | null;
+      siteName?: string | null;
+      excerpt?: string | null;
+      contentHtml: string;
+      fetchedAt?: number;
+    }
+  ) => void;
+
+  // Generalized highlight-jump action used by citation pills, regardless of
+  // whether the source is a PDF or a web article. The PDF-specific name is
+  // kept as a thin alias for back-compat with existing callers.
+  requestHighlightJump: (nodeId: string, highlightId: string) => void;
   requestPdfHighlightJump: (nodeId: string, highlightId: string) => void;
   consumePendingHighlightJump: (nodeId: string) => void;
 };
@@ -195,12 +236,15 @@ function maxZ(panels: FloatingPanel[]): number {
   return z;
 }
 
-async function persistToServer(state: AppState): Promise<boolean> {
+async function persistToServer(body: string): Promise<boolean> {
   try {
     await fetch("/api/state", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state),
+      body,
+      // Keep the save in flight even if the user navigates away or closes
+      // the panel mid-flush (e.g. Cmd+W) — the browser will finish it.
+      keepalive: true,
     });
     return true;
   } catch (err) {
@@ -209,37 +253,60 @@ async function persistToServer(state: AppState): Promise<boolean> {
   }
 }
 
+// Yield the heavy work (`JSON.stringify` on potentially MBs of state) to
+// the browser's idle phase so user input doesn't stall. Falls back to a
+// 0-ms setTimeout where `requestIdleCallback` isn't available (Safari).
+function runWhenIdle(fn: () => void, timeoutMs = 1500): void {
+  type RIC = (
+    cb: () => void,
+    opts?: { timeout?: number }
+  ) => unknown;
+  const ric: RIC | undefined =
+    typeof window !== "undefined"
+      ? (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback
+      : undefined;
+  if (ric) {
+    ric(fn, { timeout: timeoutMs });
+  } else {
+    setTimeout(fn, 0);
+  }
+}
+
 function scheduleSave(get: () => Store, set: (patch: Partial<Store>) => void) {
   set({ isDirty: true });
   if (saveTimer) clearTimeout(saveTimer);
 
-  saveTimer = setTimeout(async () => {
-    const s = get();
-    const snapshot: AppState = {
-      workspaces: s.workspaces,
-      nodes: s.nodes,
-      edges: s.edges,
-      selectedWorkspaceId: s.selectedWorkspaceId,
-      version: s.version + 1,
-    };
+  saveTimer = setTimeout(() => {
+    runWhenIdle(async () => {
+      const s = get();
+      const snapshot: AppState = {
+        workspaces: s.workspaces,
+        nodes: s.nodes,
+        edges: s.edges,
+        selectedWorkspaceId: s.selectedWorkspaceId,
+        version: s.version + 1,
+      };
+      // Stringify + send inside the idle callback so the main thread
+      // stays responsive during typing bursts.
+      const body = JSON.stringify(snapshot);
+      const ok = await persistToServer(body);
+      if (!ok) {
+        set({
+          error: "Failed to save state. Check your connection and retry.",
+        });
+        return;
+      }
 
-    const ok = await persistToServer(snapshot);
-    if (!ok) {
+      if (justSavedTimer) clearTimeout(justSavedTimer);
       set({
-        error: "Failed to save state. Check your connection and retry.",
+        error: null,
+        version: snapshot.version,
+        isDirty: false,
+        justSaved: true,
+        lastSavedAt: Date.now(),
       });
-      return;
-    }
-
-    if (justSavedTimer) clearTimeout(justSavedTimer);
-    set({
-      error: null,
-      version: snapshot.version,
-      isDirty: false,
-      justSaved: true,
-      lastSavedAt: Date.now(),
+      justSavedTimer = setTimeout(() => set({ justSaved: false }), 600);
     });
-    justSavedTimer = setTimeout(() => set({ justSaved: false }), 600);
   }, 400);
 }
 
@@ -460,7 +527,9 @@ export const useStore = create<Store>((set, get) => ({
   movePanel: (panelId, x, y) => {
     set((s) => ({
       panels: s.panels.map((p) =>
-        p.id === panelId ? { ...p, x, y, maximized: false } : p
+        p.id === panelId
+          ? { ...p, x, y, maximized: false, snap: undefined }
+          : p
       ),
     }));
   },
@@ -474,6 +543,7 @@ export const useStore = create<Store>((set, get) => ({
               width: Math.max(PANEL_MIN_WIDTH, width),
               height: Math.max(PANEL_MIN_HEIGHT, height),
               maximized: false,
+              snap: undefined,
             }
           : p
       ),
@@ -483,7 +553,53 @@ export const useStore = create<Store>((set, get) => ({
   togglePanelMaximize: (panelId) => {
     set((s) => ({
       panels: s.panels.map((p) =>
-        p.id === panelId ? { ...p, maximized: !p.maximized } : p
+        p.id === panelId
+          ? { ...p, maximized: !p.maximized, snap: undefined }
+          : p
+      ),
+    }));
+  },
+
+  snapPanel: (panelId, layout, slot) => {
+    set((s) => {
+      const target = s.panels.find((p) => p.id === panelId);
+      if (!target) return s;
+      const nextSnap: PanelSnap = { layout, slot };
+      const top = maxZ(s.panels);
+      // If another panel is already in this exact slot, evict it back to a
+      // free state — mirrors Windows' behavior where placing a new window in
+      // a snap zone pushes out the previous occupant.
+      const panels = s.panels.map((p) => {
+        if (p.id === panelId) {
+          return {
+            ...p,
+            snap: nextSnap,
+            maximized: false,
+            // Bring the freshly snapped panel to the top of the stack so
+            // it can immediately receive focus / keyboard input.
+            z: p.z === top ? p.z : top + 1,
+          };
+        }
+        if (
+          p.snap &&
+          p.snap.layout === layout &&
+          p.snap.slot === slot
+        ) {
+          return { ...p, snap: undefined };
+        }
+        return p;
+      });
+      return {
+        panels,
+        focusedNodeId: focusedNodeIdFromPanels(panels),
+      };
+    });
+  },
+
+  unsnapPanel: (panelId) => {
+    set((s) => ({
+      panels: s.panels.map((p) =>
+        p.id === panelId ? { ...p, snap: undefined } : p
       ),
     }));
   },
@@ -784,7 +900,130 @@ export const useStore = create<Store>((set, get) => ({
     scheduleSave(get, set);
   },
 
-  requestPdfHighlightJump: (nodeId, highlightId) => {
+  addWebHighlight: (nodeId, text, prefix, suffix, color) => {
+    const target = get().nodes.find((n) => n.id === nodeId);
+    if (!target || target.data.kind !== "link") return null;
+    const id = nanoid(8);
+    const highlight: WebHighlight = {
+      id,
+      text,
+      prefix,
+      suffix,
+      color,
+      comments: [],
+      aiThread: [],
+      createdAt: Date.now(),
+    };
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "link") return n;
+        const data = n.data as LinkNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            highlights: [...(data.highlights ?? []), highlight],
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+    return id;
+  },
+
+  deleteWebHighlight: (nodeId, highlightId) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "link") return n;
+        const data = n.data as LinkNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            highlights: (data.highlights ?? []).filter(
+              (h) => h.id !== highlightId
+            ),
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  addWebComment: (nodeId, highlightId, text) => {
+    const comment: Comment = {
+      id: nanoid(8),
+      text,
+      createdAt: Date.now(),
+    };
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "link") return n;
+        const data = n.data as LinkNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            highlights: (data.highlights ?? []).map((h) =>
+              h.id === highlightId
+                ? { ...h, comments: [...h.comments, comment] }
+                : h
+            ),
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  deleteWebComment: (nodeId, highlightId, commentId) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "link") return n;
+        const data = n.data as LinkNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            highlights: (data.highlights ?? []).map((h) =>
+              h.id === highlightId
+                ? {
+                    ...h,
+                    comments: h.comments.filter((c) => c.id !== commentId),
+                  }
+                : h
+            ),
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  setLinkExtraction: (nodeId, snapshot) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "link") return n;
+        const data = n.data as LinkNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            extractedHtml: snapshot.contentHtml,
+            extractedTitle: snapshot.title ?? data.extractedTitle,
+            extractedByline: snapshot.byline ?? data.extractedByline,
+            extractedSiteName: snapshot.siteName ?? data.extractedSiteName,
+            extractedExcerpt: snapshot.excerpt ?? data.extractedExcerpt,
+            extractedFinalUrl: snapshot.finalUrl ?? data.extractedFinalUrl,
+            extractedAt: snapshot.fetchedAt ?? Date.now(),
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  requestHighlightJump: (nodeId, highlightId) => {
     const state = get();
     const target = state.nodes.find((n) => n.id === nodeId);
     if (!target) return;
@@ -801,6 +1040,10 @@ export const useStore = create<Store>((set, get) => ({
         [nodeId]: highlightId,
       },
     }));
+  },
+
+  requestPdfHighlightJump: (nodeId, highlightId) => {
+    get().requestHighlightJump(nodeId, highlightId);
   },
 
   consumePendingHighlightJump: (nodeId) => {
