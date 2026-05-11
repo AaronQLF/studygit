@@ -26,6 +26,26 @@ let splashWindow: BrowserWindow | null = null;
 let nextProcess: ChildProcess | null = null;
 let resolvedAppUrl: string | null = null;
 
+// Keep the dev electron's Chromium state (singleton lock, cookies, cache)
+// separate from the packaged build's. Otherwise launching the packaged
+// app while `npm run electron:dev` is running denies the new singleton
+// lock and dispatches `second-instance` to the dev process — which is
+// fine, except any subtle bug there crashes the dev session.
+if (!app.isPackaged) {
+  app.setPath("userData", path.join(app.getPath("appData"), `${APP_NAME}Dev`));
+}
+
+// Install global error handlers as early as possible. Anything that fires
+// before `whenReady()` (e.g. `second-instance` while the window is still
+// being created) would otherwise take the process down with Electron's
+// default uncaught-exception dialog.
+process.on("uncaughtException", (err) => {
+  console.error("[main] uncaught exception:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[main] unhandled rejection:", reason);
+});
+
 // --------------------------------------------------------------------------
 // Single-instance lock — desktop apps should only ever have one running
 // instance per user; second launches just focus the existing window.
@@ -36,7 +56,11 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
+    // The JS reference to a BrowserWindow can outlive the underlying
+    // native window: once that's torn down, *any* method call on the
+    // wrapper throws "Object has been destroyed". Guard for both the
+    // null-out path and the stale-reference path before touching it.
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   });
@@ -209,6 +233,9 @@ function createSplashWindow(): BrowserWindow {
       sandbox: true,
     },
   });
+  win.on("closed", () => {
+    splashWindow = null;
+  });
   void win.loadFile(path.join(__dirname, "..", "splash.html"));
   return win;
 }
@@ -261,6 +288,13 @@ function createMainWindow(appUrl: string): BrowserWindow {
     }
   });
 
+  win.on("closed", () => {
+    // Drop the dead reference so anything that fires after the window is
+    // torn down (second-instance, autoUpdater broadcast, etc.) doesn't
+    // crash on `Object has been destroyed`.
+    mainWindow = null;
+  });
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isInternalUrl(url)) return { action: "allow" };
     void shell.openExternal(url);
@@ -293,44 +327,97 @@ function isInternalUrl(url: string): boolean {
 // Auto-update
 // --------------------------------------------------------------------------
 
-function wireAutoUpdate(): void {
-  if (!app.isPackaged) return;
+type UpdateStatus =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "available"; version: string }
+  | { kind: "not-available"; version: string }
+  | { kind: "downloading"; percent: number; version?: string }
+  | { kind: "ready"; version: string }
+  | { kind: "error"; message: string };
 
+// Cached so a renderer that mounts after a status event has already fired
+// (e.g. the 6-hour interval check that completes mid-session) can still
+// query the latest state via `personalgit:get-update-status`.
+let latestUpdateStatus: UpdateStatus = { kind: "idle" };
+let updaterWired = false;
+
+function wireAutoUpdate(): void {
+  if (updaterWired) return;
+  updaterWired = true;
+
+  // Manual checks are always available so the "Check for updates" menu
+  // item works in dev builds too; only the periodic auto-check is gated
+  // on `app.isPackaged` since unpackaged builds have no real version to
+  // compare against.
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  const send = (status: unknown) => {
+  const broadcast = (status: UpdateStatus) => {
+    latestUpdateStatus = status;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("personalgit:update-status", status);
     }
   };
 
-  autoUpdater.on("checking-for-update", () => send({ kind: "checking" }));
+  autoUpdater.on("checking-for-update", () => broadcast({ kind: "checking" }));
   autoUpdater.on("update-available", (info) =>
-    send({ kind: "available", version: info.version })
+    broadcast({ kind: "available", version: info.version })
   );
-  autoUpdater.on("update-not-available", () => send({ kind: "not-available" }));
+  autoUpdater.on("update-not-available", (info) =>
+    broadcast({ kind: "not-available", version: info.version })
+  );
   autoUpdater.on("download-progress", (p) =>
-    send({ kind: "downloading", percent: p.percent })
+    broadcast({
+      kind: "downloading",
+      percent: p.percent,
+      version:
+        latestUpdateStatus.kind === "available"
+          ? latestUpdateStatus.version
+          : undefined,
+    })
   );
   autoUpdater.on("update-downloaded", (info) =>
-    send({ kind: "ready", version: info.version })
+    broadcast({ kind: "ready", version: info.version })
   );
   autoUpdater.on("error", (err) =>
-    send({ kind: "error", message: err.message })
+    broadcast({ kind: "error", message: err.message })
   );
 
   ipcMain.on("personalgit:install-update", () => {
     autoUpdater.quitAndInstall();
   });
 
-  const tick = () => {
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.warn("[updater] check failed:", err.message);
-    });
-  };
-  setTimeout(tick, 10_000);
-  setInterval(tick, 6 * 60 * 60 * 1000);
+  ipcMain.handle("personalgit:get-update-status", () => latestUpdateStatus);
+
+  ipcMain.handle("personalgit:check-for-updates", async () => {
+    if (!app.isPackaged) {
+      // electron-updater throws on unpackaged dev builds; surface a
+      // friendlier message to the renderer so the manual-check button
+      // doesn't look broken in dev.
+      broadcast({
+        kind: "error",
+        message: "Auto-update is only available in packaged builds.",
+      });
+      return;
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      broadcast({ kind: "error", message });
+    }
+  });
+
+  if (app.isPackaged) {
+    const tick = () => {
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.warn("[updater] check failed:", err.message);
+      });
+    };
+    setTimeout(tick, 10_000);
+    setInterval(tick, 6 * 60 * 60 * 1000);
+  }
 }
 
 // --------------------------------------------------------------------------
