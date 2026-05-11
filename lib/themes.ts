@@ -6,7 +6,14 @@
 // across presets — themes only swap *color*. The aesthetic batch handles
 // geometry separately.
 
-export type ThemeId = "paper" | "slate" | "mocha" | "forest" | "ink" | "plum";
+export type ThemeId =
+  | "paper"
+  | "slate"
+  | "mocha"
+  | "forest"
+  | "ink"
+  | "plum"
+  | "retro";
 
 export type ThemeMode = "light" | "dark";
 
@@ -236,6 +243,45 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     },
   },
 
+  // 70s yellowed paperback in light, amber-CRT phosphor terminal in dark.
+  // Cohesive "retro" identity that reads warm and a little nostalgic
+  // across both modes without leaning into a single decade gimmick.
+  retro: {
+    id: "retro",
+    name: "Retro",
+    description: "Yellowed paperback by day, amber CRT by night.",
+    light: {
+      "--pg-bg": "#f4eccb",
+      "--pg-bg-subtle": "#ece2b5",
+      "--pg-bg-elevated": "#e0d496",
+      "--pg-bg-canvas": "#ede4c0",
+      "--pg-fg": "#2d1f0e",
+      "--pg-fg-soft": "#4d3b1f",
+      "--pg-muted": "#8c7a4a",
+      "--pg-muted-soft": "#c2b287",
+      "--pg-border": "#d4c189",
+      "--pg-border-strong": "#b39b5e",
+      "--pg-accent": "#b8590f",
+      "--pg-accent-soft": soft("#b8590f"),
+      "--pg-marker": "#ffd24a",
+    },
+    dark: {
+      "--pg-bg": "#120e08",
+      "--pg-bg-subtle": "#1a1410",
+      "--pg-bg-elevated": "#25190e",
+      "--pg-bg-canvas": "#0d0905",
+      "--pg-fg": "#e4d2a4",
+      "--pg-fg-soft": "#c4b080",
+      "--pg-muted": "#8a7548",
+      "--pg-muted-soft": "#4a3a1f",
+      "--pg-border": "#3a2c14",
+      "--pg-border-strong": "#503e1c",
+      "--pg-accent": "#ffb000",
+      "--pg-accent-soft": soft("#ffb000", 0.18),
+      "--pg-marker": "#6a4a0f",
+    },
+  },
+
   // Moody deep purple over warm paper.
   plum: {
     id: "plum",
@@ -281,6 +327,7 @@ export const THEME_ORDER: ThemeId[] = [
   "forest",
   "ink",
   "plum",
+  "retro",
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = "paper";
@@ -295,7 +342,8 @@ export function isThemeId(value: unknown): value is ThemeId {
     value === "mocha" ||
     value === "forest" ||
     value === "ink" ||
-    value === "plum"
+    value === "plum" ||
+    value === "retro"
   );
 }
 
