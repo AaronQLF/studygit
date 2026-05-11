@@ -9,7 +9,13 @@
 const CITATION_CACHE = new Map<string, string[]>();
 const CITATION_CACHE_MAX = 256;
 
-export function extractCitedPdfIds(html: string): string[] {
+/**
+ * Returns the set of source-node ids referenced by `<citation>` pills
+ * inside the given TipTap HTML. The pill itself is source-agnostic —
+ * could point at a PDF highlight or a web-article highlight — so this
+ * scanner just returns node ids without caring what kind they are.
+ */
+export function extractCitedNodeIds(html: string): string[] {
   if (!html || typeof DOMParser === "undefined") return [];
   const cached = CITATION_CACHE.get(html);
   if (cached) return cached;

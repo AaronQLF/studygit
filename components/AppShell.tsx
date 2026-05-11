@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Command, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  Command,
+  Loader2,
+  Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 // CSS only needed inside the app: KaTeX renders math in TipTap nodes and
 // in the web-article reader, tippy.js styles the slash/citation menus.
 // Importing here (instead of in app/layout.tsx) keeps these off the
@@ -16,6 +22,10 @@ import { PanelManager } from "./PanelManager";
 import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
 import { UserMenu } from "./UserMenu";
+import {
+  THEME_DIALOG_EVENT,
+  ThemeSettingsDialog,
+} from "./ThemeSettingsDialog";
 
 type AppShellProps = {
   user?: { id: string; email: string | null } | null;
@@ -42,6 +52,7 @@ export function AppShell({ user }: AppShellProps = {}) {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const openPanel = useStore((s) => s.openPanel);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   // When running inside the Electron shell on macOS, reserve room at the
   // top-left for the hover-revealed window controls (see electron/main.ts:
   // titleBarStyle = "customButtonsOnHover"). Outside Electron (regular
@@ -51,6 +62,15 @@ export function AppShell({ user }: AppShellProps = {}) {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // The UserMenu (and any future surface) opens the dialog by
+  // dispatching a window event. Keeping it event-driven avoids prop
+  // drilling through the menu and the sign-out form.
+  useEffect(() => {
+    const onOpen = () => setThemeDialogOpen(true);
+    window.addEventListener(THEME_DIALOG_EVENT, onOpen);
+    return () => window.removeEventListener(THEME_DIALOG_EVENT, onOpen);
+  }, []);
 
   useEffect(() => {
     const pg = (window as unknown as { personalGit?: { platform?: string } })
@@ -156,6 +176,15 @@ export function AppShell({ user }: AppShellProps = {}) {
               <span className="font-medium tracking-tight">⌘K</span>
             </button>
             <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setThemeDialogOpen(true)}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+              title="Customize theme"
+              aria-label="Customize theme"
+            >
+              <Palette size={14} />
+            </button>
             {user ? <UserMenu email={user.email} /> : null}
           </div>
         </div>
@@ -170,6 +199,10 @@ export function AppShell({ user }: AppShellProps = {}) {
 
       <PanelManager />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ThemeSettingsDialog
+        open={themeDialogOpen}
+        onClose={() => setThemeDialogOpen(false)}
+      />
       <ToastViewport />
     </div>
   );

@@ -9,6 +9,7 @@ import {
   Link2,
   MoonStar,
   NotebookPen,
+  Palette,
   PanelLeft,
   Plus,
   Search,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { cycleTheme, readThemePreference, writeThemePreference } from "./ThemeToggle";
+import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
 import { useStore } from "@/lib/store";
 import { NEW_WORKSPACE_EVENT } from "./Sidebar";
 import type { AnyNodeData, NodeKind } from "@/lib/types";
@@ -131,6 +133,23 @@ export function CommandPalette({
           const current = readThemePreference();
           writeThemePreference(cycleTheme(current));
         },
+      },
+      {
+        id: "view-theme-customize",
+        section: "View",
+        label: "Customize theme\u2026",
+        icon: Palette,
+        keywords: [
+          "theme",
+          "color",
+          "colors",
+          "preset",
+          "accent",
+          "palette",
+          "appearance",
+        ],
+        onSelect: () =>
+          window.dispatchEvent(new CustomEvent(THEME_DIALOG_EVENT)),
       },
       {
         id: "view-sidebar",

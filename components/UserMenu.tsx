@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Palette, User as UserIcon } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
+import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
 
 type UserMenuProps = {
   email: string | null;
@@ -54,6 +55,18 @@ export function UserMenu({ email }: UserMenuProps) {
               {email ?? "Signed in"}
             </span>
           </div>
+          <div className="h-px bg-[var(--pg-border)] my-1" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent(THEME_DIALOG_EVENT));
+            }}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] rounded-[var(--pg-radius)]"
+          >
+            <Palette size={12} />
+            Customize theme&hellip;
+          </button>
           <div className="h-px bg-[var(--pg-border)] my-1" />
           <form action={signOut}>
             <button
