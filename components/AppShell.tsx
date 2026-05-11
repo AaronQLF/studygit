@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import {
   Command,
   Loader2,
@@ -15,6 +16,7 @@ import {
 // landing/marketing routes.
 import "katex/dist/katex.min.css";
 import "tippy.js/dist/tippy.css";
+import { LATEST_RELEASE } from "@/lib/changelog";
 import { useStore } from "@/lib/store";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
@@ -164,6 +166,15 @@ export function AppShell({ user }: AppShellProps = {}) {
             </div>
           </div>
           <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
+            <Link
+              href="/changelog"
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Release notes for v${LATEST_RELEASE.version}`}
+              className="hidden md:inline-flex h-7 items-center rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-1.5 font-mono text-[10.5px] text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:border-[var(--pg-border-strong)]"
+            >
+              v{LATEST_RELEASE.version}
+            </Link>
             <span className="pg-section-label inline-flex h-7 items-center px-2">
               {saveStatus}
             </span>
