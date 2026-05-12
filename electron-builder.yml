@@ -36,6 +36,11 @@ asar: true
 asarUnpack:
   - ".next/standalone/**/*"
   - "node_modules/@mongodb-js/zstd/**/*"
+  # Electron <webview preload="…"> only accepts file:// URLs; preloads
+  # inside an asar archive are rejected. Unpack the in-app browser's
+  # selection/highlight preload so Chromium can load it directly.
+  - "electron/dist/webview-preload.js"
+  - "electron/dist/webview-preload.js.map"
 
 mac:
   category: public.app-category.productivity

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   FileSearch,
+  Globe,
   Image as ImageIcon,
   Layers,
   Link2,
@@ -21,6 +22,7 @@ import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { cycleTheme, readThemePreference, writeThemePreference } from "./ThemeToggle";
 import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
 import { useStore } from "@/lib/store";
+import { useBrowserSession } from "@/lib/browser-session";
 import { NEW_WORKSPACE_EVENT } from "./Sidebar";
 import type { AnyNodeData, NodeKind } from "@/lib/types";
 
@@ -78,6 +80,7 @@ export function CommandPalette({
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const setSidebarCollapsed = useStore((s) => s.setSidebarCollapsed);
   const openPanel = useStore((s) => s.openPanel);
+  const openBrowser = useBrowserSession((s) => s.openBrowser);
 
   const items = useMemo<PaletteItem[]>(() => {
     const wsId = selectedWorkspaceId;
@@ -123,6 +126,22 @@ export function CommandPalette({
     ];
 
     const viewItems: PaletteItem[] = [
+      {
+        id: "view-open-browser",
+        section: "View",
+        label: "Open browser\u2026",
+        icon: Globe,
+        keywords: [
+          "browser",
+          "web",
+          "internet",
+          "url",
+          "highlight",
+          "research",
+          "cite",
+        ],
+        onSelect: () => openBrowser(),
+      },
       {
         id: "view-theme",
         section: "View",
@@ -173,6 +192,7 @@ export function CommandPalette({
     return [...addItems, ...workspaceActions, ...viewItems];
   }, [
     addNode,
+    openBrowser,
     openPanel,
     selectWorkspace,
     selectedNodeId,

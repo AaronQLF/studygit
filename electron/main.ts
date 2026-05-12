@@ -251,14 +251,18 @@ function createMainWindow(appUrl: string): BrowserWindow {
     title: APP_NAME,
     // Drop the native title bar in favour of our in-app header (see
     // AppShell.tsx). Window controls are still reachable:
-    //   macOS  — Apple-drawn close/minimise buttons fade in when the cursor
-    //            enters the top-left corner ("customButtonsOnHover").
+    //   macOS  — Apple-drawn traffic lights are kept permanently visible
+    //            ("hidden" titleBarStyle keeps them painted while removing
+    //            the native title bar). We nudge them down so they vertically
+    //            centre inside our 40px header; AppShell reserves 72px of
+    //            left padding for them.
     //   win/lx — a thin titleBarOverlay paints native min/max/close buttons
     //            on the right edge of our header.
     ...(process.platform === "darwin"
       ? ({
           frame: false,
-          titleBarStyle: "customButtonsOnHover",
+          titleBarStyle: "hidden",
+          trafficLightPosition: { x: 12, y: 14 },
         } as const)
       : ({
           frame: false,
@@ -277,7 +281,34 @@ function createMainWindow(appUrl: string): BrowserWindow {
       // Keep the renderer locked to the embedded loopback origin. Anything
       // else opens in the OS browser (see setWindowOpenHandler below).
       webSecurity: true,
+      // Allow <webview> tags so the in-app Browser feature can host live
+      // third-party pages. The actual attach is policed in
+      // `will-attach-webview` below — we force-pin the preload path,
+      // strip nodeIntegration, and confine each webview to its own
+      // partition so cookies don't bleed back into the app shell.
+      webviewTag: true,
     },
+  });
+
+  // Lock down every webview the renderer tries to attach. Without this,
+  // a compromised page (or a careless attribute) could opt out of
+  // sandboxing or load arbitrary preload code.
+  win.webContents.on("will-attach-webview", (_event, webPreferences, params) => {
+    // Force the preload to our trusted file regardless of what the
+    // renderer attribute says — Electron's `webPreferences` carries the
+    // legacy `preloadURL` slot and the modern `preload` path; clobber
+    // both so a tampered renderer can't smuggle a different script.
+    const wp = webPreferences as Record<string, unknown>;
+    delete wp.preloadURL;
+    delete wp.preload;
+    wp.preload = resolveWebviewPreloadPath();
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = false;
+    params.allowpopups = "false";
+    if (!params.partition || !params.partition.startsWith("persist:browser")) {
+      params.partition = "persist:browser";
+    }
   });
 
   win.once("ready-to-show", () => {
@@ -311,6 +342,37 @@ function createMainWindow(appUrl: string): BrowserWindow {
   void win.loadURL(`${appUrl}/app`);
   return win;
 }
+
+// Resolve the path the in-app browser <webview> uses as its preload
+// script. The compiled webview-preload.js sits next to this file in
+// `electron/dist/`. In the packaged app it's pulled out of asar via
+// `asarUnpack` (see electron-builder.yml) so Chromium can load it as a
+// plain file:// URL — webview preloads must be on disk, not inside an
+// archive.
+function resolveWebviewPreloadPath(): string {
+  const local = path.join(__dirname, "webview-preload.js");
+  if (app.isPackaged) {
+    const unpacked = local.replace(
+      `${path.sep}app.asar${path.sep}`,
+      `${path.sep}app.asar.unpacked${path.sep}`
+    );
+    return fs.existsSync(unpacked) ? unpacked : local;
+  }
+  return local;
+}
+
+function webviewPreloadFileUrl(): string {
+  const p = resolveWebviewPreloadPath();
+  // Cross-platform absolute path → file URL (handles Windows drive letters
+  // and spaces correctly without pulling in the deprecated `url` helpers).
+  const normalized = p.replace(/\\/g, "/");
+  const prefix = normalized.startsWith("/") ? "file://" : "file:///";
+  return prefix + encodeURI(normalized);
+}
+
+ipcMain.handle("personalgit:get-webview-preload-url", () =>
+  webviewPreloadFileUrl()
+);
 
 function isInternalUrl(url: string): boolean {
   if (!resolvedAppUrl) return false;

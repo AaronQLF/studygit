@@ -23,4 +23,10 @@ contextBridge.exposeInMainWorld("personalGit", {
     return () => ipcRenderer.removeListener("personalgit:update-status", listener);
   },
   installUpdateAndRestart: () => ipcRenderer.send("personalgit:install-update"),
+  // file:// URL the in-app Browser <webview> attaches as its preload.
+  // Returned async because the path is only known to the main process —
+  // it depends on whether we're running packaged (out of asar.unpacked)
+  // or unpackaged (out of electron/dist next to this file).
+  getWebviewPreloadUrl: (): Promise<string> =>
+    ipcRenderer.invoke("personalgit:get-webview-preload-url"),
 });

@@ -238,19 +238,72 @@ function maxZ(panels: FloatingPanel[]): number {
 
 async function persistToServer(body: string): Promise<boolean> {
   try {
-    await fetch("/api/state", {
+    // NOTE: do NOT set `keepalive: true` here. Chromium enforces a hard
+    // 64 KiB cumulative body cap on keepalive requests across the page
+    // lifetime; once a workspace accumulates highlights / extracted HTML
+    // the snapshot blows through that and fetch synchronously rejects
+    // with `TypeError: Failed to fetch`, killing autosave entirely. The
+    // unload-time flush is handled separately via navigator.sendBeacon
+    // below, which is the right primitive for "finish even if the page
+    // is gone" anyway.
+    const res = await fetch("/api/state", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body,
-      // Keep the save in flight even if the user navigates away or closes
-      // the panel mid-flush (e.g. Cmd+W) — the browser will finish it.
-      keepalive: true,
     });
+    if (!res.ok) {
+      console.error(
+        "Failed to save state (server returned)",
+        res.status,
+        res.statusText
+      );
+      return false;
+    }
     return true;
   } catch (err) {
     console.error("Failed to save state", err);
     return false;
   }
+}
+
+// Best-effort flush at page-close time. Uses `navigator.sendBeacon` which
+// the browser is guaranteed to dispatch even after the document is gone —
+// this is the correct primitive for "finish saving on Cmd+W / quit" and
+// avoids the 64 KiB keepalive cap that the regular fetch path can't carry
+// for non-trivial workspaces.
+function flushOnUnload(get: () => Store): void {
+  if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
+  const s = get();
+  if (!s.isDirty) return;
+  try {
+    const snapshot: AppState = {
+      workspaces: s.workspaces,
+      nodes: s.nodes,
+      edges: s.edges,
+      selectedWorkspaceId: s.selectedWorkspaceId,
+      version: s.version + 1,
+    };
+    const blob = new Blob([JSON.stringify(snapshot)], {
+      type: "application/json",
+    });
+    // sendBeacon is POST-only; the /api/state route accepts POST as an
+    // alias for the unload path (see app/api/state/route.ts).
+    navigator.sendBeacon("/api/state", blob);
+  } catch (err) {
+    console.warn("[store] unload flush failed", err);
+  }
+}
+
+let unloadHandlerInstalled = false;
+function installUnloadFlush(get: () => Store): void {
+  if (unloadHandlerInstalled) return;
+  if (typeof window === "undefined") return;
+  unloadHandlerInstalled = true;
+  // `pagehide` is the spec-blessed event for "this document is going
+  // away"; it fires for both bfcache evictions and real unloads and is
+  // strictly more reliable than `beforeunload` (which Chromium skips for
+  // background tabs and some PWA close paths).
+  window.addEventListener("pagehide", () => flushOnUnload(get));
 }
 
 // Yield the heavy work (`JSON.stringify` on potentially MBs of state) to
@@ -324,6 +377,7 @@ export const useStore = create<Store>((set, get) => ({
   pendingHighlightJumps: {},
 
   hydrate: async () => {
+    installUnloadFlush(get);
     try {
       const res = await fetch("/api/state");
       const data = (await res.json()) as LegacyAppState;

@@ -26,3 +26,15 @@ export async function PUT(request: Request) {
   await getDriver().saveState(await request.json());
   return NextResponse.json({ ok: true });
 }
+
+// Unload-time flush path. `navigator.sendBeacon` only speaks POST, so the
+// client uses this method when the user is closing the window with dirty
+// state. The semantics are identical to PUT — overwrite the persisted
+// snapshot. Kept as a thin alias so the regular save path stays on PUT
+// and HTTP semantics stay clean.
+export async function POST(request: Request) {
+  const unauthorized = await requireAuthIfSupabase();
+  if (unauthorized) return unauthorized;
+  await getDriver().saveState(await request.json());
+  return NextResponse.json({ ok: true });
+}
