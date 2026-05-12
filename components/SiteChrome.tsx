@@ -18,7 +18,7 @@ export function SiteNav({
       <div className="max-w-6xl mx-auto h-12 px-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group">
           <span className="pg-serif text-[18px] font-medium tracking-tight text-[var(--pg-fg)] group-hover:text-[var(--pg-accent)] transition-colors">
-            personalGit
+            Studygit
           </span>
         </Link>
         <nav className="flex items-center gap-1">
@@ -89,7 +89,7 @@ export function SiteFooter() {
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--pg-muted)]">
         <div className="flex items-center gap-2">
           <span className="pg-serif text-[14px] text-[var(--pg-fg-soft)]">
-            personalGit
+            Studygit
           </span>
           <span aria-hidden>·</span>
           <span>© {year}</span>

@@ -359,7 +359,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.1.0",
     date: "2026-05-04",
-    tagline: "The first usable personalGit.",
+    tagline: "The first usable Studygit.",
     sections: [
       {
         heading: "Canvas",
