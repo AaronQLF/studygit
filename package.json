@@ -1,5 +1,5 @@
 {
-  "name": "personalgit",
+  "name": "studygit",
   "version": "0.2.12",
   "private": true,
   "main": "electron/dist/main.js",

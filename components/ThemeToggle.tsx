@@ -5,7 +5,7 @@ import { Monitor, Moon, Sun } from "lucide-react";
 
 export type Theme = "light" | "dark" | "system";
 
-export const STORAGE_KEY = "personalgit-theme";
+export const STORAGE_KEY = "studygit-theme";
 const DEFAULT_THEME: Theme = "system";
 
 function isTheme(value: unknown): value is Theme {
@@ -49,7 +49,7 @@ export function writeThemePreference(theme: Theme) {
   } catch {}
   applyTheme(theme);
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("personalgit:themechange"));
+    window.dispatchEvent(new CustomEvent("studygit:themechange"));
   }
 }
 
@@ -83,9 +83,9 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onChange = () => setTheme(readThemePreference());
-    window.addEventListener("personalgit:themechange", onChange);
+    window.addEventListener("studygit:themechange", onChange);
     return () =>
-      window.removeEventListener("personalgit:themechange", onChange);
+      window.removeEventListener("studygit:themechange", onChange);
   }, []);
 
   useEffect(() => {

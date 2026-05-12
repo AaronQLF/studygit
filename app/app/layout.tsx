@@ -3,7 +3,7 @@ import { getPersistenceMode } from "@/lib/persistence";
 import { verifySession } from "@/lib/server/auth";
 
 export const metadata: Metadata = {
-  title: "personalGit",
+  title: "Studygit",
 };
 
 export const dynamic = "force-dynamic";

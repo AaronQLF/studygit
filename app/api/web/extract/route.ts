@@ -14,7 +14,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB ceiling for reader-view extraction
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 personalGit-Reader/1.0";
+  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 Studygit-Reader/1.0";
 
 type ExtractResponse = {
   finalUrl: string;

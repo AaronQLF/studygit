@@ -18,7 +18,7 @@ import * as fs from "node:fs";
 // --------------------------------------------------------------------------
 
 const PREFERRED_PORT = 47821;
-const APP_NAME = "personalGit";
+const APP_NAME = "Studygit";
 const DEV_URL = process.env.ELECTRON_DEV_URL ?? null;
 
 let mainWindow: BrowserWindow | null = null;
@@ -370,7 +370,7 @@ function webviewPreloadFileUrl(): string {
   return prefix + encodeURI(normalized);
 }
 
-ipcMain.handle("personalgit:get-webview-preload-url", () =>
+ipcMain.handle("studygit:get-webview-preload-url", () =>
   webviewPreloadFileUrl()
 );
 
@@ -400,7 +400,7 @@ type UpdateStatus =
 
 // Cached so a renderer that mounts after a status event has already fired
 // (e.g. the 6-hour interval check that completes mid-session) can still
-// query the latest state via `personalgit:get-update-status`.
+// query the latest state via `studygit:get-update-status`.
 let latestUpdateStatus: UpdateStatus = { kind: "idle" };
 let updaterWired = false;
 
@@ -418,7 +418,7 @@ function wireAutoUpdate(): void {
   const broadcast = (status: UpdateStatus) => {
     latestUpdateStatus = status;
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("personalgit:update-status", status);
+      mainWindow.webContents.send("studygit:update-status", status);
     }
   };
 
@@ -446,13 +446,13 @@ function wireAutoUpdate(): void {
     broadcast({ kind: "error", message: err.message })
   );
 
-  ipcMain.on("personalgit:install-update", () => {
+  ipcMain.on("studygit:install-update", () => {
     autoUpdater.quitAndInstall();
   });
 
-  ipcMain.handle("personalgit:get-update-status", () => latestUpdateStatus);
+  ipcMain.handle("studygit:get-update-status", () => latestUpdateStatus);
 
-  ipcMain.handle("personalgit:check-for-updates", async () => {
+  ipcMain.handle("studygit:check-for-updates", async () => {
     if (!app.isPackaged) {
       // electron-updater throws on unpackaged dev builds; surface a
       // friendlier message to the renderer so the manual-check button
@@ -563,6 +563,6 @@ app.on("web-contents-created", (_evt, contents) => {
   });
 });
 
-ipcMain.on("personalgit:noop", (_evt: IpcMainEvent) => {
+ipcMain.on("studygit:noop", (_evt: IpcMainEvent) => {
   // Reserved channel; kept so the preload's API surface is exercised in dev.
 });

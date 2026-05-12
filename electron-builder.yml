@@ -1,6 +1,6 @@
-appId: com.personalgit.app
-productName: personalGit
-copyright: Copyright (c) 2026 personalGit
+appId: com.studygit.app
+productName: Studygit
+copyright: Copyright (c) 2026 Studygit
 
 directories:
   buildResources: electron/build

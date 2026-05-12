@@ -18,9 +18,9 @@ export const INITIAL_STATE: AppState = {
       width: 440,
       data: {
         kind: "page",
-        title: "Welcome to personalGIt",
+        title: "Welcome to Studygit",
         content:
-          "<h1>Welcome to personalGIt</h1>" +
+          "<h1>Welcome to Studygit</h1>" +
           "<p>This is your personal learning canvas. Capture readings, write structured notes, connect ideas visually.</p>" +
           "<h2>Try a page</h2>" +
           "<p>Press <code>/</code> inside any page to open the slash menu. Insert headings, lists, todos, toggles, callouts, code, math, or diagrams.</p>" +

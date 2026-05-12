@@ -9,10 +9,12 @@
 export type ThemeId =
   | "paper"
   | "slate"
+  | "midnight"
   | "mocha"
   | "forest"
   | "ink"
   | "plum"
+  | "sakura"
   | "retro";
 
 export type ThemeMode = "light" | "dark";
@@ -132,6 +134,45 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     },
   },
 
+  // Deep blueprint blue. Light is an ice-cool drafting sheet with a
+  // saturated cobalt accent; dark is a near-black indigo with an electric
+  // cyan-blue accent — distinct from Slate (which leans muted/grey).
+  midnight: {
+    id: "midnight",
+    name: "Midnight",
+    description: "Ice-blue blueprint, electric cobalt accents.",
+    light: {
+      "--pg-bg": "#eef3fa",
+      "--pg-bg-subtle": "#e0e8f3",
+      "--pg-bg-elevated": "#cfdbeb",
+      "--pg-bg-canvas": "#e6edf6",
+      "--pg-fg": "#0a1730",
+      "--pg-fg-soft": "#1f3057",
+      "--pg-muted": "#61708d",
+      "--pg-muted-soft": "#b6c2d6",
+      "--pg-border": "#c2cee2",
+      "--pg-border-strong": "#94a2bd",
+      "--pg-accent": "#1455e6",
+      "--pg-accent-soft": soft("#1455e6"),
+      "--pg-marker": "#b8d4ff",
+    },
+    dark: {
+      "--pg-bg": "#0b1023",
+      "--pg-bg-subtle": "#11172e",
+      "--pg-bg-elevated": "#18203c",
+      "--pg-bg-canvas": "#070b1c",
+      "--pg-fg": "#d8e3f5",
+      "--pg-fg-soft": "#b4c4df",
+      "--pg-muted": "#8497b7",
+      "--pg-muted-soft": "#3f4a66",
+      "--pg-border": "#1f2746",
+      "--pg-border-strong": "#2c365a",
+      "--pg-accent": "#5eb8ff",
+      "--pg-accent-soft": soft("#5eb8ff", 0.2),
+      "--pg-marker": "#2a4a82",
+    },
+  },
+
   // Warm brown café palette — old paper, caramel ink.
   mocha: {
     id: "mocha",
@@ -243,6 +284,45 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     },
   },
 
+  // Cherry-blossom blush. Warm petal-pink paper with a cherry-rose
+  // accent in light; deep wine charcoal with a luminous pink accent in
+  // dark. Sits in the warm/floral lane that Plum (cool mauve) doesn't.
+  sakura: {
+    id: "sakura",
+    name: "Sakura",
+    description: "Petal-pink paper with cherry-rose ink.",
+    light: {
+      "--pg-bg": "#fdf3f1",
+      "--pg-bg-subtle": "#f9e4e0",
+      "--pg-bg-elevated": "#f0c8c4",
+      "--pg-bg-canvas": "#fcebe7",
+      "--pg-fg": "#2b121a",
+      "--pg-fg-soft": "#54232f",
+      "--pg-muted": "#99697b",
+      "--pg-muted-soft": "#ddb6b8",
+      "--pg-border": "#efc3c2",
+      "--pg-border-strong": "#c98e94",
+      "--pg-accent": "#c2185b",
+      "--pg-accent-soft": soft("#c2185b"),
+      "--pg-marker": "#ffd3df",
+    },
+    dark: {
+      "--pg-bg": "#181014",
+      "--pg-bg-subtle": "#20151a",
+      "--pg-bg-elevated": "#2c1d22",
+      "--pg-bg-canvas": "#110a0d",
+      "--pg-fg": "#f0d8e1",
+      "--pg-fg-soft": "#d9b5c1",
+      "--pg-muted": "#a07b8a",
+      "--pg-muted-soft": "#5a3d49",
+      "--pg-border": "#38242d",
+      "--pg-border-strong": "#4e313d",
+      "--pg-accent": "#f06292",
+      "--pg-accent-soft": soft("#f06292", 0.2),
+      "--pg-marker": "#5d2a40",
+    },
+  },
+
   // 70s yellowed paperback in light, amber-CRT phosphor terminal in dark.
   // Cohesive "retro" identity that reads warm and a little nostalgic
   // across both modes without leaning into a single decade gimmick.
@@ -323,26 +403,30 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
 export const THEME_ORDER: ThemeId[] = [
   "paper",
   "slate",
+  "midnight",
   "mocha",
   "forest",
   "ink",
   "plum",
+  "sakura",
   "retro",
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = "paper";
 
-export const THEME_STORAGE_KEY = "personalgit-theme-preset";
-export const ACCENT_STORAGE_KEY = "personalgit-accent-override";
+export const THEME_STORAGE_KEY = "studygit-theme-preset";
+export const ACCENT_STORAGE_KEY = "studygit-accent-override";
 
 export function isThemeId(value: unknown): value is ThemeId {
   return (
     value === "paper" ||
     value === "slate" ||
+    value === "midnight" ||
     value === "mocha" ||
     value === "forest" ||
     value === "ink" ||
     value === "plum" ||
+    value === "sakura" ||
     value === "retro"
   );
 }
@@ -434,4 +518,4 @@ export function writeAccentOverride(hex: string | null): void {
 
 // Compact event name used by the dialog + ThemeToggle to invalidate
 // their local state when the theme changes from elsewhere in the app.
-export const THEME_CHANGE_EVENT = "personalgit:themechange";
+export const THEME_CHANGE_EVENT = "studygit:themechange";
