@@ -83,8 +83,8 @@ function hostnameOf(url: string): string {
 function isElectronEnvironment(): boolean {
   if (typeof window === "undefined") return false;
   const pg = (window as unknown as {
-    personalGit?: { getWebviewPreloadUrl?: () => Promise<string> };
-  }).personalGit;
+    studygit?: { getWebviewPreloadUrl?: () => Promise<string> };
+  }).studygit;
   return !!pg?.getWebviewPreloadUrl;
 }
 
@@ -158,7 +158,7 @@ function BrowserWindowMounted() {
       queueMicrotask(() => {
         if (!cancelled) {
           setPreloadError(
-            "The in-app browser only runs inside the personalGit desktop app."
+            "The in-app browser only runs inside the Studygit desktop app."
           );
         }
       });
@@ -167,8 +167,8 @@ function BrowserWindowMounted() {
       };
     }
     const pg = (window as unknown as {
-      personalGit?: { getWebviewPreloadUrl?: () => Promise<string> };
-    }).personalGit;
+      studygit?: { getWebviewPreloadUrl?: () => Promise<string> };
+    }).studygit;
     pg?.getWebviewPreloadUrl?.()
       .then((url) => {
         if (!cancelled) setPreloadUrl(url);

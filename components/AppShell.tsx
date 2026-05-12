@@ -79,8 +79,8 @@ export function AppShell({ user }: AppShellProps = {}) {
   }, []);
 
   useEffect(() => {
-    const pg = (window as unknown as { personalGit?: { platform?: string } })
-      .personalGit;
+    const pg = (window as unknown as { studygit?: { platform?: string } })
+      .studygit;
     if (pg?.platform === "darwin") {
       // Defer to a microtask so we don't run a setState synchronously
       // during the effect's render phase.
@@ -157,7 +157,7 @@ export function AppShell({ user }: AppShellProps = {}) {
             </button>
             <div className="flex items-center gap-2 pl-1 min-w-0">
               <span className="pg-serif text-[17px] font-medium tracking-tight text-[var(--pg-fg)]">
-                personalGit
+                Studygit
               </span>
               {currentWorkspace ? (
                 <>
