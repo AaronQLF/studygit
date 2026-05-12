@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "personalGIt",
+  title: "Studygit",
   description: "Your personal learning canvas",
 };
 
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const themeInitScript = `(function(){
   try {
     var root = document.documentElement;
-    var t = localStorage.getItem('personalgit-theme');
+    var t = localStorage.getItem('studygit-theme');
     if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'system';
     var resolved = t === 'system'
       ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -34,11 +34,11 @@ const themeInitScript = `(function(){
     root.classList.add(resolved);
     root.dataset.themePref = t;
     root.style.colorScheme = resolved;
-    var preset = localStorage.getItem('personalgit-theme-preset');
+    var preset = localStorage.getItem('studygit-theme-preset');
     var valid = ['paper','slate','mocha','forest','ink','plum','retro'];
     if (valid.indexOf(preset) < 0) preset = 'paper';
     root.dataset.themePreset = preset;
-    var acc = localStorage.getItem('personalgit-accent-override');
+    var acc = localStorage.getItem('studygit-accent-override');
     if (acc && /^#[0-9a-f]{6}$/i.test(acc)) {
       root.style.setProperty('--pg-accent', acc);
       root.style.setProperty('--pg-accent-soft', 'color-mix(in srgb, ' + acc + ' 12%, transparent)');

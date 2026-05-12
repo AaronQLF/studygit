@@ -18,8 +18,8 @@ import { tryGetCurrentUser } from "@/lib/server/auth";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Changelog — personalGit",
-  description: "Every release of personalGit and what shipped in it.",
+  title: "Changelog — Studygit",
+  description: "Every release of Studygit and what shipped in it.",
 };
 
 const TAG_META: Record<
@@ -68,7 +68,7 @@ function ChangelogHero({ latest }: { latest: ChangelogEntry }) {
       <div className="max-w-3xl mx-auto px-4 pt-16 pb-10 sm:pt-20 sm:pb-12">
         <p className="pg-section-label">Changelog</p>
         <h1 className="mt-3 pg-serif text-[40px] sm:text-[52px] leading-[1.05] font-medium tracking-tight text-[var(--pg-fg)]">
-          What&rsquo;s new in personalGit.
+          What&rsquo;s new in Studygit.
         </h1>
         <p className="mt-4 max-w-xl text-[14px] text-[var(--pg-fg-soft)]">
           Every release, top to bottom. The most recent build is{" "}

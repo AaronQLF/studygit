@@ -25,7 +25,7 @@ const ITEMS: {
   { kind: "shape", label: "Shape", keybind: "S", icon: Shapes },
 ];
 
-const TIP_KEY = "personalgit-dock-tip-dismissed";
+const TIP_KEY = "studygit-dock-tip-dismissed";
 
 export function AddDock({ onAdd }: { onAdd: (kind: NodeKind) => void }) {
   const [showTip, setShowTip] = useState(false);

@@ -21,7 +21,7 @@ import {
   type Theme as ThemeMode,
 } from "./ThemeToggle";
 
-export const THEME_DIALOG_EVENT = "personalgit:open-theme-settings";
+export const THEME_DIALOG_EVENT = "studygit:open-theme-settings";
 
 // Suggested accent palette shown above the freeform color input. These
 // are picked to feel distinct against any preset background.

@@ -22,7 +22,7 @@ function fallbackAnswer(body: RequestBody): string {
     "AI is not configured on this server yet.",
     "",
     "To enable real answers, set an `OPENAI_API_KEY` environment variable and",
-    "restart the dev server. personalGIt will then send your highlighted excerpt",
+    "restart the dev server. Studygit will then send your highlighted excerpt",
     "and question to OpenAI and stream a real response here.",
     "",
     ctx ? `Highlighted excerpt (${ctx.length} chars):\n"${excerpt}"` : "",
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   }
 
   const systemContent = [
-    "You are an assistant embedded in personalGIt, a personal learning canvas.",
+    "You are an assistant embedded in Studygit, a personal learning canvas.",
     "The user is reading a PDF or rich page and has highlighted an excerpt to discuss.",
     "Be concise (4–10 sentences unless asked to elaborate), honest about",
     "uncertainty, and explain like you would to a curious engineer.",

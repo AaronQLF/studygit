@@ -208,7 +208,7 @@ function DownloadSection() {
             Native desktop app for macOS and Windows.
           </h2>
           <p className="mt-3 text-[14px] text-[var(--pg-fg-soft)]">
-            Run personalGit as a real desktop app. Your canvases, pages, and
+            Run Studygit as a real desktop app. Your canvases, pages, and
             PDFs live on your machine — no browser tab to lose.
           </p>
         </div>
@@ -249,7 +249,7 @@ function DownloadSection() {
               Heads up — no cross-device sync yet.
             </span>{" "}
             Each desktop install keeps its workspaces, pages, and PDFs locally
-            on that machine. If you install personalGit on both your Mac and
+            on that machine. If you install Studygit on both your Mac and
             your Windows PC, they won&rsquo;t share data with each other (or with
             the web app). Cloud sync is on the roadmap.
           </div>
@@ -257,7 +257,7 @@ function DownloadSection() {
 
         <details className="group mt-3 rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)] open:bg-[var(--pg-bg-elevated)] transition-colors">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[12.5px] font-medium text-[var(--pg-fg)]">
-            On macOS, the app says &ldquo;personalGit is damaged&rdquo; — what
+            On macOS, the app says &ldquo;Studygit is damaged&rdquo; — what
             do I do?
             <span className="text-[var(--pg-muted)] group-open:rotate-45 transition-transform text-[18px] leading-none">
               +
@@ -267,11 +267,11 @@ function DownloadSection() {
             <p>
               Early-access builds aren&rsquo;t notarized by Apple yet, so
               Gatekeeper quarantines the .app on first launch. After dragging
-              personalGit into <code>/Applications</code>, run this once in
+              Studygit into <code>/Applications</code>, run this once in
               Terminal to clear the quarantine flag:
             </p>
             <pre className="mt-2 overflow-x-auto rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 text-[12px] text-[var(--pg-fg)]">
-              <code>xattr -dr com.apple.quarantine /Applications/personalGit.app</code>
+              <code>xattr -dr com.apple.quarantine /Applications/Studygit.app</code>
             </pre>
             <p className="mt-2">
               Windows installs work out of the box; SmartScreen may show a
