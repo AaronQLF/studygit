@@ -27,6 +27,63 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.11",
+    date: "2026-05-12",
+    tagline: "In-app browser, autosave, and macOS chrome fixes.",
+    sections: [
+      {
+        heading: "In-app browser",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Pressing Enter in the address bar now actually navigates. The webview ref was being torn down and rewired on every parent re-render, which silently latched the \u201cready\u201d flag to false and rerouted every Enter into a queue that never drained.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Default homepage is now Google. Opening the in-app browser lands you on a search box instead of a random Wikipedia article.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Wikipedia pages get a reader-mode stylesheet injected by the webview preload: side rails, tabs, edit links, and site notices are hidden; the article column is centred at a comfortable 760\u202fpx in Georgia at 1.6 line-height; infoboxes shrink into a right-floated card. Highlight anchoring still runs against the live DOM.",
+          },
+        ],
+      },
+      {
+        heading: "Autosave",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Autosave was throwing `TypeError: Failed to fetch` once a workspace grew past 64\u202fKiB. The previous build set `keepalive: true` on the save fetch, which Chromium caps at 64\u202fKiB of cumulative body per page. The flag is gone; saves of any size now go through.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Page-close persistence moved to `navigator.sendBeacon` on `pagehide`. Closing the window (Cmd+W, app quit, force-close) now reliably flushes dirty state without the keepalive size cap, via a new `POST /api/state` alias.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Surface server-side save failures in the console instead of swallowing them \u2014 if `/api/state` returns non-2xx, you see the status code right away.",
+          },
+        ],
+      },
+      {
+        heading: "macOS chrome",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Traffic lights stay visible at all times. The window was using `titleBarStyle: \"customButtonsOnHover\"`, which fades the buttons out when you\u2019re not near them. Switched to `\"hidden\"` with an explicit `trafficLightPosition` so the close/minimise/zoom buttons sit cleanly inside the 40\u202fpx in-app header.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.7",
     date: "2026-05-11",
     tagline: "Themes, presets, and a custom-accent picker.",
