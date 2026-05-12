@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Command,
+  Globe,
   Loader2,
   Palette,
   PanelLeftClose,
@@ -18,12 +19,14 @@ import "katex/dist/katex.min.css";
 import "tippy.js/dist/tippy.css";
 import { LATEST_RELEASE } from "@/lib/changelog";
 import { useStore } from "@/lib/store";
+import { useBrowserSession } from "@/lib/browser-session";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
 import { PanelManager } from "./PanelManager";
 import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
 import { UserMenu } from "./UserMenu";
+import { BrowserWindow } from "./BrowserWindow";
 import {
   THEME_DIALOG_EVENT,
   ThemeSettingsDialog,
@@ -53,6 +56,7 @@ export function AppShell({ user }: AppShellProps = {}) {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const openPanel = useStore((s) => s.openPanel);
+  const openBrowser = useBrowserSession((s) => s.openBrowser);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   // When running inside the Electron shell on macOS, reserve room at the
@@ -180,6 +184,16 @@ export function AppShell({ user }: AppShellProps = {}) {
             </span>
             <button
               className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+              onClick={() => openBrowser()}
+              title="Open in-app browser — highlight as you read, save the page as a cite-able link"
+            >
+              <Globe size={13} />
+              <span className="hidden font-medium tracking-tight sm:inline">
+                Browse
+              </span>
+            </button>
+            <button
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => setPaletteOpen(true)}
               title="Open command palette"
             >
@@ -209,6 +223,7 @@ export function AppShell({ user }: AppShellProps = {}) {
       </div>
 
       <PanelManager />
+      <BrowserWindow />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ThemeSettingsDialog
         open={themeDialogOpen}
