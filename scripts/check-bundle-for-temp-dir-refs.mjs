@@ -20,7 +20,7 @@ const repoRoot = path.resolve(
 );
 // Override for tests; production builds use the repo's standalone tree.
 const standaloneDir =
-  process.env.PERSONALGIT_STANDALONE_DIR ??
+  process.env.STUDYGIT_STANDALONE_DIR ??
   path.join(repoRoot, ".next", "standalone");
 
 // Match `<pkg>-<exactly-16-hex>` inside string literals in the

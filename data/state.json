@@ -72,7 +72,7 @@
               {
                 "id": "uUSuO-TU",
                 "role": "assistant",
-                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. personalGIt will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (25 chars):\n\"P, value functions, Bellm\"\nYour question: Explain it like I'm five",
+                "text": "AI is not configured on this server yet.\nTo enable real answers, set an `OPENAI_API_KEY` environment variable and\nrestart the dev server. Studygit will then send your highlighted excerpt\nand question to OpenAI and stream a real response here.\nHighlighted excerpt (25 chars):\n\"P, value functions, Bellm\"\nYour question: Explain it like I'm five",
                 "createdAt": 1777076885627
               }
             ],
