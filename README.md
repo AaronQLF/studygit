@@ -1,4 +1,4 @@
-# personalGIt
+# Studygit
 
 Your personal learning canvas — a "student second brain". Create independent workspaces, drop in links, images, sticky notes, rich block-edited Pages, shapes, and PDFs you can highlight, annotate, and ask AI about — all on an infinite React Flow canvas.
 
@@ -45,9 +45,9 @@ All writable state (the `data/state.json`, uploaded PDFs, the chunk cache) lives
 
 | OS      | Path                                                     |
 | ------- | -------------------------------------------------------- |
-| macOS   | `~/Library/Application Support/personalGit`              |
-| Windows | `%APPDATA%\personalGit`                                  |
-| Linux   | `~/.config/personalGit`                                  |
+| macOS   | `~/Library/Application Support/Studygit`                 |
+| Windows | `%APPDATA%\Studygit`                                     |
+| Linux   | `~/.config/Studygit`                                     |
 
 This is plumbed via the `STORAGE_ROOT` env var that `electron/main.ts` sets to `app.getPath("userData")` before forking the Next server. The same env var works in plain Next runs if you want to relocate state outside the repo.
 
@@ -86,7 +86,7 @@ To enable notarization, also flip `mac.notarize: true` in `electron-builder.yml`
 
 ### Auto-update
 
-`electron-updater` is wired against the GitHub Releases provider configured in `electron-builder.yml`. The packaged app polls 10 seconds after launch and every 6 hours thereafter; updates are downloaded silently and installed on next quit. The renderer can subscribe to status events through `window.personalGit.onUpdateStatus(...)` exposed in `electron/preload.ts`.
+`electron-updater` is wired against the GitHub Releases provider configured in `electron-builder.yml`. The packaged app polls 10 seconds after launch and every 6 hours thereafter; updates are downloaded silently and installed on next quit. The renderer can subscribe to status events through `window.studygit.onUpdateStatus(...)` exposed in `electron/preload.ts`.
 
 In dev (`app.isPackaged === false`) the updater is disabled, so no network calls are made during local iteration.
 
@@ -236,7 +236,7 @@ Find the user's UUID under **Authentication → Users** in the Supabase dashboar
 
 ## Storage: chunked, dedup-friendly compression on R2
 
-personalGIt is and will stay free to use. Storage was the single biggest obstacle to that promise — students upload tens to hundreds of megabytes of PDFs, and naively writing each upload as a fresh object on a paid-per-GiB store would burn through any free tier in days. The pipeline below is what makes the free-forever line credible: it never stores the same bytes twice and then compresses what's left aggressively, so ten students working from the same paper, or one student re-exporting the same deck twenty times, costs roughly the bytes of one copy.
+Studygit is and will stay free to use. Storage was the single biggest obstacle to that promise — students upload tens to hundreds of megabytes of PDFs, and naively writing each upload as a fresh object on a paid-per-GiB store would burn through any free tier in days. The pipeline below is what makes the free-forever line credible: it never stores the same bytes twice and then compresses what's left aggressively, so ten students working from the same paper, or one student re-exporting the same deck twenty times, costs roughly the bytes of one copy.
 
 In `supabase` mode every uploaded PDF (and any future binary) takes a longer route than "PUT the bytes to S3 and hand back a presigned URL". The full pipeline lives under `lib/persistence/compression/` and `lib/persistence/r2-client.ts`:
 

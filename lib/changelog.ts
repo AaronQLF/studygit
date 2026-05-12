@@ -136,7 +136,7 @@ export const CHANGELOG: ChangelogEntry[] = [
           {
             tag: "new",
             text:
-              "Drop a link onto the canvas and personalGit fetches a sanitized reader view of the article. Select any passage to highlight it in five colors, thread comments, and cite it from any page.",
+              "Drop a link onto the canvas and Studygit fetches a sanitized reader view of the article. Select any passage to highlight it in five colors, thread comments, and cite it from any page.",
           },
           {
             tag: "new",
@@ -324,7 +324,7 @@ export const CHANGELOG: ChangelogEntry[] = [
           {
             tag: "new",
             text:
-              "First Electron build of personalGit for macOS (Apple Silicon, Intel) and Windows. Everything runs locally \u2014 workspaces, pages, PDFs all live in the OS user-data directory; no Supabase auth required.",
+              "First Electron build of Studygit for macOS (Apple Silicon, Intel) and Windows. Everything runs locally \u2014 workspaces, pages, PDFs all live in the OS user-data directory; no Supabase auth required.",
           },
           {
             tag: "new",
