@@ -27,7 +27,7 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "0.2.15",
+    version: "0.2.16",
     date: "2026-05-21",
     tagline:
       "Subpages, page zoom, the weekly time tracker, and Reader \u21c4 Web for links.",
