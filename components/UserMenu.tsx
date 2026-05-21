@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { LogOut, Palette, User as UserIcon } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
+import { UpdateMenuItem } from "./UpdateBanner";
 
 type UserMenuProps = {
   email: string | null;
@@ -67,6 +68,7 @@ export function UserMenu({ email }: UserMenuProps) {
             <Palette size={12} />
             Customize theme&hellip;
           </button>
+          <UpdateMenuItem />
           <div className="h-px bg-[var(--pg-border)] my-1" />
           <form action={signOut}>
             <button

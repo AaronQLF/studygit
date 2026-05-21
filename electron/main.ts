@@ -413,7 +413,26 @@ function wireAutoUpdate(): void {
   // on `app.isPackaged` since unpackaged builds have no real version to
   // compare against.
   autoUpdater.autoDownload = true;
+  // NOTE: this flag is misleading on macOS. MacUpdater extends AppUpdater
+  // (not BaseUpdater) and never registers a `before-quit` hook — it only
+  // uses this flag to decide whether to auto-trigger Squirrel.Mac's
+  // checkForUpdates after the JS-side download finishes. The actual
+  // bundle swap on macOS only happens when the renderer explicitly calls
+  // `installUpdateAndRestart` (handled below as `studygit:install-update`).
+  // See components/UpdateBanner.tsx for the renderer side.
   autoUpdater.autoInstallOnAppQuit = true;
+  // Funnel updater chatter into the same console stream as the rest of
+  // the main process. Without a logger the unified system log was empty
+  // when the auto-updater silently failed to apply a downloaded update —
+  // having `[updater] checking for update`, `update-downloaded`, etc.
+  // visible in `Console.app` makes the same class of bug debuggable
+  // without a source rebuild.
+  autoUpdater.logger = {
+    info: (msg) => console.log(`[updater] ${String(msg)}`),
+    warn: (msg) => console.warn(`[updater] ${String(msg)}`),
+    error: (msg) => console.error(`[updater] ${String(msg)}`),
+    debug: (msg) => console.log(`[updater:debug] ${String(msg)}`),
+  };
 
   const broadcast = (status: UpdateStatus) => {
     latestUpdateStatus = status;
