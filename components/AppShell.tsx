@@ -217,7 +217,11 @@ export function AppShell({ user }: AppShellProps = {}) {
 
       <div className="flex flex-1 overflow-hidden bg-[var(--pg-bg)]">
         <Sidebar />
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* `relative` is required so the Canvas wrapper (which uses
+            `absolute inset-0` to guarantee a stable pixel size for React
+            Flow before its ResizeObserver fires) can anchor against this
+            container instead of bubbling up to the document body. */}
+        <main className="relative flex-1 flex flex-col overflow-hidden min-w-0">
           <Canvas />
         </main>
       </div>

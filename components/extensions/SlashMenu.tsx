@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Code,
   FileImage,
+  FileText,
   Heading1,
   Heading2,
   Heading3,
@@ -28,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { type CalloutVariant } from "./CalloutBlock";
+import { SUBPAGE_CREATE_EVENT } from "./PageLinkCreator";
 
 export const CITATION_PICKER_EVENT = "pg:open-citation-picker";
 
@@ -40,6 +42,34 @@ export type SlashItem = {
 };
 
 const ALL_ITEMS: SlashItem[] = [
+  {
+    title: "Page",
+    description: "Insert a linked subpage on the canvas",
+    icon: FileText,
+    keywords: [
+      "page",
+      "subpage",
+      "child",
+      "link",
+      "nested",
+      "doc",
+      "new",
+      "create",
+    ],
+    command: ({ editor, range }) => {
+      // Delete the `/page` trigger first so the inserted pill replaces it.
+      // PageLinkCreator picks up the event, creates the canvas node + edge,
+      // and inserts the pill at the current caret position.
+      editor.chain().focus().deleteRange(range).run();
+      requestAnimationFrame(() => {
+        window.dispatchEvent(
+          new CustomEvent(SUBPAGE_CREATE_EVENT, {
+            detail: { editor },
+          })
+        );
+      });
+    },
+  },
   {
     title: "Heading 1",
     description: "Big section heading",

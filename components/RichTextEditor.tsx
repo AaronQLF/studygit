@@ -10,7 +10,6 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  Highlighter,
   Italic,
   Link as LinkIcon,
   List,
@@ -25,6 +24,7 @@ import {
   createBaseExtensions,
   type CitationContext,
 } from "./editor-extensions";
+import { ColorPickerButton } from "./ColorPickerButton";
 
 type ToolbarButtonProps = {
   onClick: () => void;
@@ -106,12 +106,8 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive("strike")}
         onClick={() => editor.chain().focus().toggleStrike().run()}
       />
-      <ToolbarButton
-        title="Highlight"
-        icon={Highlighter}
-        active={editor.isActive("highlight")}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}
-      />
+      <ColorPickerButton editor={editor} mode="text" />
+      <ColorPickerButton editor={editor} mode="highlight" />
       <ToolbarButton
         title="Inline code"
         icon={Code}

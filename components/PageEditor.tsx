@@ -7,10 +7,10 @@ import {
   Bold,
   CheckSquare,
   Code,
+  FileText,
   Heading1,
   Heading2,
   Heading3,
-  Highlighter,
   Italic,
   Link as LinkIcon,
   List,
@@ -26,6 +26,8 @@ import {
   createBaseExtensions,
   type CitationContext,
 } from "./editor-extensions";
+import { ColorPickerButton } from "./ColorPickerButton";
+import { SUBPAGE_CREATE_EVENT } from "./extensions/PageLinkCreator";
 
 type ToolbarButtonProps = {
   onClick: () => void;
@@ -107,12 +109,8 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive("strike")}
         onClick={() => editor.chain().focus().toggleStrike().run()}
       />
-      <ToolbarButton
-        title="Highlight"
-        icon={Highlighter}
-        active={editor.isActive("highlight")}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}
-      />
+      <ColorPickerButton editor={editor} mode="text" />
+      <ColorPickerButton editor={editor} mode="highlight" />
       <ToolbarButton
         title="Inline code"
         icon={Code}
@@ -171,6 +169,17 @@ function Toolbar({ editor }: { editor: Editor }) {
             .extendMarkRange("link")
             .setLink({ href: url })
             .run();
+        }}
+      />
+      <ToolbarButton
+        title="Insert subpage (/page)"
+        icon={FileText}
+        onClick={() => {
+          // Same hook the slash menu uses — keeps the canvas wiring in one
+          // place (see PageLinkCreator).
+          window.dispatchEvent(
+            new CustomEvent(SUBPAGE_CREATE_EVENT, { detail: { editor } })
+          );
         }}
       />
       <ToolbarButton
