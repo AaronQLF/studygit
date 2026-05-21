@@ -25,6 +25,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { PanelManager } from "./PanelManager";
 import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
+import { TimeTracker } from "./TimeTracker";
 import { UserMenu } from "./UserMenu";
 import { BrowserWindow } from "./BrowserWindow";
 import {
@@ -200,6 +201,7 @@ export function AppShell({ user }: AppShellProps = {}) {
               <Command size={12} />
               <span className="font-medium tracking-tight">⌘K</span>
             </button>
+            <TimeTracker />
             <ThemeToggle />
             <button
               type="button"

@@ -15,6 +15,8 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Minus,
+  Plus,
   Quote,
   Redo2,
   Sigma,
@@ -28,6 +30,12 @@ import {
 } from "./editor-extensions";
 import { ColorPickerButton } from "./ColorPickerButton";
 import { SUBPAGE_CREATE_EVENT } from "./extensions/PageLinkCreator";
+import {
+  PAGE_ZOOM_DEFAULT,
+  PAGE_ZOOM_MAX,
+  PAGE_ZOOM_MIN,
+  usePageZoom,
+} from "@/lib/page-zoom";
 
 type ToolbarButtonProps = {
   onClick: () => void;
@@ -205,9 +213,52 @@ function Toolbar({ editor }: { editor: Editor }) {
         disabled={!editor.can().redo()}
         onClick={() => editor.chain().focus().redo().run()}
       />
+      <ZoomControls />
       <span className="ml-auto pr-1.5 text-[10px] text-[var(--pg-muted)]">
         Press / for commands
       </span>
+    </div>
+  );
+}
+
+function ZoomControls() {
+  const zoom = usePageZoom((s) => s.zoom);
+  const zoomIn = usePageZoom((s) => s.zoomIn);
+  const zoomOut = usePageZoom((s) => s.zoomOut);
+  const reset = usePageZoom((s) => s.reset);
+  const atDefault = zoom === PAGE_ZOOM_DEFAULT;
+  const atMin = zoom <= PAGE_ZOOM_MIN + 1e-6;
+  const atMax = zoom >= PAGE_ZOOM_MAX - 1e-6;
+  return (
+    <div className="ml-1 inline-flex items-center" data-page-zoom-controls>
+      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <ToolbarButton
+        title="Zoom out (⌘−)"
+        icon={Minus}
+        onClick={zoomOut}
+        disabled={atMin}
+      />
+      <button
+        type="button"
+        onClick={reset}
+        disabled={atDefault}
+        title={atDefault ? "Page zoom (⌘0 to reset)" : "Reset zoom (⌘0)"}
+        className={clsx(
+          "inline-flex h-7 min-w-[36px] items-center justify-center rounded-md px-1.5 text-[10px] font-medium tabular-nums tracking-tight transition-colors",
+          atDefault
+            ? "text-[var(--pg-muted)]"
+            : "text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]",
+          atDefault && "cursor-default"
+        )}
+      >
+        {Math.round(zoom * 100)}%
+      </button>
+      <ToolbarButton
+        title="Zoom in (⌘+)"
+        icon={Plus}
+        onClick={zoomIn}
+        disabled={atMax}
+      />
     </div>
   );
 }
@@ -231,6 +282,17 @@ export function PageEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  // Page-zoom: read once for the CSS var; the toolbar's ZoomControls
+  // sibling component subscribes to the store directly for its own
+  // button states so we don't pay an extra render here on every tick.
+  const hydratePageZoom = usePageZoom((s) => s.hydrate);
+  const zoomIn = usePageZoom((s) => s.zoomIn);
+  const zoomOut = usePageZoom((s) => s.zoomOut);
+  const resetZoom = usePageZoom((s) => s.reset);
+  useEffect(() => {
+    hydratePageZoom();
+  }, [hydratePageZoom]);
 
   // Debounce keystroke → store propagation so we don't trigger the
   // canvas/panel re-render cascade and full-state JSON.stringify on every
@@ -262,8 +324,12 @@ export function PageEditor({
     content: value || "",
     editorProps: {
       attributes: {
+        // `pg-page-editor` is the high-specificity hook that lets the
+        // `.pg-page-scope` ancestor drive font-size via `--pg-page-zoom`.
+        // We intentionally drop `text-[15px]` here so the scope's
+        // `calc(15px * var(--pg-page-zoom))` rule wins.
         class: clsx(
-          "pg-prose focus:outline-none min-h-full px-8 py-6 text-[15px] leading-relaxed text-[var(--pg-fg)]",
+          "pg-prose pg-page-editor focus:outline-none min-h-full px-8 py-6 text-[var(--pg-fg)]",
           className
         ),
       },
@@ -293,6 +359,32 @@ export function PageEditor({
       flushPending();
     };
   }, [editor]);
+
+  // Notion-style page-zoom shortcuts. Only intercept when the editor
+  // owns focus so the browser's own Cmd-+ / Cmd-- still zoom the whole
+  // UI when the user isn't inside a page. `=` is matched alongside `+`
+  // because that's the character produced by the unshifted plus key on
+  // most keyboards (Cmd+= is the natural "zoom in" gesture in Chrome).
+  useEffect(() => {
+    if (!editor) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!editor.isFocused) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.shiftKey || event.altKey) return;
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomIn();
+      } else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        zoomOut();
+      } else if (event.key === "0") {
+        event.preventDefault();
+        resetZoom();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editor, zoomIn, zoomOut, resetZoom]);
 
   useEffect(() => {
     if (!editor) return;

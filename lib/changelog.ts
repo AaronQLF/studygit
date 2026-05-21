@@ -27,6 +27,109 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.15",
+    date: "2026-05-21",
+    tagline:
+      "Subpages, page zoom, the weekly time tracker, and Reader \u21c4 Web for links.",
+    sections: [
+      {
+        heading: "Pages",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Slash menu has a new \"Page\" command (also matches /subpage, /child, /nested). Creates a fresh page node on the canvas next to the parent, draws a logical edge between them, and inserts a clickable pill in the parent\u2019s body. The pill auto-updates as you rename the subpage \u2014 inside the editor and inside canvas card previews.",
+          },
+          {
+            tag: "new",
+            text:
+              "Text color + highlight color pickers in the editor toolbar. Curated 10-swatch palettes tuned for both light and dark themes, with a \u201c\u2014\u201d swatch to clear the color and a tiny color-bar under each toolbar button reflecting whichever color is currently at the caret.",
+          },
+          {
+            tag: "new",
+            text:
+              "Notion-style page zoom. \u2318+ / \u2318\u2212 / \u23180 scale the page (title and body together) in 10\u202f% steps from 70\u202f% to 160\u202f%, with a [\u2212] 100% [+] group on the right end of the toolbar. Persisted per-device. Shortcuts only intercept when an editor has focus, so the browser\u2019s UI zoom still works everywhere else.",
+          },
+        ],
+      },
+      {
+        heading: "Time tracker",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Compact tracker lives in the app header. Idle it shows your total time today (\u201c2h 13m\u201d); during a Pomodoro it shows a live countdown with a pulsing accent dot. Click it for the full popover: hero-sized timer, single Start / Pause / Resume CTA, inline duration chips (15\u202fm / 25\u202fm / 45\u202fm / 60\u202fm), and a sound toggle. Plays a two-note ding via the Web Audio API on phase completion, updates the tab title with the remaining time, and persists per-device to localStorage.",
+          },
+          {
+            tag: "new",
+            text:
+              "Weekly bar chart with previous-week navigation. \u25c0 / \u25b6 chevrons scroll through history (\u201cThis week\u201d \u2192 \u201cLast week\u201d \u2192 \u201c2 weeks ago\u201d \u2192 date-range like \u201cApr 28 \u2013 May 4\u201d). The week total is right-aligned; today\u2019s bar is highlighted only when viewing the current week so prior Wednesdays don\u2019t get a misleading accent stripe.",
+          },
+          {
+            tag: "new",
+            text:
+              "Single-line stats row in the popover: today\u2019s total / pomodoros today / current streak (consecutive days at or above 5\u202fmin), with a \ud83d\udd25 flame that turns orange when the streak is alive. Today doesn\u2019t break the streak retroactively until tomorrow.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Active time only counts when the tab is both visible and focused, so a background tab or Slack in the foreground can\u2019t inflate study hours. The Pomodoro keeps counting either way \u2014 once you\u2019ve committed to a focus session, alt-tabbing to a PDF doesn\u2019t pause it.",
+          },
+        ],
+      },
+      {
+        heading: "Floating panels \u2014 drag-to-snap",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Windows-11-style drag-to-edge snap. Drag a panel header into a viewport hot zone and a translucent accent overlay previews where it\u2019ll land; release to snap. Edges \u2192 fullscreen / halves; corners \u2192 quadrants. Esc cancels mid-drag. Plays nicely with the existing snap picker and \u2318/Ctrl + Alt + Arrow shortcuts.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Upper-right close / maximize / snap buttons were hard to click in the desktop build. The app header carries `-webkit-app-region: drag` so you can move the OS window by it, and panel headers at the default 12\u202fpx snap margin overlap that strip. Electron computes drag regions geometrically and overrides clicks on whatever sits on top, so the buttons were getting reinterpreted as window-drags. Added `-webkit-app-region: no-drag` on the panel root \u2014 clicks register normally now.",
+          },
+        ],
+      },
+      {
+        heading: "Links \u2014 Reader \u21c4 Web",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Segmented toggle in the link-panel toolbar swaps the extracted reader view for the live original page. Inside Electron the source view mounts a real <webview> on the shared persist:browser partition, so logins from the in-app browser (Substack, NYT, etc.) carry over automatically. In a regular browser it falls back to a sandboxed <iframe> with a graceful \u201cthis site refused to embed\u201d overlay when X-Frame-Options blocks it.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Highlight jumps (sidebar click, citation pill from another node, /cite navigation) auto-switch back to Reader before scrolling, since that\u2019s where the anchor lives. The side panel, the active highlight, and the notes pane stay put across the swap.",
+          },
+        ],
+      },
+      {
+        heading: "Fixes",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Subpage pills on canvas card previews now reflect the linked page\u2019s current title (and show a struck-through \u201cMissing page\u201d state when the target is deleted). Previously the preview was frozen at the label captured when the pill was first inserted \u2014 the live React node-view only ran inside an open editor. Resolved at render time via a lightweight DOM rewrite that subscribes to a shallow page-titles map and skips re-parsing when nothing changed.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Quieted the \u201c[React Flow]: parent container needs a width and a height\u201d warning that fired 6\u20138 times on /app load. The canvas wrapper now uses `absolute inset-0` inside a `relative <main>` so React Flow\u2019s ResizeObserver gets real pixel dimensions on first measure, and a tolerant onError handler swallows the residual transient 004 fire that can still slip through during the dynamic-import flush.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Multicolor highlights stay readable in dark themes. The Highlight extension writes an inline `color: inherit` on `<mark>`, which let dark-mode foreground colors leak through and become unreadable on light pastel highlights. Forced `#18181b !important` on the mark itself; nested text-color spans still win, since they apply to a child element.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.11",
     date: "2026-05-12",
     tagline: "In-app browser, autosave, and macOS chrome fixes.",
