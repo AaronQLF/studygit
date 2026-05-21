@@ -27,6 +27,7 @@ import { CommandPalette } from "./CommandPalette";
 import { ToastViewport } from "./Toast";
 import { TimeTracker } from "./TimeTracker";
 import { UserMenu } from "./UserMenu";
+import { UpdateBanner } from "./UpdateBanner";
 import { BrowserWindow } from "./BrowserWindow";
 import {
   THEME_DIALOG_EVENT,
@@ -80,9 +81,7 @@ export function AppShell({ user }: AppShellProps = {}) {
   }, []);
 
   useEffect(() => {
-    const pg = (window as unknown as { studygit?: { platform?: string } })
-      .studygit;
-    if (pg?.platform === "darwin") {
+    if (window.studygit?.platform === "darwin") {
       // Defer to a microtask so we don't run a setState synchronously
       // during the effect's render phase.
       queueMicrotask(() => setMacTitlebarPad(72));
@@ -139,6 +138,7 @@ export function AppShell({ user }: AppShellProps = {}) {
 
   return (
     <div className="relative flex flex-col flex-1 h-screen bg-[var(--pg-bg)] text-[var(--pg-fg)]">
+      <UpdateBanner />
       <header
         className="h-10 shrink-0 border-b border-[var(--pg-border)] bg-[var(--pg-bg)] [-webkit-app-region:drag]"
         style={{ paddingLeft: macTitlebarPad }}
