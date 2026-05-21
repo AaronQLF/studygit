@@ -2322,43 +2322,73 @@ select,
   line-height: 1;
 }
 
-/* Code-block-lowlight syntax highlighting (highlight.js dark-ish). */
+/* Code-block-lowlight syntax highlighting (highlight.js).
+   Token colors are theme-aware: light-mode defaults live in :root below
+   and the existing pastel palette is restored under `.dark`. The light
+   palette is the One Light theme (well-vetted for white-ish backgrounds);
+   the dark palette is the original Tailwind 400-tier mix. We keep both in
+   the same place so the contrast pairing is obvious to anyone tweaking
+   either theme.
+   Previously these rules hard-coded the dark palette, which made keywords
+   (#c084fc lavender), strings (#a7f3d0 mint), and headings (#93c5fd sky)
+   essentially invisible on the cream/white code-block background in light
+   mode. */
+:root {
+  --pg-syntax-keyword: #a626a4;
+  --pg-syntax-string: #50a14f;
+  --pg-syntax-number: #986801;
+  --pg-syntax-comment: #6c7077;
+  --pg-syntax-title: #4078f2;
+  --pg-syntax-variable: #c91b1b;
+  --pg-syntax-deletion: #c91b1b;
+  --pg-syntax-addition: #50a14f;
+}
+.dark {
+  --pg-syntax-keyword: #c084fc;
+  --pg-syntax-string: #a7f3d0;
+  --pg-syntax-number: #fbbf24;
+  --pg-syntax-comment: #71717a;
+  --pg-syntax-title: #93c5fd;
+  --pg-syntax-variable: #f472b6;
+  --pg-syntax-deletion: #fca5a5;
+  --pg-syntax-addition: #86efac;
+}
 .pg-prose pre code .hljs-keyword,
 .pg-prose pre code .hljs-selector-tag,
 .pg-prose pre code .hljs-built_in,
 .pg-prose pre code .hljs-name {
-  color: #c084fc;
+  color: var(--pg-syntax-keyword);
 }
 .pg-prose pre code .hljs-string,
 .pg-prose pre code .hljs-attr,
 .pg-prose pre code .hljs-template-variable,
 .pg-prose pre code .hljs-symbol {
-  color: #a7f3d0;
+  color: var(--pg-syntax-string);
 }
 .pg-prose pre code .hljs-number,
 .pg-prose pre code .hljs-literal,
 .pg-prose pre code .hljs-meta,
 .pg-prose pre code .hljs-link {
-  color: #fbbf24;
+  color: var(--pg-syntax-number);
 }
 .pg-prose pre code .hljs-comment,
 .pg-prose pre code .hljs-quote {
-  color: #71717a;
+  color: var(--pg-syntax-comment);
   font-style: italic;
 }
 .pg-prose pre code .hljs-title,
 .pg-prose pre code .hljs-section,
 .pg-prose pre code .hljs-doctag {
-  color: #93c5fd;
+  color: var(--pg-syntax-title);
 }
 .pg-prose pre code .hljs-variable,
 .pg-prose pre code .hljs-attribute,
 .pg-prose pre code .hljs-tag {
-  color: #f472b6;
+  color: var(--pg-syntax-variable);
 }
 .pg-prose pre code .hljs-deletion {
-  color: #fca5a5;
+  color: var(--pg-syntax-deletion);
 }
 .pg-prose pre code .hljs-addition {
-  color: #86efac;
+  color: var(--pg-syntax-addition);
 }
