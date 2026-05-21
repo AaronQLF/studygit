@@ -9,6 +9,11 @@ import TaskItem from "@tiptap/extension-task-item";
 import Typography from "@tiptap/extension-typography";
 import Image from "@tiptap/extension-image";
 import {
+  TextStyle,
+  Color,
+  BackgroundColor,
+} from "@tiptap/extension-text-style";
+import {
   Details,
   DetailsContent,
   DetailsSummary,
@@ -37,6 +42,8 @@ import { CalloutBlock } from "./extensions/CalloutBlock";
 import { SlashMenu } from "./extensions/SlashMenu";
 import { Citation } from "./extensions/Citation";
 import { CitationMention } from "./extensions/CitationMention";
+import { PageLink } from "./extensions/PageLink";
+import { PageLinkCreator } from "./extensions/PageLinkCreator";
 
 const lowlight = createLowlight({
   javascript,
@@ -90,7 +97,15 @@ export function createBaseExtensions({
         target: "_blank",
       },
     }),
-    Highlight.configure({ multicolor: false }),
+    // multicolor:true lets `setHighlight({ color })` round-trip an explicit
+    // CSS color, which is what the toolbar background-color picker needs.
+    Highlight.configure({ multicolor: true }),
+    // TextStyle is the mark Color/BackgroundColor sit on top of. Listed
+    // explicitly so the extension dependency is obvious; both Color and
+    // BackgroundColor still register it themselves if missing.
+    TextStyle,
+    Color,
+    BackgroundColor,
     Typography,
     TaskList,
     TaskItem.configure({ nested: true }),
@@ -111,6 +126,7 @@ export function createBaseExtensions({
     MermaidBlock,
     CalloutBlock,
     Citation,
+    PageLink,
   ];
 
   if (withSlashMenu) {
@@ -120,6 +136,14 @@ export function createBaseExtensions({
   if (citationContext) {
     extensions.push(
       CitationMention.configure({
+        sourceNodeId: citationContext.sourceNodeId,
+        workspaceId: citationContext.workspaceId,
+      })
+    );
+    // Subpage creation reuses the same source context — we need the parent
+    // node id so the new page lands beside it and gets a logical edge.
+    extensions.push(
+      PageLinkCreator.configure({
         sourceNodeId: citationContext.sourceNodeId,
         workspaceId: citationContext.workspaceId,
       })

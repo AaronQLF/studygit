@@ -995,7 +995,11 @@ select,
 
 .pg-prose mark {
   background: color-mix(in srgb, #fde68a 70%, transparent);
-  color: #18181b;
+  /* Force dark text on highlighted spans regardless of theme. The
+     multicolor Highlight extension writes an inline `color: inherit`
+     that would otherwise let dark-mode foreground colors leak through
+     and become unreadable on a light pastel highlight. */
+  color: #18181b !important;
   border-radius: 2px;
   padding: 0 2px;
 }
@@ -1751,6 +1755,187 @@ select,
       var(--pg-citation-color, var(--pg-accent)) 28%,
       transparent
     );
+}
+
+/* Subpage pill — same family as citations but uses the page accent so
+   subpages read as "navigation" rather than "reference". */
+.pg-prose .pg-page-link,
+.pg-page-link {
+  display: inline;
+  user-select: none;
+  line-height: inherit;
+}
+.pg-prose .pg-page-link .pg-page-link-pill,
+.pg-page-link .pg-page-link-pill {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32em;
+  vertical-align: baseline;
+  padding: 1px 9px 1px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pg-accent) 9%, transparent);
+  color: color-mix(in srgb, var(--pg-accent) 45%, var(--pg-fg) 55%);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--pg-accent) 22%, transparent);
+  font-family: var(--font-sans);
+  font-size: 0.9em;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
+}
+.pg-prose .pg-page-link .pg-page-link-pill:hover,
+.pg-page-link .pg-page-link-pill:hover {
+  background: color-mix(in srgb, var(--pg-accent) 16%, transparent);
+  color: color-mix(in srgb, var(--pg-accent) 65%, var(--pg-fg) 35%);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--pg-accent) 38%, transparent);
+}
+.pg-prose .pg-page-link.is-selected .pg-page-link-pill,
+.pg-page-link.is-selected .pg-page-link-pill {
+  box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--pg-accent) 50%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--pg-accent) 18%, transparent);
+}
+.pg-prose .pg-page-link.is-broken .pg-page-link-pill,
+.pg-page-link.is-broken .pg-page-link-pill {
+  background: transparent;
+  color: var(--pg-muted);
+  text-decoration: line-through;
+  box-shadow: inset 0 0 0 1px var(--pg-border-strong);
+  cursor: not-allowed;
+}
+.pg-prose .pg-page-link .pg-page-link-pill:disabled,
+.pg-page-link .pg-page-link-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pg-prose .pg-page-link .pg-page-link-icon,
+.pg-page-link .pg-page-link-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+.pg-prose .pg-page-link .pg-page-link-label,
+.pg-page-link .pg-page-link-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+/* Floating-panel drag-to-snap preview. Materialises while the user is
+   dragging a panel header into one of the viewport edge / corner snap
+   zones; clicks pass through (the underlying drag handler keeps owning
+   the mouse) and it disappears the moment the pointer leaves the zone
+   or the drag ends. */
+.pg-snap-preview {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 10px;
+  border: 1.5px solid var(--pg-accent);
+  background: color-mix(in srgb, var(--pg-accent) 14%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--pg-accent) 22%, transparent),
+    0 10px 36px -8px color-mix(in srgb, var(--pg-accent) 35%, transparent);
+  transition:
+    top 90ms ease,
+    left 90ms ease,
+    width 90ms ease,
+    height 90ms ease,
+    opacity 90ms ease;
+  animation: pg-snap-preview-in 110ms ease-out;
+}
+@keyframes pg-snap-preview-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Toolbar color-picker button + popover (shared by PageEditor and the
+   inline RichTextEditor used in PDF/article side notes). */
+.pg-color-button-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+.pg-color-button-bar {
+  display: block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--pg-border-strong);
+}
+.pg-color-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 180px;
+  padding: 0.45rem 0.5rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--pg-border-strong);
+  background: var(--pg-bg-subtle);
+  box-shadow: var(--pg-shadow-lg, var(--pg-shadow));
+}
+.pg-color-popover-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pg-muted-soft, var(--pg-muted));
+  padding: 0 0.1rem 0.35rem;
+}
+.pg-color-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 22px);
+  gap: 4px;
+}
+.pg-color-swatch {
+  all: unset;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--pg-border);
+  background: transparent;
+  transition: box-shadow 100ms ease, transform 100ms ease;
+}
+.pg-color-swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--pg-border-strong);
+}
+.pg-color-swatch.is-selected {
+  box-shadow:
+    inset 0 0 0 1px var(--pg-fg),
+    0 0 0 2px color-mix(in srgb, var(--pg-fg) 18%, transparent);
+}
+.pg-color-swatch-chip {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+.pg-color-swatch-clear {
+  color: var(--pg-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* Code-block-lowlight syntax highlighting (highlight.js dark-ish). */

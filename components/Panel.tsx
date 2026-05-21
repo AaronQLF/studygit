@@ -17,6 +17,41 @@ const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_HEIGHT = 280;
 const VIEWPORT_MARGIN = 12;
 
+// Drag-to-snap hot-zones. Windows-11 / FancyZones style: dragging the
+// header into one of these rectangles previews a snap target and lands
+// the panel into the matching slot on release.
+//   EDGE   — strip along each viewport edge → halves / fullscreen
+//   CORNER — square at each viewport corner → quadrants
+// Corners win when they overlap an edge so the user can always reach
+// every quadrant without surgical aim.
+const EDGE_SNAP_THRESHOLD = 18;
+const CORNER_SNAP_THRESHOLD = 96;
+
+type SnapZone = { layout: SnapLayoutId; slot: number };
+
+function detectSnapZone(
+  pointerX: number,
+  pointerY: number,
+  vw: number,
+  vh: number
+): SnapZone | null {
+  const nearTop = pointerY < CORNER_SNAP_THRESHOLD;
+  const nearBottom = pointerY > vh - CORNER_SNAP_THRESHOLD;
+  const nearLeft = pointerX < CORNER_SNAP_THRESHOLD;
+  const nearRight = pointerX > vw - CORNER_SNAP_THRESHOLD;
+  if (nearTop && nearLeft) return { layout: "quads", slot: 0 };
+  if (nearTop && nearRight) return { layout: "quads", slot: 1 };
+  if (nearBottom && nearLeft) return { layout: "quads", slot: 2 };
+  if (nearBottom && nearRight) return { layout: "quads", slot: 3 };
+  if (pointerY < EDGE_SNAP_THRESHOLD) return { layout: "full", slot: 0 };
+  if (pointerX < EDGE_SNAP_THRESHOLD) return { layout: "halves-h", slot: 0 };
+  if (pointerX > vw - EDGE_SNAP_THRESHOLD)
+    return { layout: "halves-h", slot: 1 };
+  if (pointerY > vh - EDGE_SNAP_THRESHOLD)
+    return { layout: "halves-v", slot: 1 };
+  return null;
+}
+
 type DragState =
   | { type: "idle" }
   | {
@@ -73,6 +108,9 @@ export function Panel({
   const [drag, setDrag] = useState<DragState>({ type: "idle" });
   const [pendingGeom, setPendingGeom] = useState<Geom | null>(null);
   const [snapChooserOpen, setSnapChooserOpen] = useState(false);
+  // Currently-hovered snap zone while a drag is in progress. Rendered as a
+  // translucent overlay; commits on mouseup.
+  const [snapPreview, setSnapPreview] = useState<SnapZone | null>(null);
 
   // Track the viewport size so snapped panels recompute their geometry on
   // window resize. We only need this when the panel is snapped/maximized;
@@ -90,9 +128,9 @@ export function Panel({
     return () => window.removeEventListener("resize", onResize);
   }, [panel.maximized, panel.snap]);
 
-  const stateRef = useRef({ drag, pendingGeom, panel });
+  const stateRef = useRef({ drag, pendingGeom, panel, snapPreview });
   useEffect(() => {
-    stateRef.current = { drag, pendingGeom, panel };
+    stateRef.current = { drag, pendingGeom, panel, snapPreview };
   });
 
   const visibleGeom: Geom = useMemo(() => {
@@ -145,6 +183,17 @@ export function Panel({
           Math.min(vh - 32, cur.panelStartY + dy)
         );
         setPendingGeom({ x: nextX, y: nextY, width: w, height: h });
+        // Snap-zone preview tracks the pointer (not the panel header)
+        // because the header has moved off-screen by the time the user
+        // pushes against the bottom or right edge of the viewport.
+        const zone = detectSnapZone(event.clientX, event.clientY, vw, vh);
+        const prev = stateRef.current.snapPreview;
+        if (
+          zone?.layout !== prev?.layout ||
+          zone?.slot !== prev?.slot
+        ) {
+          setSnapPreview(zone);
+        }
       } else if (cur.type === "resize") {
         const dw = event.clientX - cur.pointerStartX;
         const dh = event.clientY - cur.pointerStartY;
@@ -166,7 +215,12 @@ export function Panel({
     const onUp = () => {
       const cur = stateRef.current.drag;
       const pending = stateRef.current.pendingGeom;
-      if (pending) {
+      const zone = stateRef.current.snapPreview;
+      if (cur.type === "move" && zone) {
+        // Drag ended inside a snap zone — commit the snap and discard the
+        // free-floating pending geometry so movePanel doesn't fight it.
+        snapPanel(stateRef.current.panel.id, zone.layout, zone.slot);
+      } else if (pending) {
         if (cur.type === "move") {
           movePanel(stateRef.current.panel.id, pending.x, pending.y);
         } else if (cur.type === "resize") {
@@ -175,14 +229,27 @@ export function Panel({
       }
       setDrag({ type: "idle" });
       setPendingGeom(null);
+      setSnapPreview(null);
+    };
+    const onCancel = () => {
+      // ESC while dragging cancels the move — drop pending geometry and the
+      // snap preview without persisting anything.
+      setDrag({ type: "idle" });
+      setPendingGeom(null);
+      setSnapPreview(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("keydown", onKey);
     };
-  }, [drag.type, movePanel, resizePanel]);
+  }, [drag.type, movePanel, resizePanel, snapPanel]);
 
   const onHeaderMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -274,21 +341,64 @@ export function Panel({
       ? "PDF"
       : kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
 
+  // Pre-compute the preview rectangle for whichever snap zone is currently
+  // hovered, so we can render a translucent overlay showing the user
+  // exactly where the panel will land on release.
+  const snapPreviewGeom: Geom | null = useMemo(() => {
+    if (!snapPreview) return null;
+    const g = snapGeom(
+      snapPreview.layout,
+      snapPreview.slot,
+      viewport.vw,
+      viewport.vh
+    );
+    if (!g) return null;
+    return {
+      x: g.x,
+      y: g.y,
+      width: Math.max(PANEL_MIN_WIDTH, g.width),
+      height: Math.max(PANEL_MIN_HEIGHT, g.height),
+    };
+  }, [snapPreview, viewport.vw, viewport.vh]);
+
   return (
-    <div
-      className={clsx(
-        "fixed flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)]",
-        drag.type !== "idle" && "select-none"
-      )}
-      style={{
-        top: visibleGeom.y,
-        left: visibleGeom.x,
-        width: visibleGeom.width,
-        height: visibleGeom.height,
-        zIndex: 60 + panel.z,
-      }}
-      onMouseDown={() => bringPanelFront(panel.id)}
-    >
+    <>
+      {snapPreviewGeom ? (
+        <div
+          aria-hidden
+          className="pg-snap-preview"
+          style={{
+            top: snapPreviewGeom.y,
+            left: snapPreviewGeom.x,
+            width: snapPreviewGeom.width,
+            height: snapPreviewGeom.height,
+            // Float just under the dragged panel itself so the panel header
+            // stays visible on top of the indicator while the user is
+            // sweeping it across the viewport.
+            zIndex: 59 + panel.z,
+          }}
+        />
+      ) : null}
+      <div
+        className={clsx(
+          // `[-webkit-app-region:no-drag]` keeps Electron's title-bar drag
+          // region (defined on the app header above) from swallowing clicks
+          // on panel buttons that geometrically overlap the header strip.
+          // Without it, the close / maximize / snap buttons in the upper
+          // right of a snapped or maximized panel become impossible to hit
+          // in the desktop build.
+          "fixed flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] [-webkit-app-region:no-drag]",
+          drag.type !== "idle" && "select-none"
+        )}
+        style={{
+          top: visibleGeom.y,
+          left: visibleGeom.x,
+          width: visibleGeom.width,
+          height: visibleGeom.height,
+          zIndex: 60 + panel.z,
+        }}
+        onMouseDown={() => bringPanelFront(panel.id)}
+      >
       <header
         onMouseDown={onHeaderMouseDown}
         onDoubleClick={(event) => {
@@ -419,6 +529,7 @@ export function Panel({
         </div>
       ) : null}
     </div>
+    </>
   );
 }
 

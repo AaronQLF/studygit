@@ -476,9 +476,16 @@ function CanvasInner() {
   }
 
   return (
+    // `absolute inset-0` (vs. the previous `flex-1 h-full w-full`) gives
+    // the wrapper a guaranteed pixel size from its positioned parent the
+    // moment it mounts, so React Flow's `useResizeHandler` doesn't fire
+    // `error004` on the transient 0×0 frame between the dynamic-loading
+    // fallback unmounting and the canvas hydrating. AddDock and the
+    // context menu still position correctly because the wrapper is itself
+    // a positioned ancestor.
     <div
       ref={wrapperRef}
-      className="relative flex-1 h-full w-full bg-[var(--pg-bg-canvas)]"
+      className="absolute inset-0 bg-[var(--pg-bg-canvas)]"
     >
       <AddDock onAdd={(k) => addNode(k)} />
       <ReactFlow
@@ -493,6 +500,16 @@ function CanvasInner() {
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={() => setContextMenu(null)}
         onMove={(_, viewport) => setZoom(viewport.zoom)}
+        onError={(code, message) => {
+          // 004 = "parent container needs width and height". React Flow's
+          // ResizeObserver still occasionally measures 0×0 during the
+          // brief window between dynamic mount and first layout commit
+          // even after the sizing fix above; treat that single transient
+          // warning as informational and let everything else through to
+          // the default console.warn.
+          if (code === "004") return;
+          console.warn(`[React Flow] (${code}) ${message}`);
+        }}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
           type: "bezier",
