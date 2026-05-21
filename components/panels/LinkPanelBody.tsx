@@ -1,10 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import clsx from "clsx";
 import {
   ArrowLeft,
+  BookOpen,
   ExternalLink,
+  Globe,
   Highlighter,
   Link2,
   MessageSquare,
@@ -68,6 +76,11 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [editingMeta, setEditingMeta] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  // "reader" = sanitised Readability HTML (the surface where highlighting
+  // works), "source" = the live original page rendered in an Electron
+  // <webview> (or <iframe> when we're not inside Electron). Defaults to
+  // reader because that's where the citable highlights live.
+  const [viewMode, setViewMode] = useState<"reader" | "source">("reader");
 
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -164,6 +177,11 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
         return;
       }
       if (!ready) return;
+      // Jumping only makes sense against the reader view — that's where
+      // the anchor lives. If the user happens to be on the source view
+      // (or arrives via a /cite link while in source view), flip back
+      // first so the scroll target actually exists in the DOM.
+      setViewMode("reader");
       setActiveHighlightId(highlightId);
       setHighlightsOpen(true);
       requestAnimationFrame(() => {
@@ -272,6 +290,46 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
             />
             {extracting ? "Refreshing…" : "Refresh"}
           </button>
+          {resolvedUrl ? (
+            <div
+              role="tablist"
+              aria-label="View mode"
+              className="inline-flex h-7 items-center gap-px rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg)] p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "reader"}
+                onClick={() => setViewMode("reader")}
+                title="Clean reader view (highlight-able)"
+                className={clsx(
+                  "inline-flex h-6 items-center gap-1 rounded px-2 text-[11px] transition-colors",
+                  viewMode === "reader"
+                    ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+                    : "text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+                )}
+              >
+                <BookOpen size={11} />
+                Reader
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "source"}
+                onClick={() => setViewMode("source")}
+                title="Live original page"
+                className={clsx(
+                  "inline-flex h-6 items-center gap-1 rounded px-2 text-[11px] transition-colors",
+                  viewMode === "source"
+                    ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+                    : "text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+                )}
+              >
+                <Globe size={11} />
+                Web
+              </button>
+            </div>
+          ) : null}
           <button
             title={notesOpen ? "Hide notes" : "Open notes side-by-side"}
             onClick={() => setNotesOpen((v) => !v)}
@@ -365,6 +423,14 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
                 runExtract(url);
               }}
             />
+          ) : viewMode === "source" ? (
+            // Source view loads the live page independently of the
+            // extraction snapshot — useful for paywalled / interactive
+            // sites and for double-checking the reader didn't lose
+            // anything. Highlighting is intentionally read-only here:
+            // creating highlights stays gated on the reader view since
+            // that's where the anchor text lives.
+            <LiveSourceView url={resolvedUrl} />
           ) : extracting && !data.extractedHtml ? (
             <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
               Loading reader view…
@@ -443,9 +509,12 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
               highlight={activeHighlight}
               hostname={articleHostname}
               onBack={() => setActiveHighlightId(null)}
-              onJump={() =>
-                viewerRef.current?.jumpToHighlight(activeHighlight.id)
-              }
+              onJump={() => {
+                setViewMode("reader");
+                requestAnimationFrame(() =>
+                  viewerRef.current?.jumpToHighlight(activeHighlight.id)
+                );
+              }}
               onRemove={() => {
                 deleteWebHighlight(nodeId, activeHighlight.id);
                 setActiveHighlightId(null);
@@ -464,8 +533,11 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
               highlights={highlights}
               hostname={articleHostname}
               onOpen={(id) => {
+                setViewMode("reader");
                 setActiveHighlightId(id);
-                viewerRef.current?.jumpToHighlight(id);
+                requestAnimationFrame(() =>
+                  viewerRef.current?.jumpToHighlight(id)
+                );
               }}
               onDelete={(id) => {
                 deleteWebHighlight(nodeId, id);
@@ -476,6 +548,119 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
         </aside>
       ) : null}
     </section>
+  );
+}
+
+// Renders the live original page. Inside Electron we mount a real
+// <webview> so cross-origin sites load without X-Frame-Options
+// problems; in a regular browser we fall back to a sandboxed iframe
+// (which most sites refuse via X-Frame-Options / CSP, hence the
+// "Open original" escape hatch overlay).
+function LiveSourceView({ url }: { url: string }) {
+  // The `studygit` global is set by the Electron preload script (see
+  // electron/preload.ts and the BrowserWindow component); its presence
+  // is a reliable signal that we're inside the desktop shell.
+  const [isElectron, setIsElectron] = useState(false);
+  const [iframeBlocked, setIframeBlocked] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    // Defer the setState a microtask so we don't sync-render twice
+    // during the initial mount (matches the pattern used in
+    // AppShell.tsx for the same platform-detection check).
+    queueMicrotask(() => {
+      setIsElectron(
+        typeof window !== "undefined" &&
+          !!(window as unknown as { studygit?: unknown }).studygit
+      );
+    });
+  }, []);
+
+  // Most cross-origin iframes that get blocked by X-Frame-Options
+  // don't fire a useful `onError` — they just stay blank. Surface a
+  // soft fallback after a beat so the user isn't staring at a void.
+  useEffect(() => {
+    if (isElectron) return;
+    queueMicrotask(() => setIframeBlocked(false));
+    const id = window.setTimeout(() => {
+      try {
+        const doc = iframeRef.current?.contentDocument;
+        if (!doc || doc.body?.childElementCount === 0) {
+          setIframeBlocked(true);
+        }
+      } catch {
+        // Cross-origin contentDocument access throws — that's a strong
+        // signal the iframe loaded SOMETHING (rather than being blank).
+        // Don't show the fallback in that case.
+      }
+    }, 1800);
+    return () => window.clearTimeout(id);
+  }, [isElectron, url]);
+
+  if (!url) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
+        No URL to load
+      </div>
+    );
+  }
+
+  if (isElectron) {
+    // The webview shares the persist:browser partition with the main
+    // in-app browser so a Substack / NYT login made there carries
+    // over to the source view of any saved link.
+    return (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      React.createElement("webview" as any, {
+        src: url,
+        partition: "persist:browser",
+        style: {
+          display: "inline-flex",
+          width: "100%",
+          height: "100%",
+          background: "white",
+        },
+      })
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col bg-white">
+      <iframe
+        ref={iframeRef}
+        src={url}
+        className="h-full w-full border-0"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        title="Original page"
+      />
+      {iframeBlocked ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[color-mix(in_srgb,var(--pg-bg)_85%,transparent)]">
+          <div className="pointer-events-auto max-w-sm rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] p-4 text-center shadow-[var(--pg-shadow)]">
+            <Globe size={18} className="mx-auto mb-2 text-[var(--pg-muted)]" />
+            <div className="mb-1 text-[13px] font-medium text-[var(--pg-fg)]">
+              This site refused to embed
+            </div>
+            <p className="mb-3 text-[12px] text-[var(--pg-fg-soft)]">
+              Many sites send an{" "}
+              <code className="rounded bg-[var(--pg-bg-subtle)] px-1">
+                X-Frame-Options
+              </code>{" "}
+              header that blocks iframes. The desktop app loads it natively
+              — or open the original in a new tab.
+            </p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white hover:opacity-90"
+            >
+              <ExternalLink size={11} />
+              Open original
+            </a>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

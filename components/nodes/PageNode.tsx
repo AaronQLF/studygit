@@ -1,16 +1,43 @@
 "use client";
 
+import { useMemo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { FileText, Pencil } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { NodeShell } from "./NodeShell";
 import { EditableTitle } from "./EditableTitle";
 import { useStore } from "@/lib/store";
+import { resolvePageLinkLabels } from "@/lib/page-link-render";
 import type { PageNodeData } from "@/lib/types";
 
 export function PageNode({ id, data }: NodeProps) {
   const d = data as unknown as PageNodeData;
   const updateNodeData = useStore((s) => s.updateNodeData);
   const openPanel = useStore((s) => s.openPanel);
+
+  // Live map of page-id → current title, used to repaint any
+  // `<span data-type="page-link">` pills baked into this card's preview
+  // HTML so renames of the target subpage propagate instantly across
+  // the canvas. `useShallow` keeps the subscription stable: re-renders
+  // only fire when a page title actually changes, not when (say) a
+  // PDF highlight is added in another node.
+  const pageTitlesById = useStore(
+    useShallow((s) => {
+      const map: Record<string, string> = {};
+      for (const n of s.nodes) {
+        if (n.data.kind === "page") {
+          const title = (n.data as PageNodeData).title;
+          map[n.id] = title && title.trim() ? title : "Untitled page";
+        }
+      }
+      return map;
+    })
+  );
+
+  const previewHtml = useMemo(
+    () => resolvePageLinkLabels(d.content ?? "", pageTitlesById),
+    [d.content, pageTitlesById]
+  );
 
   return (
     <NodeShell
@@ -44,7 +71,7 @@ export function PageNode({ id, data }: NodeProps) {
         {d.content ? (
           <div
             className="pg-prose pg-prose-preview text-[13px] text-[var(--pg-fg-soft)]"
-            dangerouslySetInnerHTML={{ __html: d.content }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         ) : (
           <div className="text-[13px] text-[var(--pg-muted)]">

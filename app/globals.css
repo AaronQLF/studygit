@@ -903,7 +903,10 @@ select,
   color: var(--pg-fg);
 }
 .pg-prose h1 {
-  font-size: 1.7rem;
+  /* em-based so headings track the parent's font-size (which is what
+     the page-zoom CSS variable scales). The preview class below pins
+     these back to 1rem for the canvas card mini-rendering. */
+  font-size: 1.7em;
   line-height: 1.18;
   font-weight: 600;
   margin-top: 1em;
@@ -911,13 +914,13 @@ select,
   border-bottom: 1px solid var(--pg-border);
 }
 .pg-prose h2 {
-  font-size: 1.35rem;
+  font-size: 1.35em;
   line-height: 1.22;
   font-weight: 600;
   margin-top: 1em;
 }
 .pg-prose h3 {
-  font-size: 1.12rem;
+  font-size: 1.12em;
   line-height: 1.3;
   font-weight: 600;
   margin-top: 0.85em;
@@ -929,7 +932,7 @@ select,
 
 .pg-prose ul,
 .pg-prose ol {
-  padding-left: 1.25rem;
+  padding-left: 1.25em;
 }
 .pg-prose ul {
   list-style: disc;
@@ -985,7 +988,8 @@ select,
   padding: 0.75rem 0.9rem;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  /* em-based so code blocks scale alongside body copy under page zoom. */
+  font-size: 0.85em;
 }
 .pg-prose pre code {
   background: transparent;
@@ -1022,6 +1026,36 @@ select,
   color: var(--pg-muted);
   pointer-events: none;
   height: 0;
+}
+
+/* Notion-style page zoom. A wrapping ancestor (PagePanelBody) sets the
+   `--pg-page-zoom` CSS variable inline; every text element inside the
+   scope scales relative to the base size. Children that already use
+   `em` (headings via the rem→em conversion above, code, citation
+   pills, callouts, page-link pills, math inline) inherit the scaling
+   for free because their sizes are relative to the prose root.
+
+   The base `.pg-page-editor.pg-prose` rule is kept so the editor is
+   sized correctly even when not wrapped in `.pg-page-scope` (e.g. if
+   someone uses the editor standalone). Inside `.pg-page-scope` the
+   higher-specificity rule wins.
+
+   The preview class (.pg-prose-preview) intentionally does NOT
+   participate — canvas card previews stay at their fixed 13-px size
+   regardless of the user's editor zoom. */
+.pg-page-editor.pg-prose {
+  font-size: 15px;
+  line-height: 1.55;
+}
+.pg-page-title {
+  font-size: 30px;
+  line-height: 1.1;
+}
+.pg-page-scope .pg-page-editor.pg-prose {
+  font-size: calc(15px * var(--pg-page-zoom, 1));
+}
+.pg-page-scope .pg-page-title {
+  font-size: calc(30px * var(--pg-page-zoom, 1));
 }
 
 /* Compact prose for canvas card previews and inline previews. */
@@ -1830,6 +1864,356 @@ select,
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 240px;
+}
+
+/* Time tracker — header button + popover.
+
+   Minimalist + modern: one hero number, one primary CTA, inline
+   duration chips for idle state, inline skip/reset links for active
+   state, a single-line stats row, and a compact weekly bar chart.
+   No nested cards, no chrome dividers, no settings sidebar. The
+   only visible "decoration" is a 1-px accent line at the very top
+   of the popover that fills from 0 → 100 % as the current phase
+   elapses. */
+
+.pg-tracker-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--pg-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pg-accent) 22%, transparent);
+  margin-left: 2px;
+  animation: pg-tracker-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pg-tracker-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.pg-tracker-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: 320px;
+  border-radius: 12px;
+  border: 1px solid var(--pg-border-strong);
+  background: var(--pg-bg);
+  box-shadow: var(--pg-shadow-lg, var(--pg-shadow));
+  overflow: hidden;
+  padding: 14px 16px 16px;
+  animation: pg-tracker-pop-in 130ms ease-out;
+}
+@keyframes pg-tracker-pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pg-tracker-pop-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--pg-accent);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  transition: transform 0.95s linear;
+  pointer-events: none;
+}
+
+.pg-tracker-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.pg-tracker-pop-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+.pg-tracker-pop-icon {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--pg-muted);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+.pg-tracker-pop-icon:hover {
+  background: var(--pg-bg-elevated);
+  color: var(--pg-fg);
+}
+
+.pg-tracker-pop-hero {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.pg-tracker-pop-time {
+  font-size: 48px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--pg-fg);
+  line-height: 1;
+}
+.pg-tracker-pop-time.is-paused {
+  color: var(--pg-muted);
+}
+.pg-tracker-pop-mode {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--pg-muted);
+  text-transform: lowercase;
+}
+.pg-tracker-pop-mode.is-active {
+  color: var(--pg-accent);
+}
+.pg-tracker-pop-mode.is-paused {
+  color: var(--pg-muted);
+}
+
+.pg-tracker-pop-cta {
+  all: unset;
+  width: 100%;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--pg-accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition: background 140ms ease, transform 100ms ease;
+}
+.pg-tracker-pop-cta:hover {
+  background: color-mix(in srgb, var(--pg-accent) 90%, white);
+}
+.pg-tracker-pop-cta:active {
+  transform: scale(0.99);
+}
+.pg-tracker-pop-cta.is-running {
+  background: color-mix(in srgb, var(--pg-accent) 14%, transparent);
+  color: var(--pg-accent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--pg-accent) 30%, transparent);
+}
+.pg-tracker-pop-cta.is-running:hover {
+  background: color-mix(in srgb, var(--pg-accent) 22%, transparent);
+}
+
+.pg-tracker-pop-sub {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+
+.pg-tracker-pop-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pg-tracker-pop-chip {
+  all: unset;
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--pg-muted);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+.pg-tracker-pop-chip:hover {
+  color: var(--pg-fg);
+  background: var(--pg-bg-elevated);
+}
+.pg-tracker-pop-chip.is-selected {
+  color: var(--pg-fg);
+  background: var(--pg-bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--pg-border-strong);
+  font-weight: 500;
+}
+.pg-tracker-pop-chip-sep,
+.pg-tracker-pop-dot-sep {
+  color: var(--pg-muted-soft, var(--pg-muted));
+  font-size: 11px;
+  user-select: none;
+}
+
+.pg-tracker-pop-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg-tracker-pop-link {
+  all: unset;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--pg-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  transition: color 100ms ease, background 100ms ease;
+}
+.pg-tracker-pop-link:hover {
+  color: var(--pg-fg);
+  background: var(--pg-bg-elevated);
+}
+
+.pg-tracker-pop-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+}
+.pg-tracker-pop-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+}
+.pg-tracker-pop-stat-value {
+  color: var(--pg-fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.pg-tracker-pop-stat-label {
+  color: var(--pg-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.pg-tracker-pop-stat-sep {
+  color: var(--pg-border-strong);
+  font-size: 11px;
+  user-select: none;
+}
+.pg-tracker-pop-flame {
+  color: #f97316;
+}
+
+.pg-tracker-pop-week {
+  margin-top: 14px;
+}
+.pg-tracker-pop-week-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.pg-tracker-pop-week-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.pg-tracker-pop-week-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+  white-space: nowrap;
+  padding: 0 4px;
+  transition: color 100ms ease;
+}
+.pg-tracker-pop-nav-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--pg-muted);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, opacity 100ms ease;
+}
+.pg-tracker-pop-nav-btn:hover:not(:disabled) {
+  background: var(--pg-bg-elevated);
+  color: var(--pg-fg);
+}
+.pg-tracker-pop-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.pg-tracker-pop-week-total {
+  font-size: 11px;
+  color: var(--pg-fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pg-tracker-pop-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 58px;
+  gap: 5px;
+}
+.pg-tracker-pop-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  gap: 6px;
+  min-width: 0;
+}
+.pg-tracker-pop-bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pg-tracker-pop-bar {
+  width: 100%;
+  max-width: 14px;
+  min-height: 0;
+  background: color-mix(
+    in srgb,
+    var(--pg-muted-soft, var(--pg-muted)) 35%,
+    transparent
+  );
+  border-radius: 4px;
+  transition: background 120ms ease, height 240ms ease;
+}
+.pg-tracker-pop-bar.is-today {
+  background: var(--pg-accent);
+}
+.pg-tracker-pop-bar.is-empty {
+  height: 2px !important;
+  background: var(--pg-border-strong);
+  border-radius: 999px;
+  opacity: 0.55;
+}
+.pg-tracker-pop-col-label {
+  font-size: 9.5px;
+  color: var(--pg-muted-soft, var(--pg-muted));
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.pg-tracker-pop-col-label.is-today {
+  color: var(--pg-fg);
+  font-weight: 600;
 }
 
 /* Floating-panel drag-to-snap preview. Materialises while the user is
