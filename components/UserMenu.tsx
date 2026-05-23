@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Palette, User as UserIcon } from "lucide-react";
+import { LogOut, Palette, Sparkles, User as UserIcon } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
+import { AI_SETTINGS_DIALOG_EVENT } from "./AiSettingsDialog";
 import { UpdateMenuItem } from "./UpdateBanner";
 
 type UserMenuProps = {
@@ -67,6 +68,17 @@ export function UserMenu({ email }: UserMenuProps) {
           >
             <Palette size={12} />
             Customize theme&hellip;
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent(AI_SETTINGS_DIALOG_EVENT));
+            }}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] rounded-[var(--pg-radius)]"
+          >
+            <Sparkles size={12} />
+            Configure AI&hellip;
           </button>
           <UpdateMenuItem />
           <div className="h-px bg-[var(--pg-border)] my-1" />

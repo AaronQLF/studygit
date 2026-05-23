@@ -135,9 +135,9 @@ const ALL_ITEMS: SlashItem[] = [
   },
   {
     title: "Toggle",
-    description: "Collapsible block",
+    description: "Collapsible block (type > + space)",
     icon: ChevronDown,
-    keywords: ["details", "collapse", "expand", "fold"],
+    keywords: ["details", "collapse", "expand", "fold", "toggle", ">"],
     command: ({ editor, range }) =>
       editor.chain().focus().deleteRange(range).setDetails().run(),
   },
@@ -203,9 +203,27 @@ const ALL_ITEMS: SlashItem[] = [
   },
   {
     title: "Citation",
-    description: "Cite a highlight from this workspace",
+    description: "Cite a highlight, page, note, or AI reply from this workspace",
     icon: Link2,
-    keywords: ["cite", "citation", "ref", "reference", "pdf", "article", "web", "blog", "quote", "source"],
+    keywords: [
+      "cite",
+      "citation",
+      "ref",
+      "reference",
+      "pdf",
+      "article",
+      "web",
+      "blog",
+      "quote",
+      "source",
+      "ai",
+      "answer",
+      "conversation",
+      "reply",
+      "chat",
+      "page",
+      "note",
+    ],
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run();
       // Defer one frame so the editor selection has settled after the

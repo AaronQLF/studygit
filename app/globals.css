@@ -1077,45 +1077,137 @@ select,
   font-size: 11.5px;
 }
 
-/* TipTap "details" / toggle blocks. */
-.pg-prose details.pg-details,
-.pg-prose .pg-details {
-  border: 1px solid var(--pg-border);
-  border-radius: 6px;
-  background: var(--pg-bg-subtle);
-  padding: 0.5rem 0.75rem;
+/* TipTap "details" / toggle blocks — Notion-style layout.
+   TipTap renders toggles via a NodeView: a wrapper div, a chevron
+   button, and an inner content div holding <summary> + body. Styles
+   target that structure (not native <details>). */
+.pg-prose .pg-details,
+.pg-prose div[data-type="details"] {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0.15em 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0;
+  width: 100%;
 }
-.pg-prose details.pg-details > summary,
-.pg-prose .pg-details > summary {
+
+.pg-prose .pg-details > button.pg-details-toggle {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.625rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  font-weight: 500;
+  border-radius: 4px;
+  padding: 0;
+  margin: 0.05rem 0 0 -0.35rem;
+  color: var(--pg-muted);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.pg-prose .pg-details > button.pg-details-toggle:hover {
+  background: var(--pg-bg-elevated);
+  color: var(--pg-fg);
+}
+
+.pg-prose .pg-details > button.pg-details-toggle::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 120ms ease;
+  transform-origin: 25% 50%;
+}
+
+.pg-prose .pg-details.is-open > button.pg-details-toggle::before {
+  transform: rotate(90deg);
+}
+
+/* Inner wrapper that holds summary + collapsible body */
+.pg-prose .pg-details > button.pg-details-toggle + div {
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-prose .pg-details summary,
+.pg-prose .pg-details > div > summary {
+  cursor: text;
+  font-weight: inherit;
   outline: none;
-  padding: 0.1rem 0;
+  list-style: none;
+  padding: 0.125rem 0;
+  display: block;
+  line-height: 1.55;
+}
+
+.pg-prose .pg-details summary::-webkit-details-marker,
+.pg-prose .pg-details > div > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pg-prose .pg-details summary::before,
+.pg-prose .pg-details > div > summary::before {
+  display: none;
+}
+
+.pg-prose .pg-details div[data-type="detailsContent"] {
+  margin-top: 0.125rem;
+  padding-left: 0;
+}
+
+.pg-prose .pg-details div[data-type="detailsContent"][hidden] {
+  display: none !important;
+}
+
+.pg-prose .pg-details div[data-type="detailsContent"] > * + * {
+  margin-top: 0.25em;
+}
+
+/* Nested toggles indent like Notion */
+.pg-prose .pg-details div[data-type="detailsContent"] .pg-details,
+.pg-prose .pg-details div[data-type="detailsContent"] div[data-type="details"] {
+  margin-left: 0;
+}
+
+/* Legacy native <details> fallback (pasted HTML) */
+.pg-prose details.pg-details {
+  display: block;
+}
+.pg-prose details.pg-details > summary {
+  cursor: pointer;
+  font-weight: inherit;
+  outline: none;
+  padding: 0.125rem 0;
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
-.pg-prose details.pg-details > summary::-webkit-details-marker,
-.pg-prose .pg-details > summary::-webkit-details-marker {
+.pg-prose details.pg-details > summary::-webkit-details-marker {
   display: none;
 }
-.pg-prose details.pg-details > summary::before,
-.pg-prose .pg-details > summary::before {
-  content: "▸";
-  color: var(--pg-muted);
-  font-size: 0.8em;
+.pg-prose details.pg-details > summary::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--pg-muted);
   transition: transform 120ms ease;
-  display: inline-block;
+  transform-origin: 25% 50%;
 }
-.pg-prose details.pg-details[open] > summary::before,
-.pg-prose .pg-details.is-open > summary::before {
+.pg-prose details.pg-details[open] > summary::before {
   transform: rotate(90deg);
-}
-.pg-prose details.pg-details > div[data-type="detailsContent"],
-.pg-prose .pg-details > div[data-type="detailsContent"] {
-  margin-top: 0.4rem;
-  padding-left: 1rem;
 }
 
 /* Callout blocks. */
@@ -1596,6 +1688,82 @@ select,
   padding: 1px 6px;
   letter-spacing: 0.02em;
 }
+/* "Whole" badge on rows that attach an entire node (PDF, page, note,
+   article, conversation) rather than a single highlight. Same visual
+   weight as the locator chip but lowercase to read as a soft tag rather
+   than a hard label. */
+.pg-citation-row-whole {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--pg-muted);
+  border: 1px solid var(--pg-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  letter-spacing: 0;
+}
+
+/* Two-step picker affordances. The picker's first view lists source
+   nodes (one per node); clicking a node either attaches its single
+   citation directly or drills into a second view showing the node's
+   per-citation rows. The back button and breadcrumb are only shown in
+   the drilled-in state. */
+.pg-citation-menu-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--pg-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pg-citation-menu-back:hover {
+  background: var(--pg-bg-elevated);
+  color: var(--pg-fg);
+}
+.pg-citation-menu-crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+  font-size: 11px;
+  color: var(--pg-fg-soft);
+  min-width: 0;
+}
+.pg-citation-menu-crumb-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* First-step row: one entry per source node. Bigger title, smaller
+   meta line, optional chevron when the node has multiple citations to
+   drill into. */
+.pg-citation-row-node {
+  align-items: center;
+}
+.pg-citation-row-doc-strong {
+  font-weight: 500;
+  color: var(--pg-fg);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pg-citation-row-chevron {
+  color: var(--pg-muted);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
 .pg-citation-row-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1756,6 +1924,25 @@ select,
   cursor: not-allowed;
   opacity: 0.55;
 }
+/* Server-rendered citations from the AI Answer panel are flagged is-weak
+   when the substring-overlap verifier kept them but couldn't confirm the
+   surrounding prose actually relies on the cited excerpt. We render them
+   with an amber tint so the reader knows to double-check before trusting
+   the link. The is-weak rule sits BEFORE is-broken intentionally — broken
+   wins if both somehow apply. */
+.pg-prose .pg-citation.is-weak .pg-citation-pill,
+.pg-citation.is-weak .pg-citation-pill {
+  --pg-citation-color: #d97706; /* amber-600 */
+}
+.pg-prose .pg-citation.is-weak .pg-citation-pill::after,
+.pg-citation.is-weak .pg-citation-pill::after {
+  content: "?";
+  font-size: 0.78em;
+  font-weight: 600;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
 .pg-prose .pg-citation.is-broken .pg-citation-pill,
 .pg-citation.is-broken .pg-citation-pill {
   background: transparent;

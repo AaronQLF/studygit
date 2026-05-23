@@ -27,6 +27,7 @@ import {
   Link2,
   NotebookPen,
   Shapes,
+  Sparkles,
   StickyNote,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -46,6 +47,7 @@ import { NoteNode } from "./nodes/NoteNode";
 import { PageNode } from "./nodes/PageNode";
 import { PdfNode } from "./nodes/PdfNode";
 import { ShapeNode } from "./nodes/ShapeNode";
+import { AiAnswerNode } from "./nodes/AiAnswerNode";
 
 const nodeTypes = {
   link: LinkNode,
@@ -55,6 +57,7 @@ const nodeTypes = {
   blog: PageNode,
   pdf: PdfNode,
   shape: ShapeNode,
+  ai: AiAnswerNode,
 };
 
 // React Flow's built-in edge types are `default` (bezier-shaped),
@@ -73,6 +76,7 @@ const KIND_LABELS: Record<NodeKind, string> = {
   blog: "Page",
   pdf: "PDF",
   shape: "Shape",
+  ai: "Ask AI",
 };
 
 const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
@@ -83,6 +87,7 @@ const KIND_ICONS: Record<NodeKind, React.ComponentType<{ size?: number }>> = {
   blog: NotebookPen,
   pdf: FileSearch,
   shape: Shapes,
+  ai: Sparkles,
 };
 
 /** Add-from-canvas palette order; excludes legacy `blog` (same UX as `page`). */
@@ -93,6 +98,7 @@ const CONTEXT_MENU_KINDS: NodeKind[] = [
   "page",
   "pdf",
   "shape",
+  "ai",
 ];
 
 const CITATION_EDGE_PREFIX = "cite:";
@@ -103,21 +109,42 @@ type CitationEdge = {
   target: string;
 };
 
-// Every node kind that can be the *target* of a citation pill — i.e. that
-// hosts highlight-anchored citations. PDFs and link/reader-view nodes
-// qualify; pages, notes, etc. do not.
+// Every node kind that can be the *target* of a citation pill. Citation
+// edges on the canvas are derived from these — any pill embedded in a
+// `citationSourceHtmls(...)` body that points at one of these nodes
+// becomes a real dashed edge from citer → cited.
+//
+// We include pages and notes here so "whole-node" citations (e.g. an AI
+// conversation that cited a Page) draw the same provenance edges as
+// highlight-anchored ones.
 function isCitableTarget(node: CanvasNode): boolean {
-  return node.data.kind === "pdf" || node.data.kind === "link";
+  return (
+    node.data.kind === "pdf" ||
+    node.data.kind === "link" ||
+    node.data.kind === "page" ||
+    node.data.kind === "blog" ||
+    node.data.kind === "note" ||
+    node.data.kind === "ai"
+  );
 }
 
 // Every place inside a node where citation pills can be authored. Pages
 // store their body as `content`; PDFs and links keep their notes in a
-// separate `notes` field driven by the same RichTextEditor.
+// separate `notes` field driven by the same RichTextEditor; AI answer
+// conversations have <citation> pills baked into every assistant turn's
+// rendered HTML — concatenating them is what gives the canvas a real
+// edge from an AI node to each highlight the model cited across the
+// whole conversation.
 function citationSourceHtmls(node: CanvasNode): string[] {
   const data = node.data;
   if (data.kind === "page") return data.content ? [data.content] : [];
   if (data.kind === "pdf") return data.notes ? [data.notes] : [];
   if (data.kind === "link") return data.notes ? [data.notes] : [];
+  if (data.kind === "ai") {
+    return data.turns
+      .filter((t) => t.role === "assistant" && t.text)
+      .map((t) => t.text);
+  }
   return [];
 }
 
@@ -197,6 +224,13 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
         fill: SHAPE_FILLS[1],
         stroke: SHAPE_STROKES[0],
         label: "",
+      };
+    case "ai":
+      return {
+        kind,
+        title: "Ask AI",
+        sources: [],
+        turns: [],
       };
   }
 }
@@ -447,6 +481,7 @@ function CanvasInner() {
         b: "page",
         p: "pdf",
         s: "shape",
+        a: "ai",
       };
       const kind = map[key];
       if (!kind) return;
