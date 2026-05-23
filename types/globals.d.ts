@@ -30,6 +30,7 @@ interface StudygitBridge {
   getUpdateStatus: () => Promise<StudygitUpdateStatus>;
   checkForUpdates: () => Promise<void>;
   installUpdateAndRestart: () => void;
+  getAppVersion: () => Promise<string>;
   getWebviewPreloadUrl: () => Promise<string>;
 }
 

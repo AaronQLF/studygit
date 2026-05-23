@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld("studygit", {
   // electron-updater MacUpdater.js: that flag only gates whether
   // Squirrel.Mac's own checkForUpdates is auto-triggered post-download).
   installUpdateAndRestart: () => ipcRenderer.send("studygit:install-update"),
+  getAppVersion: (): Promise<string> =>
+    ipcRenderer.invoke("studygit:get-app-version"),
   // file:// URL the in-app Browser <webview> attaches as its preload.
   // Returned async because the path is only known to the main process —
   // it depends on whether we're running packaged (out of asar.unpacked)
