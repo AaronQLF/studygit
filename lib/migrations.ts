@@ -104,5 +104,94 @@ export function migrateNode(node: CanvasNode): {
     }
   }
 
+  // AI Answer / conversation nodes.
+  //
+  // Two ages of data to handle here:
+  //   1. The initial single-shot shape we shipped briefly:
+  //        { prompt, answer, sources, provenance, status }
+  //      Convert it into a two-turn conversation so no work is lost.
+  //   2. Any node missing the modern fields (e.g. hand-edited state.json):
+  //      backfill `turns: []` and `sources: []` so panels don't crash on
+  //      runtime undefined accesses.
+  if (kind === "ai") {
+    const data = node.data as unknown as Record<string, unknown>;
+    const hasModernTurns = Array.isArray(data.turns);
+    const hasLegacyShape =
+      typeof data.prompt === "string" || typeof data.answer === "string";
+
+    const needsMigration = !hasModernTurns || hasLegacyShape;
+    if (needsMigration) {
+      const turns: Array<{
+        id: string;
+        role: "user" | "assistant";
+        text: string;
+        createdAt: number;
+        status?: "idle" | "running" | "error";
+        provenance?: unknown;
+        error?: string;
+      }> = Array.isArray(data.turns)
+        ? (data.turns as Array<{
+            id: string;
+            role: "user" | "assistant";
+            text: string;
+            createdAt: number;
+            status?: "idle" | "running" | "error";
+            provenance?: unknown;
+            error?: string;
+          }>)
+        : [];
+
+      // Legacy prompt → leading user turn (only if it didn't already get
+      // copied in some earlier partial migration).
+      if (typeof data.prompt === "string" && data.prompt.trim()) {
+        const alreadyHas = turns.some(
+          (t) => t.role === "user" && t.text === data.prompt
+        );
+        if (!alreadyHas) {
+          turns.push({
+            id: `t-${node.id}-user-0`,
+            role: "user",
+            text: data.prompt as string,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      // Legacy answer → assistant turn.
+      if (typeof data.answer === "string" && data.answer.trim()) {
+        const alreadyHas = turns.some(
+          (t) => t.role === "assistant" && t.text === data.answer
+        );
+        if (!alreadyHas) {
+          turns.push({
+            id: `t-${node.id}-asst-0`,
+            role: "assistant",
+            text: data.answer as string,
+            createdAt: Date.now(),
+            status: "idle",
+            provenance: (data.provenance as unknown) ?? null,
+          });
+        }
+      }
+
+      return {
+        node: {
+          ...node,
+          data: {
+            kind: "ai",
+            title:
+              typeof data.title === "string" && data.title
+                ? (data.title as string)
+                : "Ask AI",
+            sources: Array.isArray(data.sources)
+              ? (data.sources as never[])
+              : [],
+            turns: turns as never,
+          },
+        },
+        changed: true,
+      };
+    }
+  }
+
   return { node, changed: false };
 }

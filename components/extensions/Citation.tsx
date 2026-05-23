@@ -9,11 +9,21 @@ import {
 import { useMemo } from "react";
 import { useStore } from "@/lib/store";
 import type {
+  AiAnswerNodeData,
   CanvasNode,
   LinkNodeData,
+  NoteNodeData,
+  PageNodeData,
   PdfNodeData,
   WebHighlight,
 } from "@/lib/types";
+
+function stripHtmlInline(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export type CitationAttrs = {
   nodeId: string | null;
@@ -68,6 +78,21 @@ function resolveSource(
       highlightId != null
         ? data.highlights.find((h) => h.id === highlightId) ?? null
         : null;
+    // Whole-PDF citation (highlightId == null) — no specific page, no
+    // excerpt available without re-running pdf.js. The pill renders with
+    // just the title and a soft "PDF" locator chip; clicking opens the
+    // PDF panel.
+    if (highlightId == null) {
+      return {
+        title: data.title || "Untitled PDF",
+        locator: data.pageCount
+          ? { kind: "host", host: `${data.pageCount} pages` }
+          : null,
+        highlightText: data.fileName ?? null,
+        highlightColor: null,
+        orphan: false,
+      };
+    }
     return {
       title: data.title || "Untitled PDF",
       locator: highlight
@@ -86,12 +111,113 @@ function resolveSource(
         ? highlights.find((h) => h.id === highlightId) ?? null
         : null;
     const host = hostnameOf(data.extractedFinalUrl ?? data.url);
+    // Whole-link citation (highlightId == null) — show the extracted
+    // excerpt or first paragraph as the pill's hover text.
+    const wholeArticleText =
+      highlightId == null
+        ? data.extractedExcerpt?.trim() ||
+          stripHtmlInline(data.extractedHtml ?? "").slice(0, 240) ||
+          null
+        : null;
     return {
       title: data.extractedTitle || data.title || host || "Untitled link",
       locator: host ? { kind: "host", host } : null,
-      highlightText: highlight?.text ?? null,
+      highlightText: highlight?.text ?? wholeArticleText,
       highlightColor: highlight?.color ?? null,
+      // Only mark broken when a specific highlight was requested and no
+      // longer exists. Whole-link citations are never orphaned.
       orphan: highlightId != null && highlight == null,
+    };
+  }
+  if (sourceNode.data.kind === "page" || sourceNode.data.kind === "blog") {
+    const data = sourceNode.data as PageNodeData;
+    const plain = stripHtmlInline(data.content ?? "");
+    return {
+      title: data.title || "Untitled page",
+      locator: null,
+      highlightText: plain ? plain.slice(0, 240) : null,
+      highlightColor: null,
+      orphan: false,
+    };
+  }
+  if (sourceNode.data.kind === "note") {
+    const data = sourceNode.data as NoteNodeData;
+    const text = (data.text ?? "").trim();
+    const title = text
+      ? text.length > 60
+        ? `${text.slice(0, 60)}…`
+        : text
+      : "Note";
+    return {
+      title,
+      locator: null,
+      highlightText: text || null,
+      // Surface the note's own color on the pill — a small visual link
+      // back to the sticky on the canvas.
+      highlightColor: data.color ?? null,
+      orphan: false,
+    };
+  }
+  if (sourceNode.data.kind === "ai") {
+    const data = sourceNode.data as AiAnswerNodeData;
+
+    // Per-turn citation — pill carries the assistant turn id. Look it
+    // up by id; if it's been deleted the pill renders as orphan (same
+    // pattern as a deleted PDF highlight).
+    if (highlightId != null) {
+      const turn = data.turns.find(
+        (t) => t.id === highlightId && t.role === "assistant"
+      );
+      if (!turn) {
+        return {
+          title: data.title || "Conversation",
+          locator: null,
+          highlightText: null,
+          highlightColor: null,
+          orphan: true,
+        };
+      }
+      const plain = turn.text
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return {
+        title: data.title || "Conversation",
+        locator: turn.provenance?.model
+          ? { kind: "host", host: turn.provenance.model }
+          : null,
+        highlightText: plain || null,
+        highlightColor: null,
+        orphan: false,
+      };
+    }
+
+    // Legacy / pre-per-turn citations — highlightId is null, meaning
+    // "the conversation as a whole". Fall back to the most recent
+    // fully-rendered assistant turn, mirroring the previous behaviour
+    // so existing citations don't break after the per-turn upgrade.
+    let lastAssistant: AiAnswerNodeData["turns"][number] | null = null;
+    for (let i = data.turns.length - 1; i >= 0; i--) {
+      const t = data.turns[i];
+      if (t.role === "assistant" && t.status !== "running" && t.text) {
+        lastAssistant = t;
+        break;
+      }
+    }
+    const plain = lastAssistant
+      ? lastAssistant.text
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
+    return {
+      title: data.title || "Conversation",
+      locator: lastAssistant?.provenance?.model
+        ? { kind: "host", host: lastAssistant.provenance.model }
+        : null,
+      highlightText: plain || null,
+      highlightColor: null,
+      orphan: false,
     };
   }
   return null;

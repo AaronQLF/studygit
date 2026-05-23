@@ -29,3 +29,8 @@ export const LazyLinkPanelBody = dynamic(
   () => import("./LinkPanelBody").then((m) => m.LinkPanelBody),
   { ssr: false, loading: PanelLoading }
 );
+
+export const LazyAiAnswerPanelBody = dynamic(
+  () => import("./AiAnswerPanelBody").then((m) => m.AiAnswerPanelBody),
+  { ssr: false, loading: PanelLoading }
+);

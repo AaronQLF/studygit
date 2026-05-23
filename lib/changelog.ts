@@ -27,6 +27,104 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.19",
+    date: "2026-05-23",
+    tagline:
+      "AI conversations on the canvas, citable model replies, and Notion-style page toggles.",
+    sections: [
+      {
+        heading: "AI",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Conversation node on the canvas. Add one from the dock or command palette, attach sources, and chat in a panel that reads like a document thread rather than a chat bubble. Each exchange is saved on the node; assistant replies stream back with inline citation pills when the model grounds an answer in your sources.",
+          },
+          {
+            tag: "new",
+            text:
+              "AI provider settings under the user menu. Point Studygit at any OpenAI-compatible endpoint (base URL, API key, model) with a few presets and a \u201cTest connection\u201d check. Credentials stay in localStorage on your device \u2014 nothing is sent to Studygit servers except through the endpoint you configure.",
+          },
+          {
+            tag: "new",
+            text:
+              "Sticky sources per conversation. Attach PDF highlights, whole PDFs, web-article highlights, whole articles, pages, notes, or other AI replies. Whole-PDF sources are extracted client-side via pdf.js and cached in memory so the model gets full text without re-uploading the file each turn.",
+          },
+          {
+            tag: "new",
+            text:
+              "Per-chip source mode swap. Click a source chip in the AI panel to flip between \u201cwhole document\u201d and a specific highlight or turn from the same node, without re-picking from scratch.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Multi-turn API. The server sends a messages[] thread to your provider, strips citation HTML from prior assistant turns before re-feeding them (saves tokens), and post-processes each reply to verify and render citation pills server-side.",
+          },
+        ],
+      },
+      {
+        heading: "Citations",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Cite individual AI replies. Assistant turns show up in the /cite picker; each turn is its own citable row so you can reference a specific answer instead of the whole conversation.",
+          },
+          {
+            tag: "new",
+            text:
+              "Two-step citation picker. /cite and the AI source picker now open on a node list first (PDF, page, note, link, conversation\u2026), then drill into that node\u2019s highlights or turns. Per-chip swap skips the node step when you\u2019re toggling modes on an already-attached source.",
+          },
+          {
+            tag: "new",
+            text:
+              "Whole-node citations. Pages, notes, and full web articles (not just highlights) are first-class sources in /cite and in AI grounding. PDFs offer both \u201cwhole document\u201d and per-highlight rows.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Citation and source pickers now close reliably on Esc and click-away. Esc is handled at the window level so it doesn\u2019t get swallowed by the panel\u2019s own keyboard shortcuts; Backspace on an empty search field goes back out of a drilled view.",
+          },
+        ],
+      },
+      {
+        heading: "Pages",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Notion-style toggle blocks. Type > followed by a space at the start of a line (or pick Toggle from /) to create a collapsible block. Click the chevron to expand or collapse; Enter or Tab in the title opens the body; Shift-Tab moves back to the title.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Page formatting toolbar sits directly under the panel header, above the page title \u2014 same doc-chrome order as Notion. Toggle styling drops the bordered box in favour of a left chevron and inline summary row.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Enter/Tab inside a toggle title no longer throws a selection error or leaves the cursor in a dead zone. Body entry resolves the first editable position inside detailsContent instead of landing on the node boundary.",
+          },
+        ],
+      },
+      {
+        heading: "Fixes",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "AI route no longer crashes with \u201cinvalid header name\u201d on the server. Custom provider headers (x-ai-base-url, x-ai-api-key, x-ai-model) live in a shared module without a \u201cuse client\u201d boundary so Next.js doesn\u2019t replace them with stub functions at import time.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Legacy single-shot AI nodes (prompt + answer shape) auto-migrate to the conversation turns[] format on load, preserving existing text and provenance.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.16",
     date: "2026-05-21",
     tagline:

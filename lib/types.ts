@@ -11,7 +11,8 @@ export type NodeKind =
   | "blog"
   | "pdf"
   | "page"
-  | "shape";
+  | "shape"
+  | "ai";
 
 export type ShapeVariant = "rectangle" | "rounded" | "ellipse" | "diamond";
 
@@ -142,6 +143,78 @@ export type ShapeNodeData = {
   textItalic?: boolean;
 };
 
+// A single source the user attached to an AI answer. Generic enough to
+// point at a PDF highlight, a web highlight, a Page, or even another AI
+// answer — anything cite-able elsewhere in the app.
+//
+// `sid` is the short id the model uses inside its prose ([s1], [s2], …);
+// it's stable for the lifetime of one answer so the post-processed pills
+// in `AiAnswerNodeData.answer` keep pointing at the right source even if
+// the user reorders the chips afterwards.
+export type AiSourceRef = {
+  sid: string;
+  // Backing pointer.
+  nodeId: string;
+  highlightId?: string | null;
+  // Display.
+  label: string;
+  locator: string | null;
+  page?: number | null;
+  // The exact text snapshot the model saw. Stored so we can re-run the
+  // citation verifier or show "source has changed since this answer was
+  // generated" later.
+  excerpt: string;
+};
+
+export type AiProvenance = {
+  model: string;
+  baseUrlHost: string;
+  promptHash: string;
+  createdAt: number;
+  finishedAt: number;
+  // Counters emitted by lib/ai-citations.ts. Surfaced in the panel so the
+  // user knows how many [sN] markers the model wanted to emit vs. how many
+  // survived verification.
+  citationsResolved: number;
+  citationsDropped: number;
+  citationsDemoted: number;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+};
+
+export type AiTurnStatus = "idle" | "running" | "error";
+
+export type AiTurn = {
+  id: string;
+  role: "user" | "assistant";
+  // User turns store plain text; assistant turns store HTML (paragraphs +
+  // <span data-type="citation"…> pills emitted server-side). Click-jump
+  // on those pills is wired up by the panel's delegated click handler.
+  text: string;
+  createdAt: number;
+  // Set on assistant turns. `status` flows running → idle/error during a
+  // model call; `provenance` records the model/usage/citation counters
+  // for the completed answer.
+  status?: AiTurnStatus;
+  provenance?: AiProvenance | null;
+  error?: string;
+};
+
+// A conversation node. Sources are sticky to the whole conversation —
+// they're sent with every assistant turn so the model has the same
+// grounding context each time. `turns` is the chronological exchange:
+// alternating user/assistant entries that get appended via the composer
+// at the bottom of the panel.
+export type AiAnswerNodeData = {
+  kind: "ai";
+  title: string;
+  sources: AiSourceRef[];
+  turns: AiTurn[];
+};
+
 export type AnyNodeData =
   | LinkNodeData
   | ImageNodeData
@@ -149,7 +222,8 @@ export type AnyNodeData =
   | BlogNodeData
   | PdfNodeData
   | PageNodeData
-  | ShapeNodeData;
+  | ShapeNodeData
+  | AiAnswerNodeData;
 
 export type CanvasNode = {
   id: string;

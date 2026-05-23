@@ -8,6 +8,7 @@ import {
   Link2,
   NotebookPen,
   Shapes,
+  Sparkles,
   StickyNote,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ const ITEMS: {
   { kind: "page", label: "Page", keybind: "B", icon: NotebookPen },
   { kind: "pdf", label: "PDF", keybind: "P", icon: FileSearch },
   { kind: "shape", label: "Shape", keybind: "S", icon: Shapes },
+  { kind: "ai", label: "Ask AI", keybind: "A", icon: Sparkles },
 ];
 
 const TIP_KEY = "studygit-dock-tip-dismissed";

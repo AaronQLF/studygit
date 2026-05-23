@@ -33,6 +33,10 @@ import {
   THEME_DIALOG_EVENT,
   ThemeSettingsDialog,
 } from "./ThemeSettingsDialog";
+import {
+  AI_SETTINGS_DIALOG_EVENT,
+  AiSettingsDialog,
+} from "./AiSettingsDialog";
 
 type AppShellProps = {
   user?: { id: string; email: string | null } | null;
@@ -61,6 +65,7 @@ export function AppShell({ user }: AppShellProps = {}) {
   const openBrowser = useBrowserSession((s) => s.openBrowser);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   // When running inside the Electron shell on macOS, reserve room at the
   // top-left for the hover-revealed window controls (see electron/main.ts:
   // titleBarStyle = "customButtonsOnHover"). Outside Electron (regular
@@ -78,6 +83,12 @@ export function AppShell({ user }: AppShellProps = {}) {
     const onOpen = () => setThemeDialogOpen(true);
     window.addEventListener(THEME_DIALOG_EVENT, onOpen);
     return () => window.removeEventListener(THEME_DIALOG_EVENT, onOpen);
+  }, []);
+
+  useEffect(() => {
+    const onOpen = () => setAiSettingsOpen(true);
+    window.addEventListener(AI_SETTINGS_DIALOG_EVENT, onOpen);
+    return () => window.removeEventListener(AI_SETTINGS_DIALOG_EVENT, onOpen);
   }, []);
 
   useEffect(() => {
@@ -234,6 +245,10 @@ export function AppShell({ user }: AppShellProps = {}) {
       <ThemeSettingsDialog
         open={themeDialogOpen}
         onClose={() => setThemeDialogOpen(false)}
+      />
+      <AiSettingsDialog
+        open={aiSettingsOpen}
+        onClose={() => setAiSettingsOpen(false)}
       />
       <ToastViewport />
     </div>

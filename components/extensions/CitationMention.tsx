@@ -12,43 +12,101 @@ import clsx from "clsx";
 import { Extension, type Editor } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
-import { FileText, Link2, Search } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Link2,
+  NotebookPen,
+  Search,
+  Sparkles,
+  StickyNote,
+} from "lucide-react";
 import { useStore } from "@/lib/store";
-import type {
-  LinkNodeData,
-  PdfHighlight,
-  PdfNodeData,
-  WebHighlight,
-} from "@/lib/types";
+import {
+  buildSourceRows,
+  groupSourceRows,
+  isWholeNodeRow,
+  type SourceGroup,
+  type SourceGroupKind,
+  type SourceRow,
+} from "@/lib/source-rows";
 import type { CitationAttrs } from "./Citation";
 import { CITATION_PICKER_EVENT } from "./SlashMenu";
 
-// One row per highlight, whether it lives on a PDF or a link node. The
-// `locator` is the short chip shown after the source title (page number for
-// PDFs, hostname for web articles).
-type Row =
-  | {
-      kind: "pdf";
-      sourceNodeId: string;
-      sourceTitle: string;
-      locator: string;
-      highlight: PdfHighlight;
-    }
-  | {
-      kind: "web";
-      sourceNodeId: string;
-      sourceTitle: string;
-      locator: string;
-      highlight: WebHighlight;
-    };
+// Row shape was inlined here historically; it now lives in lib/source-rows
+// so the AI Answer panel's source picker uses the exact same logic.
+type Row = SourceRow;
 
-function hostnameOf(url: string | undefined | null): string {
-  if (!url) return "";
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
+// Inline icon renderers — switching on kind inside JSX rather than
+// `const Icon = iconFor(kind)` so we don't trip React 19's
+// `react-hooks/static-components` lint rule.
+function RowIcon({
+  kind,
+  size,
+  className,
+}: {
+  kind: SourceRow["kind"];
+  size: number;
+  className?: string;
+}) {
+  if (kind === "pdf" || kind === "pdf-whole") {
+    return <FileText size={size} className={className} aria-hidden />;
   }
+  if (kind === "page") {
+    return <NotebookPen size={size} className={className} aria-hidden />;
+  }
+  if (kind === "note") {
+    return <StickyNote size={size} className={className} aria-hidden />;
+  }
+  if (kind === "ai") {
+    return <Sparkles size={size} className={className} aria-hidden />;
+  }
+  return <Link2 size={size} className={className} aria-hidden />;
+}
+
+function GroupIcon({
+  kind,
+  size,
+  className,
+}: {
+  kind: SourceGroupKind;
+  size: number;
+  className?: string;
+}) {
+  if (kind === "pdf") {
+    return <FileText size={size} className={className} aria-hidden />;
+  }
+  if (kind === "page") {
+    return <NotebookPen size={size} className={className} aria-hidden />;
+  }
+  if (kind === "note") {
+    return <StickyNote size={size} className={className} aria-hidden />;
+  }
+  if (kind === "ai") {
+    return <Sparkles size={size} className={className} aria-hidden />;
+  }
+  return <Link2 size={size} className={className} aria-hidden />;
+}
+
+function countLabel(group: SourceGroup): string {
+  if (group.kind === "ai") {
+    return group.count === 1 ? "1 reply" : `${group.count} replies`;
+  }
+  if (group.kind === "page") return "page";
+  if (group.kind === "note") return "note";
+  let whole = 0;
+  let highlights = 0;
+  for (const row of group.rows) {
+    if (isWholeNodeRow(row)) whole += 1;
+    else highlights += 1;
+  }
+  const parts: string[] = [];
+  if (highlights > 0) {
+    parts.push(`${highlights} ${highlights === 1 ? "highlight" : "highlights"}`);
+  }
+  if (whole > 0) parts.push("whole");
+  return parts.join(" + ") || `${group.count} items`;
 }
 
 type PickerProps = {
@@ -70,6 +128,9 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
   function CitationPicker({ rows, onSelect, onClose }, ref) {
     const [query, setQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
+    // Two-step drill: when set, we're viewing one source node's
+    // citations; when null, we're viewing the list of source nodes.
+    const [drillNodeId, setDrillNodeId] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -85,20 +146,59 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
       requestAnimationFrame(() => inputRef.current?.focus());
     }, []);
 
-    const filtered = useMemo(() => {
+    const groups = useMemo(() => groupSourceRows(rows), [rows]);
+    const drillGroup = useMemo(
+      () =>
+        drillNodeId
+          ? groups.find((g) => g.nodeId === drillNodeId) ?? null
+          : null,
+      [groups, drillNodeId]
+    );
+    const view: "nodes" | "citations" = drillNodeId ? "citations" : "nodes";
+
+    // Search operates on whichever view is active. At the node level it
+    // searches both group titles and the text of their child rows so a
+    // PDF whose title doesn't include the query but whose highlights do
+    // still surfaces as a hit.
+    const filteredGroups = useMemo(() => {
+      if (view !== "nodes") return groups;
       const q = query.trim().toLowerCase();
-      if (!q) return rows;
-      return rows.filter((row) => {
+      if (!q) return groups;
+      return groups.filter((g) => {
+        if (g.title.toLowerCase().includes(q)) return true;
+        return g.rows.some(
+          (row) =>
+            row.highlight.text.toLowerCase().includes(q) ||
+            row.locator.toLowerCase().includes(q)
+        );
+      });
+    }, [groups, query, view]);
+
+    const filteredRows = useMemo(() => {
+      if (view !== "citations" || !drillGroup) return [];
+      const q = query.trim().toLowerCase();
+      if (!q) return drillGroup.rows;
+      return drillGroup.rows.filter((row) => {
         if (row.sourceTitle.toLowerCase().includes(q)) return true;
         if (row.highlight.text.toLowerCase().includes(q)) return true;
         if (row.locator.toLowerCase().includes(q)) return true;
         return false;
       });
-    }, [rows, query]);
+    }, [drillGroup, query, view]);
 
+    const itemCount =
+      view === "nodes" ? filteredGroups.length : filteredRows.length;
+    const totalCount =
+      view === "nodes" ? groups.length : drillGroup?.rows.length ?? 0;
+
+    // Whenever the visible list shape changes (drill in/out, typing),
+    // snap selection back to the first row. This is the textbook
+    // setState-in-effect exception (reset internal UI state when inputs
+    // change), called out in the React docs themselves.
     useEffect(() => {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveIndex(0);
-    }, [query, rows]);
+    }, [view, drillNodeId, query]);
 
     useEffect(() => {
       const list = listRef.current;
@@ -113,8 +213,29 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
       }
     }, [activeIndex]);
 
-    const commit = (idx: number) => {
-      const row = filtered[idx];
+    const enterGroup = (group: SourceGroup) => {
+      // Single-citation groups attach directly — no need to force the
+      // user through a one-item second view.
+      if (group.rows.length === 1) {
+        onSelect(group.rows[0]);
+        return;
+      }
+      setDrillNodeId(group.nodeId);
+      setQuery("");
+    };
+
+    const exitGroup = () => {
+      setDrillNodeId(null);
+      setQuery("");
+    };
+
+    const commitCurrent = () => {
+      if (view === "nodes") {
+        const group = filteredGroups[activeIndex];
+        if (group) enterGroup(group);
+        return;
+      }
+      const row = filteredRows[activeIndex];
       if (row) onSelect(row);
     };
 
@@ -122,61 +243,112 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setActiveIndex((i) =>
-          filtered.length ? (i + 1) % filtered.length : 0
+          itemCount ? (i + 1) % itemCount : 0
         );
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
         setActiveIndex((i) =>
-          filtered.length
-            ? (i - 1 + filtered.length) % filtered.length
-            : 0
+          itemCount ? (i - 1 + itemCount) % itemCount : 0
         );
         return;
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        commit(activeIndex);
+        commitCurrent();
         return;
       }
-      if (event.key === "Escape") {
+      // Backspace on an empty search field steps back to the node list
+      // when we're inside a drilled view — keeps keyboard-only flow
+      // snappy. Esc itself is handled by a window-level listener below
+      // so it always closes the popover regardless of focus location.
+      if (
+        event.key === "Backspace" &&
+        view === "citations" &&
+        query.length === 0
+      ) {
         event.preventDefault();
-        onClose();
+        exitGroup();
         return;
       }
     };
 
+    // Window-level Escape handler that always closes the popover.
+    // Without this, Esc only fires when the input has focus, which is
+    // easy to lose by clicking a row button or chevron.
+    useEffect(() => {
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      };
+      window.addEventListener("keydown", onKey, true);
+      return () => window.removeEventListener("keydown", onKey, true);
+    }, [onClose]);
+
+    const showBack = view === "citations";
+
     return (
       <div className="pg-citation-menu" onMouseDown={(e) => e.preventDefault()}>
         <div className="pg-citation-menu-search">
-          <Search
-            size={13}
-            className="pg-citation-menu-search-icon"
-            aria-hidden
-          />
+          {showBack ? (
+            <button
+              type="button"
+              onClick={exitGroup}
+              className="pg-citation-menu-back"
+              title="Back to sources (Esc)"
+            >
+              <ChevronLeft size={13} aria-hidden />
+            </button>
+          ) : (
+            <Search
+              size={13}
+              className="pg-citation-menu-search-icon"
+              aria-hidden
+            />
+          )}
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Cite a highlight…"
+            placeholder={
+              view === "citations" && drillGroup
+                ? `Search in ${drillGroup.title}…`
+                : "Cite from…"
+            }
             spellCheck={false}
             className="pg-citation-menu-input"
           />
           <span className="pg-citation-menu-count">
-            {filtered.length}
-            {filtered.length !== rows.length ? `/${rows.length}` : ""}
+            {itemCount}
+            {itemCount !== totalCount ? `/${totalCount}` : ""}
           </span>
         </div>
 
-        {filtered.length === 0 ? (
+        {view === "citations" && drillGroup ? (
+          <div className="pg-citation-menu-crumb">
+            <GroupIcon
+              kind={drillGroup.kind}
+              size={12}
+              className="pg-citation-row-kind"
+            />
+            <span className="pg-citation-menu-crumb-title">
+              {drillGroup.title}
+            </span>
+          </div>
+        ) : null}
+
+        {itemCount === 0 ? (
           <div className="pg-citation-empty">
-            {rows.length === 0 ? (
+            {totalCount === 0 ? (
               <>
-                No highlights in this workspace yet
+                Nothing to cite in this workspace yet
                 <span className="pg-citation-empty-hint">
-                  Highlight a passage in any PDF or article to cite it here
+                  Highlight a PDF/article, write a page or note, or have an
+                  AI reply — any of those become citable here.
                 </span>
               </>
             ) : (
@@ -188,47 +360,54 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
               </>
             )}
           </div>
+        ) : view === "nodes" ? (
+          <div className="pg-citation-list" ref={listRef}>
+            {filteredGroups.map((group, i) => (
+              <NodeRow
+                key={group.nodeId}
+                group={group}
+                active={i === activeIndex}
+                onHover={() => setActiveIndex(i)}
+                onPick={() => enterGroup(group)}
+              />
+            ))}
+          </div>
         ) : (
           <div className="pg-citation-list" ref={listRef}>
-            {filtered.map((row, i) => {
-              const Icon = row.kind === "pdf" ? FileText : Link2;
-              return (
-                <button
-                  key={`${row.sourceNodeId}:${row.highlight.id}`}
-                  type="button"
-                  className={clsx(
-                    "pg-citation-row",
-                    i === activeIndex && "is-active"
-                  )}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  onClick={() => commit(i)}
-                >
-                  <span
-                    className="pg-citation-row-bar"
-                    style={{ backgroundColor: row.highlight.color }}
-                    aria-hidden
-                  />
-                  <span className="pg-citation-row-body">
-                    <span className="pg-citation-row-meta">
-                      <Icon
-                        size={11}
-                        className="pg-citation-row-kind"
-                        aria-hidden
-                      />
-                      <span className="pg-citation-row-doc">
-                        {row.sourceTitle}
-                      </span>
-                      <span className="pg-citation-row-page">
-                        {row.locator}
-                      </span>
-                    </span>
-                    <span className="pg-citation-row-text">
-                      {clampExcerpt(row.highlight.text) || <em>(no text)</em>}
-                    </span>
+            {filteredRows.map((row, i) => (
+              <button
+                key={`${row.sourceNodeId}:${row.highlight.id}`}
+                type="button"
+                className={clsx(
+                  "pg-citation-row",
+                  i === activeIndex && "is-active"
+                )}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => onSelect(row)}
+              >
+                <span
+                  className="pg-citation-row-bar"
+                  style={{ backgroundColor: row.highlight.color }}
+                  aria-hidden
+                />
+                <span className="pg-citation-row-body">
+                  <span className="pg-citation-row-meta">
+                    <RowIcon
+                      kind={row.kind}
+                      size={11}
+                      className="pg-citation-row-kind"
+                    />
+                    {isWholeNodeRow(row) ? (
+                      <span className="pg-citation-row-whole">whole</span>
+                    ) : null}
+                    <span className="pg-citation-row-page">{row.locator}</span>
                   </span>
-                </button>
-              );
-            })}
+                  <span className="pg-citation-row-text">
+                    {clampExcerpt(row.highlight.text) || <em>(no text)</em>}
+                  </span>
+                </span>
+              </button>
+            ))}
           </div>
         )}
 
@@ -237,8 +416,13 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
             <kbd>↑</kbd> <kbd>↓</kbd> navigate
           </span>
           <span>
-            <kbd>↵</kbd> insert
+            <kbd>↵</kbd> {view === "nodes" ? "open" : "insert"}
           </span>
+          {view === "citations" ? (
+            <span>
+              <kbd>⌫</kbd> back
+            </span>
+          ) : null}
           <span>
             <kbd>esc</kbd> close
           </span>
@@ -247,6 +431,50 @@ const CitationPicker = forwardRef<PickerHandle, PickerProps>(
     );
   }
 );
+
+function NodeRow({
+  group,
+  active,
+  onHover,
+  onPick,
+}: {
+  group: SourceGroup;
+  active: boolean;
+  onHover: () => void;
+  onPick: () => void;
+}) {
+  const drillable = group.rows.length > 1;
+  return (
+    <button
+      type="button"
+      onMouseEnter={onHover}
+      onClick={onPick}
+      className={clsx(
+        "pg-citation-row pg-citation-row-node",
+        active && "is-active"
+      )}
+    >
+      <GroupIcon
+        kind={group.kind}
+        size={13}
+        className="pg-citation-row-kind"
+      />
+      <span className="pg-citation-row-body">
+        <span className="pg-citation-row-doc pg-citation-row-doc-strong">
+          {group.title}
+        </span>
+        <span className="pg-citation-row-text">{countLabel(group)}</span>
+      </span>
+      {drillable ? (
+        <ChevronRight
+          size={12}
+          className="pg-citation-row-chevron"
+          aria-hidden
+        />
+      ) : null}
+    </button>
+  );
+}
 
 type CitationMentionOptions = {
   sourceNodeId: string | null;
@@ -258,49 +486,10 @@ export type CitationPickerEventDetail = {
 };
 
 function buildRows(workspaceId: string | null, sourceNodeId: string | null): Row[] {
-  const state = useStore.getState();
-  const rows: Row[] = [];
-  for (const node of state.nodes) {
-    if (workspaceId && node.workspaceId !== workspaceId) continue;
-    if (sourceNodeId && node.id === sourceNodeId) continue;
-
-    if (node.data.kind === "pdf") {
-      const data = node.data as PdfNodeData;
-      const title = data.title || "Untitled PDF";
-      for (const highlight of data.highlights) {
-        rows.push({
-          kind: "pdf",
-          sourceNodeId: node.id,
-          sourceTitle: title,
-          locator: `p${highlight.page}`,
-          highlight,
-        });
-      }
-      continue;
-    }
-
-    if (node.data.kind === "link") {
-      const data = node.data as LinkNodeData;
-      const highlights: WebHighlight[] = data.highlights ?? [];
-      if (highlights.length === 0) continue;
-      const host =
-        hostnameOf(data.extractedFinalUrl ?? data.url) || "link";
-      const title =
-        data.extractedTitle || data.title || host || "Untitled link";
-      for (const highlight of highlights) {
-        rows.push({
-          kind: "web",
-          sourceNodeId: node.id,
-          sourceTitle: title,
-          locator: host,
-          highlight,
-        });
-      }
-      continue;
-    }
-  }
-  rows.sort((a, b) => b.highlight.createdAt - a.highlight.createdAt);
-  return rows;
+  return buildSourceRows(useStore.getState().nodes, {
+    workspaceId,
+    excludeNodeId: sourceNodeId,
+  });
 }
 
 export const CitationMention = Extension.create<CitationMentionOptions>({
@@ -345,13 +534,17 @@ export const CitationMention = Extension.create<CitationMentionOptions>({
     };
 
     const handleSelect = (row: Row) => {
+      // Whole-node citations carry no highlight id — the pill points at
+      // the node itself and clicking it opens that node's panel rather
+      // than trying to jump to a (non-existent) anchor.
+      const whole = isWholeNodeRow(row);
       const attrs: CitationAttrs = {
         nodeId: row.sourceNodeId,
-        highlightId: row.highlight.id,
+        highlightId: whole ? null : row.highlight.id,
         label: row.sourceTitle,
-        // `page` is only meaningful for PDFs; web rows leave it null so the
-        // citation pill renders without the locator chip until the live
-        // node-view replaces it with the hostname.
+        // `page` is only meaningful for PDF highlight rows; everything
+        // else leaves it null so the citation pill renders with whatever
+        // locator chip the live node-view derives.
         page: row.kind === "pdf" ? row.highlight.page : null,
         excerpt: row.highlight.text,
       };

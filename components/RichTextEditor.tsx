@@ -41,6 +41,9 @@ function ToolbarButton({
   title,
   icon: Icon,
 }: ToolbarButtonProps) {
+  // Mirrors the Notion-leaning sizing applied to the page toolbar — see
+  // components/PageEditor.tsx. Kept in sync so link/PDF-note toolbars
+  // don't visually diverge from the page toolbar.
   return (
     <button
       type="button"
@@ -48,21 +51,21 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] transition-colors",
+        "inline-flex h-6 w-6 items-center justify-center rounded-[5px] text-[var(--pg-muted)] transition-colors",
         active
-          ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+          ? "bg-[var(--pg-accent-soft)]/40 text-[var(--pg-fg)]"
           : "hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]",
         disabled && "opacity-40 cursor-not-allowed"
       )}
     >
-      <Icon size={14} />
+      <Icon size={13} />
     </button>
   );
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-1.5 py-1">
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-1.5 py-0.5">
       <ToolbarButton
         title="Heading 1"
         icon={Heading1}
@@ -87,7 +90,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           editor.chain().focus().toggleHeading({ level: 3 }).run()
         }
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Bold (⌘B)"
         icon={Bold}
@@ -114,7 +117,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive("code")}
         onClick={() => editor.chain().focus().toggleCode().run()}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Bulleted list"
         icon={List}
@@ -144,7 +147,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         icon={Sigma}
         onClick={() => editor.chain().focus().insertMathInline("").run()}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Add / edit link"
         icon={LinkIcon}
@@ -167,7 +170,7 @@ function Toolbar({ editor }: { editor: Editor }) {
             .run();
         }}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Undo (⌘Z)"
         icon={Undo2}

@@ -113,13 +113,13 @@ export function ColorPickerButton({
         }
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          "inline-flex h-7 w-7 flex-col items-center justify-center gap-[1px] rounded-md text-[var(--pg-muted)] transition-colors",
+          "inline-flex h-6 w-6 flex-col items-center justify-center gap-[1px] rounded-[5px] text-[var(--pg-muted)] transition-colors",
           isActive
-            ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+            ? "bg-[var(--pg-accent-soft)]/40 text-[var(--pg-fg)]"
             : "hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
         )}
       >
-        <Icon size={13} />
+        <Icon size={12} />
         <span
           className="pg-color-button-bar"
           style={{

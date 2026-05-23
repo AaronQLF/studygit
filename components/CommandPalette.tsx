@@ -58,6 +58,13 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
         stroke: SHAPE_STROKES[0],
         label: "",
       };
+    case "ai":
+      return {
+        kind,
+        title: "Ask AI",
+        sources: [],
+        turns: [],
+      };
   }
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import clsx from "clsx";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
@@ -52,6 +52,9 @@ function ToolbarButton({
   title,
   icon: Icon,
 }: ToolbarButtonProps) {
+  // Notion-bubble-menu sizing: 24×24 hit target with a 13px icon. Active
+  // state is a soft accent tint rather than a solid bg block, so the
+  // strip reads as a row of icons instead of a row of pressed buttons.
   return (
     <button
       type="button"
@@ -59,21 +62,21 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] transition-colors",
+        "inline-flex h-6 w-6 items-center justify-center rounded-[5px] text-[var(--pg-muted)] transition-colors",
         active
-          ? "bg-[var(--pg-bg-elevated)] text-[var(--pg-fg)]"
+          ? "bg-[var(--pg-accent-soft)]/40 text-[var(--pg-fg)]"
           : "hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]",
         disabled && "opacity-40 cursor-not-allowed"
       )}
     >
-      <Icon size={14} />
+      <Icon size={13} />
     </button>
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+export function PageEditorToolbar({ editor }: { editor: Editor }) {
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-1.5 py-1">
+    <div className="flex flex-wrap items-center gap-0.5 px-3 py-1">
       <ToolbarButton
         title="Heading 1"
         icon={Heading1}
@@ -98,7 +101,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           editor.chain().focus().toggleHeading({ level: 3 }).run()
         }
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Bold (⌘B)"
         icon={Bold}
@@ -125,7 +128,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive("code")}
         onClick={() => editor.chain().focus().toggleCode().run()}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Bulleted list"
         icon={List}
@@ -156,7 +159,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         active={editor.isActive("codeBlock")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Add / edit link"
         icon={LinkIcon}
@@ -200,7 +203,12 @@ function Toolbar({ editor }: { editor: Editor }) {
         icon={Sparkles}
         onClick={() => editor.chain().focus().insertMermaidBlock().run()}
       />
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      {/* Push undo/redo + zoom to the right edge of the strip so the
+          left half stays a clean "create / format" cluster. The spacer
+          gets `ml-auto` so flex-wrap still degrades gracefully on
+          narrow panels (the right cluster just flows onto the next
+          line instead of clipping). */}
+      <span className="ml-auto" aria-hidden />
       <ToolbarButton
         title="Undo (⌘Z)"
         icon={Undo2}
@@ -214,9 +222,6 @@ function Toolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().redo().run()}
       />
       <ZoomControls />
-      <span className="ml-auto pr-1.5 text-[10px] text-[var(--pg-muted)]">
-        Press / for commands
-      </span>
     </div>
   );
 }
@@ -231,7 +236,7 @@ function ZoomControls() {
   const atMax = zoom >= PAGE_ZOOM_MAX - 1e-6;
   return (
     <div className="ml-1 inline-flex items-center" data-page-zoom-controls>
-      <span className="mx-1 h-5 w-px bg-[var(--pg-border)]" />
+      <span className="mx-1 h-4 w-px bg-[var(--pg-border)]/60" />
       <ToolbarButton
         title="Zoom out (⌘−)"
         icon={Minus}
@@ -244,7 +249,7 @@ function ZoomControls() {
         disabled={atDefault}
         title={atDefault ? "Page zoom (⌘0 to reset)" : "Reset zoom (⌘0)"}
         className={clsx(
-          "inline-flex h-7 min-w-[36px] items-center justify-center rounded-md px-1.5 text-[10px] font-medium tabular-nums tracking-tight transition-colors",
+          "inline-flex h-6 min-w-[32px] items-center justify-center rounded-[5px] px-1.5 text-[10px] font-medium tabular-nums tracking-tight transition-colors",
           atDefault
             ? "text-[var(--pg-muted)]"
             : "text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]",
@@ -263,21 +268,35 @@ function ZoomControls() {
   );
 }
 
-export function PageEditor({
-  value,
-  onChange,
-  placeholder = "Start writing... (press / for commands)",
-  className,
-  showToolbar = true,
-  citationContext = null,
-}: {
-  value: string;
-  onChange: (html: string) => void;
-  placeholder?: string;
-  className?: string;
-  showToolbar?: boolean;
-  citationContext?: CitationContext | null;
-}) {
+// Imperative handle exposed to callers (PagePanelBody) so they can render
+// the formatting toolbar at panel level instead of inline. Only the
+// `editor` reference is exposed — the debounce / zoom / autosave logic
+// continues to live inside this component.
+export type PageEditorHandle = {
+  editor: Editor | null;
+};
+
+export const PageEditor = forwardRef<
+  PageEditorHandle,
+  {
+    value: string;
+    onChange: (html: string) => void;
+    placeholder?: string;
+    className?: string;
+    showToolbar?: boolean;
+    citationContext?: CitationContext | null;
+  }
+>(function PageEditor(
+  {
+    value,
+    onChange,
+    placeholder = "Start writing... (press / for commands)",
+    className,
+    showToolbar = true,
+    citationContext = null,
+  },
+  ref
+) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -329,7 +348,7 @@ export function PageEditor({
         // We intentionally drop `text-[15px]` here so the scope's
         // `calc(15px * var(--pg-page-zoom))` rule wins.
         class: clsx(
-          "pg-prose pg-page-editor focus:outline-none min-h-full px-8 py-6 text-[var(--pg-fg)]",
+          "pg-prose pg-page-editor focus:outline-none min-h-full px-8 pt-2 pb-8 text-[var(--pg-fg)]",
           className
         ),
       },
@@ -402,6 +421,11 @@ export function PageEditor({
     editor.commands.setContent(incoming || "", { emitUpdate: false });
   }, [value, editor]);
 
+  // Expose the editor instance to the imperative ref so callers can
+  // render the formatting toolbar (or other editor-driven UI) outside
+  // PageEditor's own DOM.
+  useImperativeHandle(ref, () => ({ editor: editor ?? null }), [editor]);
+
   if (!editor) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-[var(--pg-muted)]">
@@ -412,10 +436,10 @@ export function PageEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {showToolbar ? <Toolbar editor={editor} /> : null}
+      {showToolbar ? <PageEditorToolbar editor={editor} /> : null}
       <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--pg-bg)]">
         <EditorContent editor={editor} className="h-full" />
       </div>
     </div>
   );
-}
+});

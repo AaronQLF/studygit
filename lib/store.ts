@@ -3,7 +3,9 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type {
+  AiAnswerNodeData,
   AiMessage,
+  AiTurn,
   AnyNodeData,
   AppState,
   CanvasEdge,
@@ -119,6 +121,17 @@ type Store = AppState & {
     highlightId: string,
     message: AiMessage
   ) => void;
+
+  // AI conversation node helpers — focused on the chat-turn ergonomics
+  // the AiAnswerPanelBody needs (append, patch by id, remove by id) so
+  // the panel doesn't have to splice arrays itself.
+  appendAiTurn: (nodeId: string, turn: AiTurn) => void;
+  updateAiTurn: (
+    nodeId: string,
+    turnId: string,
+    patch: Partial<AiTurn>
+  ) => void;
+  removeAiTurn: (nodeId: string, turnId: string) => void;
 
   addWebHighlight: (
     nodeId: string,
@@ -724,7 +737,7 @@ export const useStore = create<Store>((set, get) => ({
       position,
       data,
       width:
-        data.kind === "blog" || data.kind === "page"
+        data.kind === "blog" || data.kind === "page" || data.kind === "ai"
           ? 440
           : data.kind === "pdf"
           ? 320
@@ -948,6 +961,53 @@ export const useStore = create<Store>((set, get) => ({
                 : h
             ),
           },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  appendAiTurn: (nodeId, turn) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "ai") return n;
+        const data = n.data as AiAnswerNodeData;
+        return {
+          ...n,
+          data: { ...data, turns: [...data.turns, turn] },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  updateAiTurn: (nodeId, turnId, patch) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "ai") return n;
+        const data = n.data as AiAnswerNodeData;
+        return {
+          ...n,
+          data: {
+            ...data,
+            turns: data.turns.map((t) =>
+              t.id === turnId ? { ...t, ...patch } : t
+            ),
+          },
+        };
+      }),
+    }));
+    scheduleSave(get, set);
+  },
+
+  removeAiTurn: (nodeId, turnId) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId || n.data.kind !== "ai") return n;
+        const data = n.data as AiAnswerNodeData;
+        return {
+          ...n,
+          data: { ...data, turns: data.turns.filter((t) => t.id !== turnId) },
         };
       }),
     }));

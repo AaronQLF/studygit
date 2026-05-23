@@ -8,6 +8,7 @@ import { Panel } from "./Panel";
 import { ImagePanelBody } from "./panels/ImagePanelBody";
 import { NotePanelBody } from "./panels/NotePanelBody";
 import {
+  LazyAiAnswerPanelBody,
   LazyLinkPanelBody,
   LazyPagePanelBody,
   LazyPdfPanelBody,
@@ -35,6 +36,8 @@ function PanelBody({ node }: { node: CanvasNode }) {
       return <LazyPagePanelBody node={node} />;
     case "pdf":
       return <LazyPdfPanelBody node={node} />;
+    case "ai":
+      return <LazyAiAnswerPanelBody node={node} />;
     default:
       return (
         <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
