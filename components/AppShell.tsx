@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import {
-  Command,
   Globe,
   Loader2,
   Palette,
@@ -17,7 +15,6 @@ import {
 // landing/marketing routes.
 import "katex/dist/katex.min.css";
 import "tippy.js/dist/tippy.css";
-import { LATEST_RELEASE } from "@/lib/changelog";
 import { useStore } from "@/lib/store";
 import { useBrowserSession } from "@/lib/browser-session";
 import { Sidebar } from "./Sidebar";
@@ -28,6 +25,7 @@ import { ToastViewport } from "./Toast";
 import { TimeTracker } from "./TimeTracker";
 import { UserMenu } from "./UserMenu";
 import { UpdateBanner } from "./UpdateBanner";
+import { AppVersionBadge } from "./AppVersionBadge";
 import { BrowserWindow } from "./BrowserWindow";
 import {
   THEME_DIALOG_EVENT,
@@ -182,15 +180,7 @@ export function AppShell({ user }: AppShellProps = {}) {
             </div>
           </div>
           <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
-            <Link
-              href="/changelog"
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`Release notes for v${LATEST_RELEASE.version}`}
-              className="hidden md:inline-flex h-7 items-center rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-1.5 font-mono text-[10.5px] text-[var(--pg-muted)] hover:text-[var(--pg-fg)] hover:border-[var(--pg-border-strong)]"
-            >
-              v{LATEST_RELEASE.version}
-            </Link>
+            <AppVersionBadge />
             <span className="pg-section-label inline-flex h-7 items-center px-2">
               {saveStatus}
             </span>
@@ -205,12 +195,11 @@ export function AppShell({ user }: AppShellProps = {}) {
               </span>
             </button>
             <button
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+              className="inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium tracking-tight text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => setPaletteOpen(true)}
-              title="Open command palette"
+              title="Open command palette (⌘K)"
             >
-              <Command size={12} />
-              <span className="font-medium tracking-tight">⌘K</span>
+              ⌘K
             </button>
             <TimeTracker />
             <ThemeToggle />

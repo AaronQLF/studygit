@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   shell,
   Menu,
@@ -339,6 +340,13 @@ function createMainWindow(appUrl: string): BrowserWindow {
     }
   });
 
+  win.webContents.on("did-finish-load", () => {
+    // Re-prompt when the page finishes loading if a download completed
+    // while the splash was up, or if the user relaunched with a staged
+    // update still sitting in ~/Library/Caches/studygit-updater/.
+    maybePromptPendingUpdate();
+  });
+
   void win.loadURL(`${appUrl}/app`);
   return win;
 }
@@ -403,6 +411,50 @@ type UpdateStatus =
 // query the latest state via `studygit:get-update-status`.
 let latestUpdateStatus: UpdateStatus = { kind: "idle" };
 let updaterWired = false;
+// Set when an update finishes downloading before the main window exists,
+// or when the native prompt is waiting for the page to finish loading.
+let pendingUpdatePromptVersion: string | null = null;
+let updatePromptOpen = false;
+
+async function promptRestartForUpdate(version: string): Promise<void> {
+  if (updatePromptOpen) return;
+  const win =
+    mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+  if (!win) {
+    pendingUpdatePromptVersion = version;
+    return;
+  }
+  updatePromptOpen = true;
+  try {
+    const { response } = await dialog.showMessageBox(win, {
+      type: "info",
+      title: "Update ready",
+      message: `Studygit v${version} is ready to install.`,
+      detail:
+        "Restart now to finish updating. Your work is saved automatically.",
+      buttons: ["Restart now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  } finally {
+    updatePromptOpen = false;
+  }
+}
+
+function maybePromptPendingUpdate(): void {
+  if (latestUpdateStatus.kind === "ready") {
+    void promptRestartForUpdate(latestUpdateStatus.version);
+    return;
+  }
+  if (pendingUpdatePromptVersion) {
+    const version = pendingUpdatePromptVersion;
+    pendingUpdatePromptVersion = null;
+    void promptRestartForUpdate(version);
+  }
+}
 
 function wireAutoUpdate(): void {
   if (updaterWired) return;
@@ -458,16 +510,23 @@ function wireAutoUpdate(): void {
           : undefined,
     })
   );
-  autoUpdater.on("update-downloaded", (info) =>
-    broadcast({ kind: "ready", version: info.version })
-  );
+  autoUpdater.on("update-downloaded", (info) => {
+    broadcast({ kind: "ready", version: info.version });
+    // macOS never applies a downloaded update on quit — the user must
+    // explicitly restart via quitAndInstall(). A native dialog works even
+    // when the renderer hasn't mounted yet or the user isn't signed in
+    // (the in-app UserMenu is auth-gated).
+    void promptRestartForUpdate(info.version);
+  });
   autoUpdater.on("error", (err) =>
     broadcast({ kind: "error", message: err.message })
   );
 
   ipcMain.on("studygit:install-update", () => {
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(false, true);
   });
+
+  ipcMain.handle("studygit:get-app-version", () => app.getVersion());
 
   ipcMain.handle("studygit:get-update-status", () => latestUpdateStatus);
 
@@ -496,7 +555,7 @@ function wireAutoUpdate(): void {
         console.warn("[updater] check failed:", err.message);
       });
     };
-    setTimeout(tick, 10_000);
+    setTimeout(tick, 3_000);
     setInterval(tick, 6 * 60 * 60 * 1000);
   }
 }
@@ -534,8 +593,10 @@ async function bootstrap(): Promise<void> {
       await waitForServer(appUrl, SERVER_READY_TIMEOUT_MS);
     }
     resolvedAppUrl = appUrl;
-    mainWindow = createMainWindow(appUrl);
+    // Preload reads this when the window is constructed.
+    process.env.STUDYGIT_APP_VERSION = app.getVersion();
     wireAutoUpdate();
+    mainWindow = createMainWindow(appUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[main] failed to start embedded server:", message);
