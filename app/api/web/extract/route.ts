@@ -4,9 +4,9 @@ import { isIP } from "node:net";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import sanitizeHtml from "sanitize-html";
-import katex from "katex";
 import { getCurrentUser } from "@/lib/server/auth";
 import { getPersistenceMode } from "@/lib/persistence";
+import { renderMathInHtml } from "@/lib/server/math-render";
 
 export const runtime = "nodejs";
 
@@ -161,144 +161,15 @@ async function fetchHtml(target: URL): Promise<{ html: string; finalUrl: string 
   }
 }
 
-// -- math rendering ----------------------------------------------------
-//
-// Many articles (especially blog posts about ML / math) embed LaTeX using
-// the standard delimiters $$..$$, \[..\], \(..\), and sometimes $..$. We
-// pre-render them with KaTeX server-side so the reader view sees real
-// math without any client-side work. The site already imports
-// `katex/dist/katex.min.css` globally, so the rendered HTML lands styled.
-type MathSegment =
-  | { type: "text"; value: string }
-  | { type: "inline"; value: string }
-  | { type: "block"; value: string };
-
-// Inner text of a $..$ inline match qualifies as math only if it contains
-// at least one backslash-command, a sub/superscript, or braces — keeps the
-// route from clobbering prose like "it costs $5 vs $20".
-function looksLikeMath(inner: string): boolean {
-  return /\\[a-zA-Z]+|[\^_]|[{}]/.test(inner);
-}
-
-function splitTextWithMath(text: string): MathSegment[] {
-  // Block delimiters first (greedy match across newlines), then inline.
-  // The leading "no backslash" lookbehind on $$ and $ avoids matching
-  // escaped \$\$ / \$ inside code-like prose.
-  const re =
-    /\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$|\\\(([\s\S]+?)\\\)|(?<!\\)\$([^\$\n]+?)(?<!\\)\$/g;
-  const out: MathSegment[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      out.push({ type: "text", value: text.slice(last, m.index) });
-    }
-    if (m[1] != null) out.push({ type: "block", value: m[1].trim() });
-    else if (m[2] != null) out.push({ type: "block", value: m[2].trim() });
-    else if (m[3] != null) out.push({ type: "inline", value: m[3].trim() });
-    else if (m[4] != null) {
-      const inner = m[4];
-      if (looksLikeMath(inner)) {
-        out.push({ type: "inline", value: inner.trim() });
-      } else {
-        out.push({ type: "text", value: m[0] });
-      }
-    }
-    last = re.lastIndex;
-  }
-  if (last < text.length) {
-    out.push({ type: "text", value: text.slice(last) });
-  }
-  return out;
-}
-
-function renderKatex(value: string, displayMode: boolean): string {
-  try {
-    return katex.renderToString(value, {
-      throwOnError: false,
-      displayMode,
-      output: "html",
-    });
-  } catch {
-    // Surface the raw LaTeX so the reader still sees something rather than
-    // a silent drop.
-    const escaped = value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return `<span class="pg-math-error">${escaped}</span>`;
-  }
-}
-
-const MATH_SKIP_TAGS = new Set([
-  "code",
-  "pre",
-  "script",
-  "style",
-  "noscript",
-  "kbd",
-  "samp",
-]);
-
-function renderMathInHtml(html: string): string {
-  const dom = new JSDOM(`<!DOCTYPE html><body>${html}</body>`);
-  const doc = dom.window.document;
-  const body = doc.body;
-  const NodeFilter = dom.window.NodeFilter;
-
-  const candidates: Text[] = [];
-  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      let parent: Node | null = node.parentNode;
-      while (parent) {
-        if (parent.nodeType === 1) {
-          const tag = (parent as Element).tagName.toLowerCase();
-          if (MATH_SKIP_TAGS.has(tag)) return NodeFilter.FILTER_REJECT;
-        }
-        parent = parent.parentNode;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
+// Math rendering for reader-view articles. Delegates the heavy lifting
+// to the shared server-side renderer; we opt into wrapper classes so
+// the article-specific stylesheet (.pg-web-article .pg-math-*) can
+// apply page-specific tweaks (margin reset, error coloring).
+function renderArticleMath(html: string): string {
+  return renderMathInHtml(html, {
+    blockWrapperClass: "pg-math-block-rendered",
+    inlineWrapperClass: "pg-math-inline-rendered",
   });
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    candidates.push(n as Text);
-  }
-
-  for (const node of candidates) {
-    const text = node.nodeValue ?? "";
-    if (!text) continue;
-    // Cheap pre-filter: avoid running the regex on text nodes that can't
-    // possibly contain a math delimiter.
-    if (
-      !text.includes("$") &&
-      !text.includes("\\[") &&
-      !text.includes("\\(")
-    ) {
-      continue;
-    }
-    const segments = splitTextWithMath(text);
-    const hasMath = segments.some((s) => s.type !== "text");
-    if (!hasMath) continue;
-
-    const parent = node.parentNode;
-    if (!parent) continue;
-    for (const seg of segments) {
-      if (seg.type === "text") {
-        if (seg.value) parent.insertBefore(doc.createTextNode(seg.value), node);
-        continue;
-      }
-      const span = doc.createElement("span");
-      span.setAttribute(
-        "class",
-        seg.type === "block" ? "pg-math-block-rendered" : "pg-math-inline-rendered"
-      );
-      span.innerHTML = renderKatex(seg.value, seg.type === "block");
-      parent.insertBefore(span, node);
-    }
-    parent.removeChild(node);
-  }
-
-  return body.innerHTML;
 }
 
 function sanitize(html: string, baseUrl: string): string {
@@ -446,7 +317,7 @@ export async function POST(request: Request) {
   // KaTeX HTML directly since the upstream LaTeX has been escaped by KaTeX
   // itself.
   const sanitized = sanitize(article.content, finalUrl);
-  const contentHtml = renderMathInHtml(sanitized);
+  const contentHtml = renderArticleMath(sanitized);
 
   const payload: ExtractResponse = {
     finalUrl,

@@ -23,10 +23,22 @@ export const runtime = "nodejs";
 // assistant turns may contain `<citation>` pills (HTML) emitted by an
 // earlier response; the server strips those before re-feeding so the
 // model sees clean prose with no leaked pill markup.
+//
+// `attachments` (per message) carries images the user pasted/dropped
+// into the composer as inline data URLs. They're forwarded verbatim to
+// the provider using OpenAI's vision content-array format. Providers
+// without vision support will typically 400/422 on the call.
+type AiAttachmentInput = {
+  kind: "image";
+  dataUrl: string;
+  mimeType?: string;
+};
+
 type AiRequestBody = {
   messages: Array<{
     role: "user" | "assistant";
     text: string;
+    attachments?: AiAttachmentInput[];
   }>;
   sources?: Array<{
     sid: string;
@@ -70,13 +82,23 @@ type AiResponseBody = {
 const SYSTEM_PROMPT_RULES = [
   "You are an assistant embedded in Studygit, a personal learning canvas.",
   "The user has opened a conversation node and attached a set of sources",
-  "(PDF highlights, web article highlights, pages). The conversation may",
-  "have multiple back-and-forth turns; the same sources apply to every",
-  "assistant turn.",
+  "(PDF highlights, web article highlights, pages). They may also attach",
+  "images directly to a message — treat those as part of the user's question.",
+  "The conversation may have multiple back-and-forth turns; the same",
+  "sources apply to every assistant turn.",
+  "",
+  "Formatting:",
+  "- Format your answer in standard Markdown. Use headings (## / ###),",
+  "  bulleted or numbered lists, **bold**, *italic*, > blockquotes,",
+  "  `inline code`, fenced ``` code blocks (with a language tag when",
+  "  relevant), tables, and [links](https://example.com) when they help",
+  "  readability. Keep formatting purposeful — don't decorate short",
+  "  replies with headings.",
+  "- Math: write LaTeX inside $...$ for inline and $$...$$ for block.",
   "",
   "Rules:",
   "- Be concise: 4–10 sentences unless the user asks to elaborate.",
-  "- Quote short phrases from the sources in backticks when helpful.",
+  "- Quote short phrases from the sources in `backticks` when helpful.",
   "- When a claim depends on a source, append its marker (e.g. [s2])",
   "  immediately after the sentence — one marker per claim.",
   "- Use ONLY the source ids that appear in the <source> blocks below.",
@@ -113,6 +135,44 @@ function hostnameOrEmpty(url: string): string {
   } catch {
     return "";
   }
+}
+
+// Image attachments arrive as inline data URLs from the client (already
+// resized + capped). Defensive checks here so a malformed request can't
+// poke through arbitrary URLs at the provider: the URL must be a
+// `data:image/...;base64,...` payload, mime must be an image type, and
+// the encoded payload must be under MAX_ATTACHMENT_BYTES after decode.
+const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024; // ~6 MB before base64 inflation
+const MAX_ATTACHMENTS_PER_MESSAGE = 6;
+const ALLOWED_IMAGE_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+]);
+
+function sanitizeAttachments(
+  input: AiAttachmentInput[] | undefined
+): Array<{ kind: "image"; dataUrl: string }> {
+  if (!Array.isArray(input)) return [];
+  const out: Array<{ kind: "image"; dataUrl: string }> = [];
+  for (const att of input) {
+    if (!att || att.kind !== "image") continue;
+    if (typeof att.dataUrl !== "string") continue;
+    const match = /^data:(image\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/.exec(
+      att.dataUrl.trim()
+    );
+    if (!match) continue;
+    const mime = match[1].toLowerCase();
+    if (!ALLOWED_IMAGE_MIME.has(mime)) continue;
+    // base64 length -> approximate decoded byte length.
+    const approxBytes = Math.floor(match[2].length * 0.75);
+    if (approxBytes > MAX_ATTACHMENT_BYTES) continue;
+    out.push({ kind: "image", dataUrl: att.dataUrl });
+    if (out.length >= MAX_ATTACHMENTS_PER_MESSAGE) break;
+  }
+  return out;
 }
 
 function sanitizeSources(input: AiRequestBody["sources"]): AiSourceInput[] {
@@ -167,18 +227,18 @@ export async function POST(request: Request) {
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const cleaned = incoming
     .map((m) => ({
-      role: m?.role === "assistant" ? "assistant" : "user",
+      role: m?.role === "assistant" ? ("assistant" as const) : ("user" as const),
       text:
         typeof m?.text === "string"
           ? m.role === "assistant"
             ? stripPills(m.text)
             : m.text.trim()
           : "",
+      attachments: sanitizeAttachments(m?.attachments),
     }))
-    .filter((m) => m.text.length > 0) as Array<{
-    role: "user" | "assistant";
-    text: string;
-  }>;
+    .filter(
+      (m) => m.text.length > 0 || (m.role === "user" && m.attachments.length > 0)
+    );
 
   if (cleaned.length === 0 || cleaned[cleaned.length - 1].role !== "user") {
     return NextResponse.json(
@@ -192,13 +252,32 @@ export async function POST(request: Request) {
 
   // Compose the OpenAI-shaped messages array. System prompt = rules +
   // sources block (sources are sticky across the conversation; we send
-  // them every turn). Then the full thread, with assistant pills stripped.
+  // them every turn). Then the full thread, with assistant pills stripped
+  // and user image attachments expanded into the vision content-array
+  // format. Assistant turns and user turns without images stay as plain
+  // string `content` for max compatibility with older providers.
   const providerMessages = [
     {
       role: "system" as const,
       content: `${SYSTEM_PROMPT_RULES}\n\n${sourcesBlock}`,
     },
-    ...cleaned.map((m) => ({ role: m.role, content: m.text })),
+    ...cleaned.map((m) => {
+      if (m.role === "user" && m.attachments.length > 0) {
+        const content: Array<
+          | { type: "text"; text: string }
+          | { type: "image_url"; image_url: { url: string } }
+        > = [];
+        if (m.text) content.push({ type: "text", text: m.text });
+        for (const att of m.attachments) {
+          content.push({
+            type: "image_url",
+            image_url: { url: att.dataUrl },
+          });
+        }
+        return { role: m.role, content };
+      }
+      return { role: m.role, content: m.text };
+    }),
   ];
 
   const createdAt = Date.now();

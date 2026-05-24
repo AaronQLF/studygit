@@ -328,16 +328,15 @@ function createMainWindow(appUrl: string): BrowserWindow {
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isInternalUrl(url)) return { action: "allow" };
+    if (isInternalUrl(url) || isAuthFlowUrl(url)) return { action: "allow" };
     void shell.openExternal(url);
     return { action: "deny" };
   });
 
   win.webContents.on("will-navigate", (event, url) => {
-    if (!isInternalUrl(url)) {
-      event.preventDefault();
-      void shell.openExternal(url);
-    }
+    if (isInternalUrl(url) || isAuthFlowUrl(url)) return;
+    event.preventDefault();
+    void shell.openExternal(url);
   });
 
   win.webContents.on("did-finish-load", () => {
@@ -388,6 +387,33 @@ function isInternalUrl(url: string): boolean {
     const parsed = new URL(url);
     const base = new URL(resolvedAppUrl);
     return parsed.host === base.host && parsed.protocol === base.protocol;
+  } catch {
+    return false;
+  }
+}
+
+// Hosts the Supabase OAuth flow legitimately navigates the main window
+// through: Google's sign-in / consent / 2FA pages, Google's OAuth token
+// endpoints, and the Supabase project callback. Without this allow-list
+// every OAuth redirect would get punted to the OS browser by the
+// `will-navigate` handler above, which kills the flow halfway through.
+const AUTH_FLOW_HOST_PATTERNS: RegExp[] = [
+  /(?:^|\.)accounts\.google\.com$/i,
+  /(?:^|\.)accounts\.youtube\.com$/i,
+  /(?:^|\.)oauth2\.googleapis\.com$/i,
+  /(?:^|\.)myaccount\.google\.com$/i,
+  /(?:^|\.)ssl\.gstatic\.com$/i,
+  /(?:^|\.)supabase\.co$/i,
+  /(?:^|\.)supabase\.in$/i,
+];
+
+function isAuthFlowUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return false;
+    }
+    return AUTH_FLOW_HOST_PATTERNS.some((re) => re.test(parsed.hostname));
   } catch {
     return false;
   }

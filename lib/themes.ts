@@ -15,7 +15,9 @@ export type ThemeId =
   | "ink"
   | "plum"
   | "sakura"
-  | "retro";
+  | "retro"
+  | "ocean"
+  | "sunset";
 
 export type ThemeMode = "light" | "dark";
 
@@ -362,6 +364,85 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
     },
   },
 
+  // Cool seafoam paper with deep teal ink in light; near-black navy with
+  // a bright cyan-teal accent in dark. Fills the "maritime" lane that
+  // neither Slate (grey) nor Midnight (cobalt) nor Forest (green) cover.
+  ocean: {
+    id: "ocean",
+    name: "Ocean",
+    description: "Seafoam paper with deep teal ink.",
+    light: {
+      "--pg-bg": "#eef5f5",
+      "--pg-bg-subtle": "#dfedee",
+      "--pg-bg-elevated": "#cbe1e2",
+      "--pg-bg-canvas": "#e4eeef",
+      "--pg-fg": "#0b1e1f",
+      "--pg-fg-soft": "#1f3a3c",
+      "--pg-muted": "#638183",
+      "--pg-muted-soft": "#a8c5c6",
+      "--pg-border": "#bcd4d5",
+      "--pg-border-strong": "#8eafb1",
+      "--pg-accent": "#0d6e7b",
+      "--pg-accent-soft": soft("#0d6e7b"),
+      "--pg-marker": "#a5e6e8",
+    },
+    dark: {
+      "--pg-bg": "#0a1517",
+      "--pg-bg-subtle": "#0f1d1f",
+      "--pg-bg-elevated": "#162729",
+      "--pg-bg-canvas": "#070f11",
+      "--pg-fg": "#d4ecec",
+      "--pg-fg-soft": "#a4d4d4",
+      "--pg-muted": "#6e9b9d",
+      "--pg-muted-soft": "#3b585a",
+      "--pg-border": "#1d3034",
+      "--pg-border-strong": "#2a4347",
+      "--pg-accent": "#34cdcd",
+      "--pg-accent-soft": soft("#34cdcd", 0.2),
+      "--pg-marker": "#1d565f",
+    },
+  },
+
+  // Warm peach paper with coral-orange ink in light; deep wine-maroon
+  // with vivid orange in dark. Distinct from Paper (oxblood), Mocha
+  // (caramel), Retro (amber) by living squarely in the coral-to-orange
+  // sunset gradient rather than brown.
+  sunset: {
+    id: "sunset",
+    name: "Sunset",
+    description: "Peach paper with coral-orange ink.",
+    light: {
+      "--pg-bg": "#fdf1e8",
+      "--pg-bg-subtle": "#f8e1ce",
+      "--pg-bg-elevated": "#efc9af",
+      "--pg-bg-canvas": "#fce8d8",
+      "--pg-fg": "#2a160f",
+      "--pg-fg-soft": "#502a1b",
+      "--pg-muted": "#9b7259",
+      "--pg-muted-soft": "#d8b59b",
+      "--pg-border": "#eec3a4",
+      "--pg-border-strong": "#c89576",
+      "--pg-accent": "#d2401e",
+      "--pg-accent-soft": soft("#d2401e"),
+      "--pg-marker": "#ffd084",
+    },
+    dark: {
+      "--pg-bg": "#1b110d",
+      "--pg-bg-subtle": "#241612",
+      "--pg-bg-elevated": "#321e17",
+      "--pg-bg-canvas": "#130a07",
+      "--pg-fg": "#f5dccd",
+      "--pg-fg-soft": "#dab59c",
+      "--pg-muted": "#a07e66",
+      "--pg-muted-soft": "#5b4030",
+      "--pg-border": "#3a2418",
+      "--pg-border-strong": "#503223",
+      "--pg-accent": "#fb7437",
+      "--pg-accent-soft": soft("#fb7437", 0.2),
+      "--pg-marker": "#7a3b14",
+    },
+  },
+
   // Moody deep purple over warm paper.
   plum: {
     id: "plum",
@@ -404,7 +485,9 @@ export const THEME_ORDER: ThemeId[] = [
   "paper",
   "slate",
   "midnight",
+  "ocean",
   "mocha",
+  "sunset",
   "forest",
   "ink",
   "plum",
@@ -427,7 +510,9 @@ export function isThemeId(value: unknown): value is ThemeId {
     value === "ink" ||
     value === "plum" ||
     value === "sakura" ||
-    value === "retro"
+    value === "retro" ||
+    value === "ocean" ||
+    value === "sunset"
   );
 }
 

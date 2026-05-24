@@ -11,6 +11,7 @@ import clsx from "clsx";
 import { nanoid } from "nanoid";
 import {
   FileText,
+  ImagePlus,
   Link2,
   Loader2,
   Plus,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/source-rows";
 import type {
   AiAnswerNodeData,
+  AiAttachment,
   AiProvenance,
   AiSourceRef,
   AiTurn,
@@ -62,6 +64,8 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
   );
 
   const [composer, setComposer] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<AiAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [credsMissing, setCredsMissing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   // sid of the chip whose mode-swap popover is currently open, or null.
@@ -250,13 +254,15 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
   }, [d.sources, nodeId, updateNodeData]);
 
   // Send a new user message. The thread becomes:
-  //   ...prior turns, { user: text }, { assistant: status=running }
+  //   ...prior turns, { user: text, attachments? }, { assistant: status=running }
   // We persist both before kicking off the fetch so the panel reflects
   // the in-flight state if the user closes / reopens it mid-call.
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachments: AiAttachment[] = []) => {
       const promptText = text.trim();
-      if (!promptText) return;
+      // Allow image-only messages — the model can describe / answer
+      // questions about the attached image on its own.
+      if (!promptText && attachments.length === 0) return;
 
       if (!hasAiCredentials()) {
         setCredsMissing(true);
@@ -279,6 +285,7 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
         role: "user",
         text: promptText,
         createdAt: Date.now(),
+        attachments: attachments.length > 0 ? attachments : undefined,
       };
       const assistantTurn: AiTurn = {
         id: nanoid(8),
@@ -291,25 +298,46 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
       appendAiTurn(nodeId, userTurn);
       appendAiTurn(nodeId, assistantTurn);
       setComposer("");
+      setPendingAttachments([]);
+      setAttachmentError(null);
 
       // First turn? Auto-derive a title from the prompt — saves a click
       // and gives the canvas card a real label. Untouched once the user
       // has customized it (anything other than the default placeholder).
       if (d.turns.length === 0 && (!d.title || d.title === "Ask AI")) {
+        const seed =
+          promptText ||
+          (attachments.length > 0
+            ? `Image (${attachments.length})`
+            : "Untitled");
         updateNodeData(nodeId, {
-          title:
-            promptText.length > 60
-              ? `${promptText.slice(0, 60)}…`
-              : promptText,
+          title: seed.length > 60 ? `${seed.slice(0, 60)}…` : seed,
         } as Partial<AiAnswerNodeData>);
       }
 
       try {
+        // Re-send full history so the model sees the prior context. We
+        // pass attachments only for user turns; assistant attachments
+        // never exist. Re-feeding images on every turn keeps the
+        // model's visual context intact across multi-turn questions.
         const history = [
           ...d.turns
-            .filter((t) => t.role === "user" || (t.text && t.status !== "error"))
-            .map((t) => ({ role: t.role, text: t.text })),
-          { role: "user" as const, text: promptText },
+            .filter(
+              (t) =>
+                t.role === "user" ||
+                (t.text && t.status !== "error")
+            )
+            .map((t) => ({
+              role: t.role,
+              text: t.text,
+              attachments:
+                t.role === "user" ? attachmentsForWire(t.attachments) : undefined,
+            })),
+          {
+            role: "user" as const,
+            text: promptText,
+            attachments: attachmentsForWire(attachments),
+          },
         ];
 
         const response = await fetch("/api/ai", {
@@ -386,7 +414,7 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
       // Also drop the user turn we're about to replay, so send() can
       // re-add it cleanly with a fresh timestamp.
       removeAiTurn(nodeId, previous.id);
-      void send(previous.text);
+      void send(previous.text, previous.attachments ?? []);
     },
     [d.turns, nodeId, removeAiTurn, send]
   );
@@ -537,12 +565,16 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
       <Composer
         value={composer}
         onChange={setComposer}
-        onSend={() => send(composer)}
+        onSend={() => send(composer, pendingAttachments)}
         disabled={
           d.turns.some((t) => t.status === "running") ||
           d.sources.some((s) => s.excerpt === EXTRACTING_SENTINEL)
         }
         credsMissing={credsMissing}
+        attachments={pendingAttachments}
+        onAttachmentsChange={setPendingAttachments}
+        attachmentError={attachmentError}
+        setAttachmentError={setAttachmentError}
       />
     </section>
   );
@@ -739,10 +771,11 @@ function Turn({
   onDelete: () => void;
 }) {
   if (turn.role === "user") {
-    // Document-style user turn: a small "You" caption, then the question
-    // text indented with a thin accent rail on the left — same visual
-    // language as a Notion quote/callout. No bubble, no background
-    // change, so it sits on the same surface as everything else.
+    // Document-style user turn: a small "You" caption, then any image
+    // attachments tiled above the question text, indented with a thin
+    // accent rail on the left. Mirrors the Notion quote/callout look —
+    // no bubble, no background change.
+    const attachments = turn.attachments ?? [];
     return (
       <div
         data-ai-turn-id={turn.id}
@@ -755,6 +788,11 @@ function Turn({
         <span className="absolute inset-y-0.5 left-0 w-[2px] rounded-full bg-[var(--pg-accent)] opacity-60" />
         <div className="mb-0.5 flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] text-[var(--pg-muted)]">
           <span>You</span>
+          {attachments.length > 0 ? (
+            <span className="normal-case tracking-normal text-[var(--pg-muted-soft)]">
+              · {attachments.length} image{attachments.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={onDelete}
@@ -764,9 +802,24 @@ function Turn({
             <Trash2 size={10} />
           </button>
         </div>
-        <div className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--pg-fg)]">
-          {turn.text}
-        </div>
+        {attachments.length > 0 ? (
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
+            {attachments.map((att, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`${turn.id}-att-${i}`}
+                src={att.dataUrl}
+                alt={att.name ?? "attached image"}
+                className="max-h-[220px] max-w-full rounded-md border border-[var(--pg-border)] object-contain"
+              />
+            ))}
+          </div>
+        ) : null}
+        {turn.text ? (
+          <div className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--pg-fg)]">
+            {turn.text}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -913,14 +966,25 @@ function Composer({
   onSend,
   disabled,
   credsMissing,
+  attachments,
+  onAttachmentsChange,
+  attachmentError,
+  setAttachmentError,
 }: {
   value: string;
   onChange: (next: string) => void;
   onSend: () => void;
   disabled: boolean;
   credsMissing: boolean;
+  attachments: AiAttachment[];
+  onAttachmentsChange: (next: AiAttachment[]) => void;
+  attachmentError: string | null;
+  setAttachmentError: (msg: string | null) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [attaching, setAttaching] = useState(false);
 
   // Auto-resize the textarea up to a generous cap. Keeps single-line
   // questions tight, lets multi-paragraph drafts breathe without
@@ -932,12 +996,85 @@ function Composer({
     el.style.height = `${Math.min(220, el.scrollHeight)}px`;
   }, [value]);
 
+  const canSend = !disabled && (value.trim().length > 0 || attachments.length > 0);
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (!disabled && value.trim()) onSend();
+      if (canSend) onSend();
     }
   };
+
+  const ingestFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      setAttachmentError(null);
+      setAttaching(true);
+      try {
+        const remaining = MAX_ATTACHMENTS - attachments.length;
+        if (remaining <= 0) {
+          setAttachmentError(
+            `Max ${MAX_ATTACHMENTS} images per message — remove one to add another.`
+          );
+          return;
+        }
+        const accepted: AiAttachment[] = [];
+        for (const file of files.slice(0, remaining)) {
+          if (!file.type.startsWith("image/")) continue;
+          try {
+            const att = await fileToImageAttachment(file);
+            accepted.push(att);
+          } catch (err) {
+            // Surface the first error but keep going so a single bad
+            // file doesn't tank the others.
+            if (!attachmentError) {
+              setAttachmentError(
+                `Couldn't attach ${file.name || "image"}: ${
+                  (err as Error).message
+                }`
+              );
+            }
+          }
+        }
+        if (accepted.length > 0) {
+          onAttachmentsChange([...attachments, ...accepted]);
+        }
+      } finally {
+        setAttaching(false);
+      }
+    },
+    [attachments, attachmentError, onAttachmentsChange, setAttachmentError]
+  );
+
+  const onPaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = Array.from(event.clipboardData.items);
+      const imageFiles: File[] = [];
+      for (const item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        void ingestFiles(imageFiles);
+      }
+    },
+    [ingestFiles]
+  );
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      setDragOver(false);
+      const files = Array.from(event.dataTransfer.files ?? []).filter((f) =>
+        f.type.startsWith("image/")
+      );
+      if (files.length > 0) void ingestFiles(files);
+    },
+    [ingestFiles]
+  );
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 pb-5 pt-2 shrink-0">
@@ -953,42 +1090,298 @@ function Composer({
           Configure an AI provider to send messages
         </button>
       ) : null}
+      {attachmentError ? (
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded-[var(--pg-radius)] border border-red-500/40 px-2.5 py-1 text-[12px] text-red-600 dark:text-red-400">
+          <TriangleAlert size={11} />
+          {attachmentError}
+        </div>
+      ) : null}
       <div
+        onDragEnter={(event) => {
+          if (Array.from(event.dataTransfer.types).includes("Files")) {
+            setDragOver(true);
+          }
+        }}
+        onDragOver={(event) => {
+          if (Array.from(event.dataTransfer.types).includes("Files")) {
+            event.preventDefault();
+            setDragOver(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          // Only clear when the drag leaves the entire wrapper, not
+          // when it crosses into a child.
+          if (event.currentTarget === event.target) setDragOver(false);
+        }}
+        onDrop={onDrop}
         className={clsx(
-          "flex items-end gap-1.5 rounded-[var(--pg-radius)] border bg-transparent p-1 transition-colors",
-          disabled
+          "flex flex-col gap-1.5 rounded-[var(--pg-radius)] border bg-transparent p-1 transition-colors",
+          dragOver
+            ? "border-[var(--pg-accent)] bg-[color-mix(in_srgb,var(--pg-accent)_8%,transparent)]"
+            : disabled
             ? "border-[var(--pg-border)]"
             : "border-[var(--pg-border)] focus-within:border-[var(--pg-border-strong)]"
         )}
       >
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          rows={1}
-          placeholder="Ask a follow-up… (⇧⏎ for newline)"
-          className="flex-1 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
-        />
-        <button
-          type="button"
-          onClick={onSend}
-          disabled={disabled || !value.trim()}
-          className={clsx(
-            "inline-flex h-7 w-7 items-center justify-center rounded-[var(--pg-radius)] transition-colors",
-            disabled || !value.trim()
-              ? "text-[var(--pg-muted)]"
-              : "text-[var(--pg-accent)] hover:bg-[var(--pg-bg-subtle)]"
-          )}
-          title="Send (⏎)"
-        >
-          {disabled ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <Send size={13} />
-          )}
-        </button>
+        {attachments.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 px-1 pt-1">
+            {attachments.map((att, i) => (
+              <AttachmentChip
+                key={`${i}-${att.dataUrl.length}`}
+                attachment={att}
+                onRemove={() =>
+                  onAttachmentsChange(attachments.filter((_, j) => j !== i))
+                }
+              />
+            ))}
+          </div>
+        ) : null}
+        <div className="flex items-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || attaching || attachments.length >= MAX_ATTACHMENTS}
+            className={clsx(
+              "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--pg-radius)] transition-colors",
+              disabled || attaching || attachments.length >= MAX_ATTACHMENTS
+                ? "text-[var(--pg-muted)]"
+                : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-subtle)] hover:text-[var(--pg-fg)]"
+            )}
+            title={
+              attachments.length >= MAX_ATTACHMENTS
+                ? `Max ${MAX_ATTACHMENTS} images per message`
+                : "Attach image (or paste / drop)"
+            }
+          >
+            {attaching ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <ImagePlus size={13} />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              void ingestFiles(files);
+              // Reset so picking the same file twice in a row still fires.
+              event.target.value = "";
+            }}
+          />
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            rows={1}
+            placeholder={
+              attachments.length > 0
+                ? "Ask about these images… (⇧⏎ for newline)"
+                : "Ask a follow-up… (⇧⏎ for newline, paste or drop images)"
+            }
+            className="flex-1 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
+          />
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={!canSend}
+            className={clsx(
+              "inline-flex h-7 w-7 items-center justify-center rounded-[var(--pg-radius)] transition-colors",
+              !canSend
+                ? "text-[var(--pg-muted)]"
+                : "text-[var(--pg-accent)] hover:bg-[var(--pg-bg-subtle)]"
+            )}
+            title="Send (⏎)"
+          >
+            {disabled ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Send size={13} />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: AiAttachment;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="group relative inline-flex">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={attachment.dataUrl}
+        alt={attachment.name ?? "attached image"}
+        className="h-12 w-12 rounded-md border border-[var(--pg-border)] object-cover"
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--pg-bg-elevated)] text-[var(--pg-muted)] opacity-0 shadow-[var(--pg-shadow)] transition-opacity hover:text-[var(--pg-fg)] group-hover:opacity-100"
+        title="Remove image"
+      >
+        <X size={9} />
+      </button>
+    </div>
+  );
+}
+
+// -- attachment plumbing ------------------------------------------------
+
+const MAX_ATTACHMENTS = 4;
+// Cap the longest edge of the resized image. 1568 mirrors Anthropic's
+// vision recommendation; OpenAI / OpenRouter accept higher but the
+// quality return per byte tails off quickly above this.
+const MAX_IMAGE_DIMENSION = 1568;
+// Final byte budget after re-encode. 1.5 MB keeps the request body
+// reasonable for most providers and well under our server's 6 MB cap.
+const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024;
+
+async function fileToImageAttachment(file: File): Promise<AiAttachment> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("not an image file");
+  }
+  // Animated GIFs lose animation when re-encoded via canvas. Keep them
+  // as-is if they're already under the byte budget; otherwise reject so
+  // we don't silently freeze the first frame.
+  if (file.type === "image/gif") {
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error("GIF too large — must be under 1.5 MB");
+    }
+    const dataUrl = await readFileAsDataUrl(file);
+    return {
+      kind: "image",
+      dataUrl,
+      mimeType: "image/gif",
+      name: file.name,
+    };
+  }
+
+  const bitmap = await loadImageBitmap(file);
+  const { width, height } = fitWithin(
+    bitmap.width,
+    bitmap.height,
+    MAX_IMAGE_DIMENSION
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas 2d context unavailable");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+  // Try JPEG first (smaller for photos), fall back to PNG if the source
+  // had transparency or JPEG ends up larger.
+  const hasAlpha = file.type === "image/png" || file.type === "image/webp";
+  const candidates: Array<{ mime: string; quality: number }> = hasAlpha
+    ? [
+        { mime: "image/webp", quality: 0.85 },
+        { mime: "image/png", quality: 1 },
+      ]
+    : [
+        { mime: "image/jpeg", quality: 0.85 },
+        { mime: "image/jpeg", quality: 0.7 },
+        { mime: "image/jpeg", quality: 0.55 },
+      ];
+
+  let best: { dataUrl: string; mime: string; bytes: number } | null = null;
+  for (const cand of candidates) {
+    const dataUrl = canvas.toDataURL(cand.mime, cand.quality);
+    const bytes = approxDataUrlBytes(dataUrl);
+    if (!best || bytes < best.bytes) {
+      best = { dataUrl, mime: cand.mime, bytes };
+    }
+    if (bytes <= MAX_IMAGE_BYTES) break;
+  }
+  if (!best) throw new Error("failed to encode image");
+  if (best.bytes > MAX_IMAGE_BYTES) {
+    throw new Error("image is too large after compression");
+  }
+  return {
+    kind: "image",
+    dataUrl: best.dataUrl,
+    mimeType: best.mime,
+    name: file.name,
+    width: canvas.width,
+    height: canvas.height,
+  };
+}
+
+function loadImageBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  // createImageBitmap is faster and avoids the load-event dance, but
+  // some Safari versions and older Electrons trip on AVIF / HEIF. Fall
+  // back to <img> with object URL on failure.
+  if (typeof createImageBitmap === "function") {
+    return createImageBitmap(file).catch(() => loadImageElement(file));
+  }
+  return loadImageElement(file);
+}
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("couldn't decode image"));
+    };
+    img.src = objectUrl;
+  });
+}
+
+function fitWithin(
+  w: number,
+  h: number,
+  maxEdge: number
+): { width: number; height: number } {
+  const longest = Math.max(w, h);
+  if (longest <= maxEdge) return { width: w, height: h };
+  const ratio = maxEdge / longest;
+  return { width: w * ratio, height: h * ratio };
+}
+
+function approxDataUrlBytes(dataUrl: string): number {
+  const commaIdx = dataUrl.indexOf(",");
+  if (commaIdx < 0) return dataUrl.length;
+  const base64 = dataUrl.slice(commaIdx + 1);
+  // base64 expansion: 4 chars per 3 bytes.
+  return Math.floor((base64.length * 3) / 4);
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("file read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Shape the wire payload for /api/ai. We only forward the dataUrl + mime
+// — name and dimensions are local UX state, not useful to the model.
+function attachmentsForWire(
+  atts: AiAttachment[] | undefined
+): Array<{ kind: "image"; dataUrl: string; mimeType: string }> | undefined {
+  if (!atts || atts.length === 0) return undefined;
+  return atts.map((a) => ({
+    kind: a.kind,
+    dataUrl: a.dataUrl,
+    mimeType: a.mimeType,
+  }));
 }
