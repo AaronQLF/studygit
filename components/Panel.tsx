@@ -7,6 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useStore } from "@/lib/store";
 import type { CanvasNode, FloatingPanel } from "@/lib/types";
 import {
+  findSnapZoneAtPointer,
   SNAP_LAYOUTS,
   SNAP_LAYOUT_ORDER,
   snapGeom,
@@ -17,40 +18,7 @@ const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_HEIGHT = 280;
 const VIEWPORT_MARGIN = 12;
 
-// Drag-to-snap hot-zones. Windows-11 / FancyZones style: dragging the
-// header into one of these rectangles previews a snap target and lands
-// the panel into the matching slot on release.
-//   EDGE   — strip along each viewport edge → halves / fullscreen
-//   CORNER — square at each viewport corner → quadrants
-// Corners win when they overlap an edge so the user can always reach
-// every quadrant without surgical aim.
-const EDGE_SNAP_THRESHOLD = 18;
-const CORNER_SNAP_THRESHOLD = 96;
-
 type SnapZone = { layout: SnapLayoutId; slot: number };
-
-function detectSnapZone(
-  pointerX: number,
-  pointerY: number,
-  vw: number,
-  vh: number
-): SnapZone | null {
-  const nearTop = pointerY < CORNER_SNAP_THRESHOLD;
-  const nearBottom = pointerY > vh - CORNER_SNAP_THRESHOLD;
-  const nearLeft = pointerX < CORNER_SNAP_THRESHOLD;
-  const nearRight = pointerX > vw - CORNER_SNAP_THRESHOLD;
-  if (nearTop && nearLeft) return { layout: "quads", slot: 0 };
-  if (nearTop && nearRight) return { layout: "quads", slot: 1 };
-  if (nearBottom && nearLeft) return { layout: "quads", slot: 2 };
-  if (nearBottom && nearRight) return { layout: "quads", slot: 3 };
-  if (pointerY < EDGE_SNAP_THRESHOLD) return { layout: "full", slot: 0 };
-  if (pointerX < EDGE_SNAP_THRESHOLD) return { layout: "halves-h", slot: 0 };
-  if (pointerX > vw - EDGE_SNAP_THRESHOLD)
-    return { layout: "halves-h", slot: 1 };
-  if (pointerY > vh - EDGE_SNAP_THRESHOLD)
-    return { layout: "halves-v", slot: 1 };
-  return null;
-}
 
 type DragState =
   | { type: "idle" }
@@ -165,6 +133,7 @@ export function Panel({
   // Drag handlers (document-level so the cursor can leave the header)
   useEffect(() => {
     if (drag.type === "idle") return;
+    document.documentElement.dataset.panelDragging = "true";
     const onMove = (event: MouseEvent) => {
       const cur = stateRef.current.drag;
       if (cur.type === "move") {
@@ -186,7 +155,7 @@ export function Panel({
         // Snap-zone preview tracks the pointer (not the panel header)
         // because the header has moved off-screen by the time the user
         // pushes against the bottom or right edge of the viewport.
-        const zone = detectSnapZone(event.clientX, event.clientY, vw, vh);
+        const zone = findSnapZoneAtPointer(event.clientX, event.clientY, vw, vh);
         const prev = stateRef.current.snapPreview;
         if (
           zone?.layout !== prev?.layout ||
@@ -245,6 +214,7 @@ export function Panel({
     document.addEventListener("mouseup", onUp);
     document.addEventListener("keydown", onKey);
     return () => {
+      delete document.documentElement.dataset.panelDragging;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.removeEventListener("keydown", onKey);

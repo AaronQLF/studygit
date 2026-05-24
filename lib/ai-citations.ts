@@ -5,11 +5,27 @@
 // Lives in /lib (no "use client") so it's importable from both
 // app/api/ai/route.ts (server) and any future client-side parser.
 //
+// Pipeline:
+//   1. Run the raw model output (which we now ask the model to format as
+//      Markdown) through `marked` to produce rich HTML — headings, lists,
+//      code blocks, bold/italic, tables, links.
+//   2. Walk the HTML, find [sN] markers in text nodes (skipping <code> /
+//      <pre>), and replace them with citation pills. Verification happens
+//      against the parent element's text content so paraphrased prose still
+//      counts as a real anchor.
+//   3. Sanitize the final HTML with sanitize-html, preserving our trusted
+//      citation spans plus standard Markdown tags.
+//
 // Two layers of strictness:
 //   1. Phantom-marker filter — drop any [sN] whose `sN` is not a real source.
-//   2. Misplacement filter — drop or demote markers whose nearby prose does
-//      not share a non-trivial substring with the cited excerpt. This is the
-//      cheap "did the model actually use this source?" heuristic.
+//   2. Misplacement filter — drop or demote markers whose surrounding prose
+//      does not share a non-trivial substring with the cited excerpt. Cheap
+//      "did the model actually use this source?" heuristic.
+
+import { marked } from "marked";
+import sanitizeHtml from "sanitize-html";
+import { JSDOM } from "jsdom";
+import { renderMathInHtml } from "@/lib/server/math-render";
 
 export type AiSourceInput = {
   // Stable short id like "s1", "s2". Used in the system prompt so the
@@ -67,15 +83,6 @@ function escapeHtml(input: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-}
-
-// Approximate paragraph splitter — splits on two-or-more newlines, keeps
-// trailing single newlines as <br/>. Good enough for chat-completion
-// prose, which doesn't tend to emit markdown structure inside paragraphs.
-function paragraphsOf(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  return trimmed.split(/\n{2,}/);
 }
 
 function normalize(s: string): string {
@@ -156,20 +163,77 @@ function buildPillHtml(
   );
 }
 
-// Replace [sN] markers in `raw` with <citation> pills, applying the
-// strictness mode. Returns the full processed HTML (paragraph-wrapped) and
-// counters the caller can put in provenance.
+// Tags we never let model output produce inside our prose pipeline. Code
+// blocks are excluded from citation marker replacement so the model can
+// write literal `[s1]` in code samples without it being turned into a
+// pill.
+const SKIP_TAGS_FOR_CITATIONS = new Set([
+  "CODE",
+  "PRE",
+  "SCRIPT",
+  "STYLE",
+]);
+
+// Sanitize the post-processed HTML. Allow the standard Markdown surface
+// plus the data attributes our citation pills emit. img/script/iframe
+// stay out — the model output is untrusted prose.
+function sanitizeAiHtml(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: [
+      "p", "br", "hr",
+      "h1", "h2", "h3", "h4", "h5", "h6",
+      "ul", "ol", "li",
+      "blockquote", "pre", "code",
+      "em", "strong", "i", "b", "u", "s", "del", "sub", "sup", "mark",
+      "a", "span",
+      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
+    ],
+    allowedAttributes: {
+      a: ["href", "title"],
+      span: [
+        "data-type",
+        "class",
+        "data-node-id",
+        "data-highlight-id",
+        "data-label",
+        "data-page",
+        "data-excerpt",
+        "data-weak",
+        "title",
+      ],
+      th: ["align"],
+      td: ["align"],
+      code: ["class"],
+      pre: ["class"],
+    },
+    allowedSchemes: ["http", "https", "mailto"],
+    transformTags: {
+      a: (tagName, attribs) => ({
+        tagName,
+        attribs: {
+          ...attribs,
+          rel: "noopener noreferrer nofollow",
+          target: "_blank",
+        },
+      }),
+    },
+    disallowedTagsMode: "discard",
+  });
+}
+
+// Run Markdown -> HTML for an AI response, then replace [sN] markers
+// found in text nodes with citation pills (with verification). Returns
+// the sanitized HTML plus counters for provenance.
 //
 // IMPORTANT: this function trusts that `sources` were ALREADY listed to
-// the model under their `sid`s. It only does post-processing; it does not
-// re-verify that the model knew about a given source.
+// the model under their `sid`s. It only does post-processing; it does
+// not re-verify that the model knew about a given source.
 export function processCitations(
   raw: string,
   sources: AiSourceInput[],
   options: CitationProcessOptions = {}
 ): CitationProcessResult {
   const verify: CitationVerifyMode = options.verify ?? "strict";
-  const windowChars = options.windowChars ?? 200;
   const minOverlap = options.minOverlap ?? 4;
 
   const sourceBySid = new Map<string, AiSourceInput>();
@@ -179,70 +243,128 @@ export function processCitations(
   let dropped = 0;
   let demoted = 0;
 
-  const renderInlineSegment = (segment: string): string => {
-    let cursor = 0;
-    let out = "";
+  const trimmed = raw.trim();
+  if (!trimmed) return { html: "", resolved, dropped, demoted };
+
+  // 1) Markdown -> HTML. `breaks: true` mirrors chat-style prose where a
+  // single newline reads as a line break, not a paragraph break.
+  let rawHtml: string;
+  try {
+    rawHtml = marked.parse(trimmed, {
+      async: false,
+      gfm: true,
+      breaks: true,
+    }) as string;
+  } catch {
+    // If marked chokes (shouldn't, but defensive), fall back to a
+    // pre-wrapped escape of the raw prose so the user still sees
+    // something rather than nothing.
+    rawHtml = `<p>${escapeHtml(trimmed)}</p>`;
+  }
+
+  // 2) Walk text nodes, replace [sN] in eligible regions (outside code
+  // blocks). Verification uses the parent element's text content so
+  // <strong>/<em>/links inside a paragraph don't break the heuristic.
+  const dom = new JSDOM(`<!DOCTYPE html><body>${rawHtml}</body>`);
+  const doc = dom.window.document;
+  const body = doc.body;
+  const NodeFilter = dom.window.NodeFilter;
+
+  const textNodes: Text[] = [];
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let parent: Node | null = node.parentNode;
+      while (parent) {
+        if (parent.nodeType === 1) {
+          const tag = (parent as Element).tagName;
+          if (SKIP_TAGS_FOR_CITATIONS.has(tag)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    textNodes.push(n as Text);
+  }
+
+  for (const node of textNodes) {
+    const value = node.nodeValue ?? "";
+    if (!value.includes("[s")) continue;
     MARKER_RE.lastIndex = 0;
+    if (!MARKER_RE.test(value)) continue;
+    MARKER_RE.lastIndex = 0;
+
+    const parent = node.parentNode;
+    if (!parent) continue;
+
+    // Cache the parent's full text once per node — used for citation
+    // verification windows so paraphrases across nested inline tags
+    // (em/strong/code spans) still count toward the overlap.
+    const containerText = (parent as Element).textContent ?? value;
+
+    let cursor = 0;
     let match: RegExpExecArray | null;
-    while ((match = MARKER_RE.exec(segment)) !== null) {
-      const before = segment.slice(cursor, match.index);
-      out += escapeHtml(before);
+    while ((match = MARKER_RE.exec(value)) !== null) {
+      const before = value.slice(cursor, match.index);
+      if (before) parent.insertBefore(doc.createTextNode(before), node);
       cursor = match.index + match[0].length;
+
       const sid = `s${match[1]}`;
       const source = sourceBySid.get(sid);
       if (!source) {
-        // Phantom marker — drop it entirely. This is layer 1 of the
-        // strictness regime: we never render a pill pointing nowhere.
         dropped += 1;
         continue;
       }
-      if (verify === "off") {
-        resolved += 1;
-        out += buildPillHtml(source);
-        continue;
-      }
-      const windowStart = Math.max(0, match.index - windowChars);
-      const windowEnd = Math.min(
-        segment.length,
-        match.index + match[0].length + windowChars
-      );
-      const window = segment.slice(windowStart, windowEnd);
-      const verified = hasOverlap(window, source.excerpt, minOverlap);
-      if (verified) {
-        resolved += 1;
-        out += buildPillHtml(source);
-      } else if (verify === "lenient") {
-        // Layer 2 in lenient mode: keep the pill but demote it. The
-        // is-weak class lets the UI render a "may be incorrect" affordance
-        // without removing useful information.
-        demoted += 1;
-        out += buildPillHtml(source, { weak: true });
-      } else {
-        // strict: drop unverified markers entirely.
-        dropped += 1;
-      }
-    }
-    out += escapeHtml(segment.slice(cursor));
-    return out;
-  };
 
-  const paragraphs = paragraphsOf(raw);
-  if (paragraphs.length === 0) {
-    return { html: "", resolved, dropped, demoted };
+      let action: "keep" | "weak" | "drop";
+      if (verify === "off") {
+        action = "keep";
+      } else {
+        const verified = hasOverlap(
+          containerText,
+          source.excerpt,
+          minOverlap
+        );
+        if (verified) action = "keep";
+        else if (verify === "lenient") action = "weak";
+        else action = "drop";
+      }
+
+      if (action === "drop") {
+        dropped += 1;
+        continue;
+      }
+      if (action === "weak") demoted += 1;
+      else resolved += 1;
+
+      const wrapper = doc.createElement("span");
+      wrapper.innerHTML = buildPillHtml(source, {
+        weak: action === "weak",
+      });
+      const pill = wrapper.firstElementChild;
+      if (pill) parent.insertBefore(pill, node);
+    }
+    const after = value.slice(cursor);
+    if (after) parent.insertBefore(doc.createTextNode(after), node);
+    parent.removeChild(node);
   }
 
-  const htmlParas = paragraphs.map((para) => {
-    // Convert remaining single newlines to <br/> after marker
-    // replacement; we split into lines first so escaping and citations
-    // happen consistently per line.
-    const lines = para.split(/\n/);
-    return (
-      "<p>" + lines.map((line) => renderInlineSegment(line)).join("<br/>") + "</p>"
-    );
-  });
+  // 3) Sanitize the final HTML, preserving allowed Markdown tags and
+  // our trusted citation span attributes.
+  const sanitized = sanitizeAiHtml(body.innerHTML);
 
-  return { html: htmlParas.join(""), resolved, dropped, demoted };
+  // 4) Render math AFTER sanitization. KaTeX emits dozens of classes
+  // and inline styles that sanitize-html would otherwise strip; running
+  // it post-sanitize lets us trust the KaTeX HTML directly (the LaTeX
+  // input itself can't escape KaTeX's parser into raw HTML).
+  const withMath = renderMathInHtml(sanitized);
+
+  return { html: withMath, resolved, dropped, demoted };
 }
+
 
 // Build the SOURCES block that gets injected into the system prompt. The
 // model is told these are *data*, not instructions, to harden against

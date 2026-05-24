@@ -31,6 +31,7 @@ import {
   type WebViewerHandle,
 } from "../WebArticleViewer";
 import { RichTextEditor } from "../RichTextEditor";
+import { buildWebProxyUrl } from "@/lib/web-proxy";
 
 type ExtractResponse = {
   finalUrl: string;
@@ -86,6 +87,22 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
   const [extractError, setExtractError] = useState<string | null>(null);
 
   const viewerRef = useRef<WebViewerHandle>(null);
+  const layoutRef = useRef<HTMLElement>(null);
+  const [layoutWidth, setLayoutWidth] = useState(1200);
+
+  useEffect(() => {
+    const el = layoutRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setLayoutWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Snapped tiles are often narrow; fixed 340px sidebars were eating the
+  // whole panel and leaving almost no room for the article / webview.
+  const compactLayout = layoutWidth < 880;
 
   const highlights = useMemo(
     () => data.highlights ?? [],
@@ -226,7 +243,7 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
   };
 
   return (
-    <section className="flex min-h-0 flex-1 overflow-hidden">
+    <section ref={layoutRef} className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3">
           <div className="flex min-w-0 flex-1 items-center gap-2 text-[11px] text-[var(--pg-muted)]">
@@ -470,7 +487,14 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
       </div>
 
       {notesOpen ? (
-        <aside className="flex w-[44%] min-w-[340px] max-w-[640px] shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]">
+        <aside
+          className={clsx(
+            "flex shrink-0 flex-col border-[var(--pg-border)] bg-[var(--pg-bg)]",
+            compactLayout
+              ? "absolute inset-y-0 right-0 z-30 w-[min(340px,92%)] border-l shadow-[var(--pg-shadow-lg)]"
+              : "w-[min(44%,640px)] min-w-[280px] max-w-[640px] border-l"
+          )}
+        >
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3">
             <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--pg-muted)]">
               <StickyNote size={12} />
@@ -503,7 +527,14 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
       ) : null}
 
       {highlightsOpen ? (
-        <aside className="flex w-[340px] shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]">
+        <aside
+          className={clsx(
+            "flex shrink-0 flex-col border-[var(--pg-border)] bg-[var(--pg-bg)]",
+            compactLayout
+              ? "absolute inset-y-0 right-0 z-40 w-[min(340px,92%)] border-l shadow-[var(--pg-shadow-lg)]"
+              : "w-[min(340px,38%)] max-w-[340px] border-l"
+          )}
+        >
           {activeHighlight ? (
             <WebHighlightDetail
               highlight={activeHighlight}
@@ -628,9 +659,12 @@ function LiveSourceView({ url }: { url: string }) {
     <div className="relative flex min-h-0 flex-1 flex-col bg-white">
       <iframe
         ref={iframeRef}
-        src={url}
-        className="h-full w-full border-0"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        src={buildWebProxyUrl(url)}
+        className="pg-live-source-iframe h-full w-full border-0"
+        // No `allow-same-origin` — see BrowserWindow.tsx for the
+        // rationale. Sites that need their own cookies render
+        // logged-out, but our XSS surface stays closed.
+        sandbox="allow-scripts allow-popups allow-forms"
         title="Original page"
       />
       {iframeBlocked ? (
@@ -638,15 +672,11 @@ function LiveSourceView({ url }: { url: string }) {
           <div className="pointer-events-auto max-w-sm rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] p-4 text-center shadow-[var(--pg-shadow)]">
             <Globe size={18} className="mx-auto mb-2 text-[var(--pg-muted)]" />
             <div className="mb-1 text-[13px] font-medium text-[var(--pg-fg)]">
-              This site refused to embed
+              Couldn&rsquo;t load this page
             </div>
             <p className="mb-3 text-[12px] text-[var(--pg-fg-soft)]">
-              Many sites send an{" "}
-              <code className="rounded bg-[var(--pg-bg-subtle)] px-1">
-                X-Frame-Options
-              </code>{" "}
-              header that blocks iframes. The desktop app loads it natively
-              — or open the original in a new tab.
+              The server-side proxy couldn&rsquo;t fetch this URL. Try the
+              reader view, or open the original in a new tab.
             </p>
             <a
               href={url}

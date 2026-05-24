@@ -27,6 +27,114 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.20",
+    date: "2026-05-24",
+    tagline:
+      "In-app browser on the web, image-aware AI conversations, a Notion-style math editor, and two new themes.",
+    sections: [
+      {
+        heading: "In-app browser \u2014 cloud",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Browse and highlight without leaving the canvas in the web app. Click Browse in the header (or pick \u201cOpen browser\u201d from the command palette) and the in-app browser opens just like in the desktop build \u2014 navigate, select text, color-highlight, save the page as a Link node with every highlight attached. Pages are fetched server-side through `/api/web/proxy` and rendered in a sandboxed iframe with the same selection / highlight bridge the Electron `<webview>` uses, so the cite-able highlight flow is identical in both surfaces.",
+          },
+          {
+            tag: "new",
+            text:
+              "The link panel\u2019s Web tab now uses the same proxy on the cloud, replacing the bare `<iframe src=url>` that most sites refused via X-Frame-Options. \u201cThis site refused to embed\u201d should be much rarer; proxy errors fall back to a friendly \u201cOpen original\u201d card.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The proxy iframe runs with `sandbox=\"allow-scripts allow-popups allow-forms\"` \u2014 deliberately without `allow-same-origin`. The proxied document lives at our origin, so without sandboxing its scripts could read Supabase tokens out of `localStorage` and impersonate the user against our APIs. Stripping `allow-same-origin` forces a unique opaque origin and isolates the page. Tradeoff: sites that depend on their own cookies render in logged-out state; the desktop `<webview>` doesn\u2019t have this restriction and keeps full session access via its `persist:browser` partition.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Cross-origin postMessage handshake between the bridge and the host. The bridge sends to `*` (opaque origin can\u2019t use a fixed targetOrigin) and the host authenticates messages by `event.source === iframe.contentWindow` rather than by origin string \u2014 origin-spoofing attacks can\u2019t hold a reference to that exact window object.",
+          },
+        ],
+      },
+      {
+        heading: "Desktop \u2014 Google sign-in",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "\u201cContinue with Google\u201d used to punt the OAuth flow to the OS browser \u2014 you\u2019d authenticate there, the localhost callback would land in the wrong window, and the Studygit shell stayed signed-out. The `will-navigate` guard now allow-lists OAuth hosts (`accounts.google.com`, `oauth2.googleapis.com`, `myaccount.google.com`, `*.supabase.co`, `*.supabase.in`) so Google\u2019s sign-in / consent / 2FA pages load inside the Studygit window and the Supabase callback lands back on the loopback origin with the session attached. Heads-up: your Supabase project\u2019s Auth \u2192 URL Configuration must include `http://127.0.0.1:3000/auth/callback` and `http://localhost:3000/auth/callback` for the redirect to be honored.",
+          },
+        ],
+      },
+      {
+        heading: "AI conversations",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Image attachments on user messages. Paste a screenshot directly into the composer, drop an image file onto it, or pick one with the new image button next to the textarea \u2014 up to 4 per message. Images are resized client-side to a 1568px long edge and ~1.5\u202fMB before send (JPEG / WebP / PNG candidates evaluated, smallest one wins; animated GIFs are passed through unmodified up to the size cap so they don\u2019t lose animation). Forwarded to the provider using OpenAI\u2019s vision content-array format, so any vision-capable model (`gpt-4o`, `gpt-5-*`, OpenRouter vision, LLaVA via Ollama\u2026) just works; providers without vision return a clear upstream error.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Assistant replies now render as proper Markdown \u2014 `##` headings, bulleted / numbered lists, **bold**, *italic*, fenced ``` code blocks with language tags, blockquotes, tables, and `[links](url)`. Server-side: raw model output goes through `marked`, the resulting HTML gets a JSDOM walk that injects citation pills only into eligible text nodes (skipping `<code>` / `<pre>` so `[s1]` inside a code sample stays literal), and the final HTML is run through `sanitize-html` with a tight tag/attribute allow-list \u2014 no `<img>`, no `<script>`, no inline event handlers.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Citation verification now reads the parent element\u2019s `textContent` for the overlap window instead of a fixed character slice of the raw response. Citations that fall inside rich Markdown formatting (`<strong>`, `<em>`, inline code) keep verifying correctly across paraphrases that the old fixed-window heuristic would have dropped.",
+          },
+          {
+            tag: "improved",
+            text:
+              "System prompt now nudges the model toward Markdown formatting and acknowledges attached images as part of the question (not background context). Composer placeholder swaps to \u201cAsk about these images\u2026\u201d when attachments are present; send is enabled with no text as long as at least one image is attached, so \u201cwhat is this?\u201d-style image-only questions work.",
+          },
+        ],
+      },
+      {
+        heading: "Math blocks \u2014 full editor",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "Block math (slash menu \u2192 Math, or `$$`) now opens into a Notion-style card with a two-pane editor: LaTeX source on the left, live KaTeX preview on the right that re-renders on every keystroke. Empty preview shows a placeholder; invalid LaTeX shows the parser error inline (with the `ParseError:` prefix stripped) and disables the Done button so broken syntax can\u2019t commit. Header carries a Sigma label and the keyboard hint (`\u2318\u21B5` render \u00B7 `esc` cancel) as real `<kbd>` chips; footer has explicit Cancel / Done buttons in addition to the shortcuts. Selected ring uses the accent color + soft glow, matching the rest of the editor\u2019s atom selections.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The card collapses the two panes to a vertical stack when its host editor is narrower than 520px (snapped half-panel, narrow viewports) via a CSS container query \u2014 no window-width listeners, no JS reflow. Textarea auto-grows between 96px and 360px so matrices and `align*` environments aren\u2019t squished. Preview pane has a faint diagonal stripe pattern so it\u2019s visually distinct from the editor at a glance.",
+          },
+          {
+            tag: "improved",
+            text:
+              "AI replies render math too. Anything the model wraps in `$...$`, `$$...$$`, `\\(...\\)`, or `\\[...\\]` gets pre-rendered with KaTeX server-side after sanitization, so equations appear styled inline alongside Markdown headings, lists, and citation pills \u2014 no extra client work, no flash of raw LaTeX. The math walker shares its logic with the article reader via a new `lib/server/math-render.ts` module, removing ~150 lines of duplication.",
+          },
+        ],
+      },
+      {
+        heading: "Themes",
+        items: [
+          {
+            tag: "new",
+            text:
+              "**Ocean.** Seafoam paper with deep teal ink in light; near-black navy with a bright cyan-teal accent in dark. Fills the \u201cmaritime\u201d lane that none of Slate (grey), Midnight (cobalt), or Forest (green) covered.",
+          },
+          {
+            tag: "new",
+            text:
+              "**Sunset.** Warm peach paper with coral-orange ink in light; deep wine-maroon with vivid orange in dark. Lives in the coral-to-orange gradient that Paper (oxblood), Mocha (caramel), and Retro (amber) all sit adjacent to but don\u2019t actually hit.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Theme order in the picker now interleaves the new presets next to their tonal cousins (Slate \u2192 Midnight \u2192 Ocean, Mocha \u2192 Sunset) so the palette grid scans by color family rather than insertion order.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.19",
     date: "2026-05-23",
     tagline:

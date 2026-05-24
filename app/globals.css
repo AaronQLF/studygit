@@ -318,6 +318,68 @@
   --pg-marker: #6a4a0f;
 }
 
+[data-theme-preset="ocean"] {
+  --pg-bg: #eef5f5;
+  --pg-bg-subtle: #dfedee;
+  --pg-bg-elevated: #cbe1e2;
+  --pg-bg-canvas: #e4eeef;
+  --pg-fg: #0b1e1f;
+  --pg-fg-soft: #1f3a3c;
+  --pg-muted: #638183;
+  --pg-muted-soft: #a8c5c6;
+  --pg-border: #bcd4d5;
+  --pg-border-strong: #8eafb1;
+  --pg-accent: #0d6e7b;
+  --pg-accent-soft: rgba(13, 110, 123, 0.1);
+  --pg-marker: #a5e6e8;
+}
+[data-theme-preset="ocean"].dark {
+  --pg-bg: #0a1517;
+  --pg-bg-subtle: #0f1d1f;
+  --pg-bg-elevated: #162729;
+  --pg-bg-canvas: #070f11;
+  --pg-fg: #d4ecec;
+  --pg-fg-soft: #a4d4d4;
+  --pg-muted: #6e9b9d;
+  --pg-muted-soft: #3b585a;
+  --pg-border: #1d3034;
+  --pg-border-strong: #2a4347;
+  --pg-accent: #34cdcd;
+  --pg-accent-soft: rgba(52, 205, 205, 0.2);
+  --pg-marker: #1d565f;
+}
+
+[data-theme-preset="sunset"] {
+  --pg-bg: #fdf1e8;
+  --pg-bg-subtle: #f8e1ce;
+  --pg-bg-elevated: #efc9af;
+  --pg-bg-canvas: #fce8d8;
+  --pg-fg: #2a160f;
+  --pg-fg-soft: #502a1b;
+  --pg-muted: #9b7259;
+  --pg-muted-soft: #d8b59b;
+  --pg-border: #eec3a4;
+  --pg-border-strong: #c89576;
+  --pg-accent: #d2401e;
+  --pg-accent-soft: rgba(210, 64, 30, 0.1);
+  --pg-marker: #ffd084;
+}
+[data-theme-preset="sunset"].dark {
+  --pg-bg: #1b110d;
+  --pg-bg-subtle: #241612;
+  --pg-bg-elevated: #321e17;
+  --pg-bg-canvas: #130a07;
+  --pg-fg: #f5dccd;
+  --pg-fg-soft: #dab59c;
+  --pg-muted: #a07e66;
+  --pg-muted-soft: #5b4030;
+  --pg-border: #3a2418;
+  --pg-border-strong: #503223;
+  --pg-accent: #fb7437;
+  --pg-accent-soft: rgba(251, 116, 55, 0.2);
+  --pg-marker: #7a3b14;
+}
+
 html,
 body {
   height: 100%;
@@ -1318,51 +1380,246 @@ select,
   font-size: 12px;
 }
 
+/* Math block — view mode. A subtle card that becomes the editor when
+   clicked. Selection ring matches the rest of the editor's atoms. */
 .pg-prose .pg-math-block {
-  border-radius: 6px;
+  margin: 0.6rem 0;
+  border-radius: 8px;
   border: 1px solid var(--pg-border);
   background: var(--pg-bg-subtle);
-  padding: 0.6rem 0.8rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  /* container-type lets the split layout flip to a stacked layout when
+     the host editor is narrow (snapped panels, mobile sizes) without
+     needing a window-width media query. */
+  container-type: inline-size;
 }
 .pg-prose .pg-math-block.is-selected {
+  border-color: var(--pg-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pg-accent) 18%, transparent);
+}
+.pg-prose .pg-math-block.is-editing {
   border-color: var(--pg-border-strong);
+  background: var(--pg-bg);
+  box-shadow: var(--pg-shadow);
 }
 .pg-prose .pg-math-block-rendered {
+  padding: 0.9rem 1rem;
   text-align: center;
   cursor: text;
   overflow-x: auto;
 }
-.pg-prose .pg-math-block-edit {
+
+/* Edit mode — a full-width card with header, two-pane editor/preview,
+   and footer actions. Mirrors Notion's "Add LaTeX" experience. */
+.pg-prose .pg-math-block-card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
 }
+.pg-prose .pg-math-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg-subtle);
+  border-radius: 8px 8px 0 0;
+}
+.pg-prose .pg-math-block-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+.pg-prose .pg-math-block-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--pg-muted);
+  font-family: var(--font-mono);
+}
+.pg-prose .pg-math-block-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  border: 1px solid var(--pg-border-strong);
+  background: var(--pg-bg);
+  color: var(--pg-fg-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+.pg-prose .pg-math-block-hint-sep {
+  margin: 0 4px;
+  color: var(--pg-muted-soft);
+}
+
+.pg-prose .pg-math-block-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 120px;
+}
+/* Stack the two panes when the editor host is narrow (e.g. a half-snap
+   panel). Preview falls underneath the input so the editor still has
+   priority real estate. */
+@container (max-width: 520px) {
+  .pg-prose .pg-math-block-split {
+    grid-template-columns: 1fr;
+  }
+  .pg-prose .pg-math-block-pane-edit {
+    border-right: none !important;
+    border-bottom: 1px solid var(--pg-border);
+  }
+}
+
+.pg-prose .pg-math-block-pane {
+  position: relative;
+  padding: 12px;
+  min-width: 0;
+}
+.pg-prose .pg-math-block-pane-edit {
+  border-right: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+}
+.pg-prose .pg-math-block-pane-preview {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 12px,
+      color-mix(in srgb, var(--pg-bg-subtle) 50%, transparent) 12px,
+      color-mix(in srgb, var(--pg-bg-subtle) 50%, transparent) 13px
+    ),
+    var(--pg-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+.pg-prose .pg-math-block-pane-label {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pg-muted-soft);
+  pointer-events: none;
+}
+
 .pg-prose .pg-math-block-input {
   width: 100%;
-  resize: vertical;
+  height: 100%;
+  min-height: 96px;
+  resize: none;
   background: transparent;
   border: none;
   outline: none;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--pg-fg);
   padding: 0;
+  /* Show whitespace tracks so escapes / leading spaces are easier to
+     read when debugging a formula. */
+  tab-size: 2;
 }
-.pg-prose .pg-math-block-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 10px;
-  font-family: var(--font-mono);
+.pg-prose .pg-math-block-input::placeholder {
   color: var(--pg-muted);
 }
-.pg-prose .pg-math-block-actions button {
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--pg-border-strong);
+
+.pg-prose .pg-math-block-live {
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+.pg-prose .pg-math-block-live .katex-display {
+  margin: 0;
+}
+.pg-prose .pg-math-block-placeholder {
+  font-size: 12px;
+  color: var(--pg-muted);
+  text-align: center;
+  padding: 0 8px;
+  line-height: 1.45;
+}
+.pg-prose .pg-math-block-error-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 28%, transparent);
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+:root.dark .pg-prose .pg-math-block-error-state,
+.dark .pg-prose .pg-math-block-error-state {
+  color: #fecaca;
+}
+.pg-prose .pg-math-block-error-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.pg-prose .pg-math-block-error-msg {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  word-break: break-word;
+}
+
+.pg-prose .pg-math-block-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--pg-border);
+  background: var(--pg-bg-subtle);
+  border-radius: 0 0 8px 8px;
+}
+.pg-prose .pg-math-block-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.pg-prose .pg-math-block-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.pg-prose .pg-math-block-btn-secondary {
+  border: 1px solid var(--pg-border);
+  background: transparent;
+  color: var(--pg-fg-soft);
+}
+.pg-prose .pg-math-block-btn-secondary:hover {
   background: var(--pg-bg-elevated);
   color: var(--pg-fg);
-  cursor: pointer;
+}
+.pg-prose .pg-math-block-btn-primary {
+  border: 1px solid transparent;
+  background: var(--pg-accent);
+  color: white;
+}
+.pg-prose .pg-math-block-btn-primary:hover {
+  opacity: 0.92;
 }
 
 /* Mermaid blocks. */
@@ -2401,6 +2658,15 @@ select,
 .pg-tracker-pop-col-label.is-today {
   color: var(--pg-fg);
   font-weight: 600;
+}
+
+/* While a panel header is being dragged, guest surfaces (Electron
+   webviews and sandboxed iframes) must not steal pointer events — otherwise
+   drag-to-snap stops updating as soon as the cursor crosses the article. */
+html[data-panel-dragging] webview,
+html[data-panel-dragging] iframe.pg-live-source-iframe,
+html[data-panel-dragging] iframe.pg-cloud-browser-iframe {
+  pointer-events: none !important;
 }
 
 /* Floating-panel drag-to-snap preview. Materialises while the user is

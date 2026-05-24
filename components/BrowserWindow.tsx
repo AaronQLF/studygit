@@ -26,6 +26,7 @@ import {
 } from "@/lib/browser-session";
 import { useToastStore } from "./Toast";
 import { HIGHLIGHT_COLORS } from "@/lib/defaults";
+import { buildWebProxyUrl } from "@/lib/web-proxy";
 import type { LinkNodeData } from "@/lib/types";
 
 // React's built-in `<webview>` JSX element is just a generic HTML
@@ -118,6 +119,10 @@ function BrowserWindowMounted() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<WebviewElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
+  const currentUrlRef = useRef(currentUrl);
   // <webview>.loadURL() throws "must be attached to the DOM and dom-ready
   // emitted" if it lands before Chromium has finished wiring up the
   // embedded WebContents. Track readiness and stash a URL the user
@@ -132,6 +137,7 @@ function BrowserWindowMounted() {
 
   const [preloadUrl, setPreloadUrl] = useState<string | null>(null);
   const [preloadError, setPreloadError] = useState<string | null>(null);
+  const [cloudFrameSrc, setCloudFrameSrc] = useState<string | null>(null);
   const [navState, setNavState] = useState({ canBack: false, canForward: false });
   const [loading, setLoading] = useState(false);
   const [selection, setSelection] = useState<SelectionPayload | null>(null);
@@ -147,25 +153,37 @@ function BrowserWindowMounted() {
 
   const isElectron = useMemo(() => isElectronEnvironment(), []);
 
-  // -- preload URL discovery -------------------------------------------
+  useEffect(() => {
+    currentUrlRef.current = currentUrl;
+  }, [currentUrl]);
+
+  const syncCloudNavState = useCallback(() => {
+    setNavState({
+      canBack: historyIndexRef.current > 0,
+      canForward:
+        historyIndexRef.current >= 0 &&
+        historyIndexRef.current < historyRef.current.length - 1,
+    });
+  }, []);
+
+  const postToCloudFrame = useCallback((channel: string, ...args: unknown[]) => {
+    // The cloud iframe is sandboxed without `allow-same-origin`, so the
+    // document inside lives in a unique opaque origin. postMessage will
+    // refuse a fixed targetOrigin against that — and the messages here
+    // carry no secrets (highlight color, transient ids) so "*" is fine.
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "pg-browser-host", channel, args },
+      "*"
+    );
+  }, []);
+
+  // -- preload URL discovery (Electron only) -----------------------------
 
   useEffect(() => {
     let cancelled = false;
-    if (!isElectron) {
-      // Defer to a microtask so the setState doesn't fire synchronously
-      // during the effect body — same pattern used elsewhere in the
-      // codebase for the "read once at mount" idiom.
-      queueMicrotask(() => {
-        if (!cancelled) {
-          setPreloadError(
-            "The in-app browser only runs inside the Studygit desktop app."
-          );
-        }
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
+    if (!isElectron) return () => {
+      cancelled = true;
+    };
     const pg = (window as unknown as {
       studygit?: { getWebviewPreloadUrl?: () => Promise<string> };
     }).studygit;
@@ -181,7 +199,76 @@ function BrowserWindowMounted() {
     };
   }, [isElectron]);
 
-  // -- webview lifecycle ------------------------------------------------
+  const navigateRef = useRef<
+    (raw: string, options?: { replace?: boolean }) => void
+  >(() => {});
+
+  const handleBrowserChannel = useCallback(
+    (
+      channel: string,
+      args: unknown[],
+      surface?: {
+        getURL: () => string;
+        getTitle: () => string;
+        getRect: () => DOMRect;
+      }
+    ) => {
+      if (channel === "pg-selection") {
+        const payload = (args[0] as SelectionPayload | null) ?? null;
+        setSelection(payload);
+        if (payload && surface) {
+          const viewRect = surface.getRect();
+          setSelectionAnchor({
+            top: viewRect.top + payload.rect.top + payload.rect.height + 8,
+            left:
+              viewRect.left + payload.rect.left + payload.rect.width / 2,
+          });
+        } else {
+          setSelectionAnchor(null);
+        }
+        return;
+      }
+      if (channel === "pg-page-info") {
+        const info = args[0] as { url: string; title: string };
+        if (info?.url) commitNavigation(info.url, info.title);
+        return;
+      }
+      if (channel === "pg-highlight-applied") {
+        const payload = args[0] as {
+          id: string;
+          color: string;
+          text: string;
+          prefix: string;
+          suffix: string;
+        };
+        addHighlight({
+          text: payload.text,
+          prefix: payload.prefix,
+          suffix: payload.suffix,
+          color: payload.color,
+          url: surface?.getURL() ?? currentUrlRef.current,
+          pageTitle: surface?.getTitle() ?? "",
+        });
+        setSelection(null);
+        return;
+      }
+      if (channel === "pg-highlight-failed") {
+        setFlash({
+          kind: "error",
+          message: "Couldn't anchor that highlight — try selecting again.",
+        });
+        window.setTimeout(() => setFlash(null), 2200);
+        return;
+      }
+      if (channel === "pg-navigate") {
+        const href = args[0] as string;
+        if (href) navigateRef.current(href);
+      }
+    },
+    [addHighlight, commitNavigation, setFlash]
+  );
+
+  // -- webview lifecycle (Electron) ------------------------------------
 
   const handleWebviewRef = useCallback(
     (node: HTMLElement | null) => {
@@ -270,56 +357,11 @@ function BrowserWindowMounted() {
       };
       const onIpc = (event: Event) => {
         const e = event as IpcMessageEvent;
-        if (e.channel === "pg-selection") {
-          const payload = (e.args[0] as SelectionPayload | null) ?? null;
-          setSelection(payload);
-          if (payload) {
-            // Project the webview-local selection rect into screen
-            // coords *now* (in the event handler) so render never has to
-            // touch the ref. The picker re-pins itself on every fresh
-            // selection event, which mirrors how user selections work.
-            const viewRect = view.getBoundingClientRect();
-            setSelectionAnchor({
-              top:
-                viewRect.top +
-                payload.rect.top +
-                payload.rect.height +
-                8,
-              left:
-                viewRect.left +
-                payload.rect.left +
-                payload.rect.width / 2,
-            });
-          } else {
-            setSelectionAnchor(null);
-          }
-        } else if (e.channel === "pg-page-info") {
-          const info = e.args[0] as { url: string; title: string };
-          if (info?.url) commitNavigation(info.url, info.title);
-        } else if (e.channel === "pg-highlight-applied") {
-          const payload = e.args[0] as {
-            id: string;
-            color: string;
-            text: string;
-            prefix: string;
-            suffix: string;
-          };
-          addHighlight({
-            text: payload.text,
-            prefix: payload.prefix,
-            suffix: payload.suffix,
-            color: payload.color,
-            url: view.getURL(),
-            pageTitle: view.getTitle(),
-          });
-          setSelection(null);
-        } else if (e.channel === "pg-highlight-failed") {
-          setFlash({
-            kind: "error",
-            message: "Couldn't anchor that highlight — try selecting again.",
-          });
-          window.setTimeout(() => setFlash(null), 2200);
-        }
+        handleBrowserChannel(e.channel, e.args, {
+          getURL: () => view.getURL(),
+          getTitle: () => view.getTitle(),
+          getRect: () => view.getBoundingClientRect(),
+        });
       };
 
       view.addEventListener("dom-ready", onDomReady);
@@ -360,53 +402,119 @@ function BrowserWindowMounted() {
         view.removeEventListener("ipc-message", onIpc);
       };
     },
-    [addHighlight, commitNavigation, setFlash, setPageTitle]
+    [commitNavigation, handleBrowserChannel, setPageTitle]
   );
 
   // -- navigation actions ----------------------------------------------
 
   const navigate = useCallback(
-    (raw: string) => {
+    (raw: string, options?: { replace?: boolean }) => {
       const url = normalizeNavInput(raw);
       if (!url) return;
-      const view = webviewRef.current;
       setSelection(null);
       setSelectionAnchor(null);
-      // Optimistically try loadURL whenever we have a view ref. The
-      // previously-used `domReadyRef.current` gate was unreliable —
-      // React's callback-ref churn could leave the flag false even
-      // after the webview was fully alive, which silently routed every
-      // address-bar Enter into pendingUrlRef and never drained it.
-      // Electron only refuses loadURL before the very first dom-ready
-      // wiring, so a try/catch covers the cold-start case cleanly.
-      if (view) {
-        try {
-          void view.loadURL(url);
-          pendingUrlRef.current = null;
-        } catch (err) {
-          console.warn("[browser] loadURL threw, queueing instead", err);
+
+      if (isElectron) {
+        const view = webviewRef.current;
+        if (view) {
+          try {
+            void view.loadURL(url);
+            pendingUrlRef.current = null;
+          } catch (err) {
+            console.warn("[browser] loadURL threw, queueing instead", err);
+            pendingUrlRef.current = url;
+          }
+        } else {
           pendingUrlRef.current = url;
         }
-      } else {
-        pendingUrlRef.current = url;
+        commitNavigation(url);
+        return;
       }
+
+      const history = historyRef.current;
+      const idx = historyIndexRef.current;
+      if (options?.replace && idx >= 0) {
+        history[idx] = url;
+      } else {
+        historyRef.current = history.slice(0, idx + 1);
+        historyRef.current.push(url);
+        historyIndexRef.current = historyRef.current.length - 1;
+      }
+      setCloudFrameSrc(buildWebProxyUrl(url));
+      setLoading(true);
       commitNavigation(url);
+      syncCloudNavState();
     },
-    [commitNavigation]
+    [commitNavigation, isElectron, syncCloudNavState]
   );
 
-  // Auto-navigate on first mount if the webview has no URL yet. The
-  // homepage launch is wrapped in a microtask so the cascade of state
-  // updates (commitNavigation -> setInputUrl/setCurrentUrl) doesn't fire
-  // synchronously inside the effect body — same pattern used for theme
-  // / titlebar setup elsewhere in the app.
   useEffect(() => {
-    if (!preloadUrl) return;
-    const view = webviewRef.current;
-    if (!view) return;
+    navigateRef.current = navigate;
+  }, [navigate]);
+
+  const cloudGoBack = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const url = historyRef.current[historyIndexRef.current];
+    setCloudFrameSrc(buildWebProxyUrl(url));
+    setLoading(true);
+    commitNavigation(url);
+    syncCloudNavState();
+  }, [commitNavigation, syncCloudNavState]);
+
+  const cloudGoForward = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const url = historyRef.current[historyIndexRef.current];
+    setCloudFrameSrc(buildWebProxyUrl(url));
+    setLoading(true);
+    commitNavigation(url);
+    syncCloudNavState();
+  }, [commitNavigation, syncCloudNavState]);
+
+  // Cloud iframe bridge (postMessage instead of Electron ipc-message).
+  // The iframe is sandboxed without `allow-same-origin` so its scripts
+  // run in an opaque origin (`event.origin === "null"`) and can't read
+  // our localStorage / cookies. We authenticate messages by their source
+  // window (must be our own iframe) rather than by origin string.
+  useEffect(() => {
+    if (isElectron) return;
+    const onMessage = (event: MessageEvent) => {
+      const frame = iframeRef.current;
+      if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data as {
+        type?: string;
+        channel?: string;
+        args?: unknown[];
+      };
+      if (data?.type !== "pg-browser" || !data.channel) return;
+      const surface = {
+        getURL: () => currentUrlRef.current,
+        // Cross-origin contentDocument access throws — fall back to "".
+        getTitle: () => {
+          try {
+            return frame.contentDocument?.title ?? "";
+          } catch {
+            return "";
+          }
+        },
+        getRect: () => frame.getBoundingClientRect(),
+      };
+      handleBrowserChannel(data.channel, data.args ?? [], surface);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [handleBrowserChannel, isElectron]);
+
+  // Auto-navigate on first mount if the browser has no URL yet.
+  useEffect(() => {
     if (currentUrl) return;
+    if (isElectron) {
+      if (!preloadUrl) return;
+      if (!webviewRef.current) return;
+    }
     queueMicrotask(() => navigate(DEFAULT_HOMEPAGE));
-  }, [preloadUrl, currentUrl, navigate]);
+  }, [currentUrl, isElectron, navigate, preloadUrl]);
 
   // Close on Escape, but only when no selection is active so the first
   // Escape clears the picker rather than tearing down the window.
@@ -436,17 +544,19 @@ function BrowserWindowMounted() {
 
   const applyHighlight = useCallback(
     (color: string) => {
-      const view = webviewRef.current;
-      if (!view || !selection) return;
-      // The id is just for round-trip correlation between host + webview.
-      // The persisted highlight id comes from `addHighlight` (nanoid).
-      view.send("pg-apply-highlight", {
+      if (!selection) return;
+      const payload = {
         id: `pending-${Date.now()}`,
         color,
-      });
+      };
+      if (isElectron) {
+        webviewRef.current?.send("pg-apply-highlight", payload);
+      } else {
+        postToCloudFrame("pg-apply-highlight", payload);
+      }
       setActiveColor(color);
     },
-    [selection]
+    [isElectron, postToCloudFrame, selection]
   );
 
   // -- save as cite-able link ------------------------------------------
@@ -561,7 +671,11 @@ function BrowserWindowMounted() {
   // -- render -----------------------------------------------------------
 
   const hostLabel = hostnameOf(currentUrl);
-  const cannotRenderWebview = !!preloadError;
+  const cannotRenderBrowser = isElectron && !!preloadError;
+  const browserInitializing =
+    isElectron && !preloadUrl && !preloadError && !cannotRenderBrowser;
+  const cloudInitializing =
+    !isElectron && !cloudFrameSrc && !cannotRenderBrowser;
 
   return (
     <div className="fixed inset-0 z-[64] flex items-center justify-center bg-[rgba(11,11,16,0.55)] backdrop-blur-[2px]">
@@ -587,7 +701,7 @@ function BrowserWindowMounted() {
             <button
               type="button"
               onClick={saveAsLink}
-              disabled={!currentUrl || cannotRenderWebview}
+              disabled={!currentUrl || cannotRenderBrowser}
               className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-2.5 text-[12px] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               title="Save the current page as a cite-able link node"
             >
@@ -614,7 +728,10 @@ function BrowserWindowMounted() {
         <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-[var(--pg-border)] px-2">
           <button
             type="button"
-            onClick={() => webviewRef.current?.goBack()}
+            onClick={() => {
+              if (isElectron) webviewRef.current?.goBack();
+              else cloudGoBack();
+            }}
             disabled={!navState.canBack}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)] disabled:opacity-40"
             title="Back"
@@ -623,7 +740,10 @@ function BrowserWindowMounted() {
           </button>
           <button
             type="button"
-            onClick={() => webviewRef.current?.goForward()}
+            onClick={() => {
+              if (isElectron) webviewRef.current?.goForward();
+              else cloudGoForward();
+            }}
             disabled={!navState.canForward}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)] disabled:opacity-40"
             title="Forward"
@@ -633,10 +753,19 @@ function BrowserWindowMounted() {
           <button
             type="button"
             onClick={() => {
-              const view = webviewRef.current;
-              if (!view) return;
-              if (loading) view.stop();
-              else view.reload();
+              if (isElectron) {
+                const view = webviewRef.current;
+                if (!view) return;
+                if (loading) view.stop();
+                else view.reload();
+                return;
+              }
+              if (loading) {
+                setCloudFrameSrc("about:blank");
+                setLoading(false);
+                return;
+              }
+              iframeRef.current?.contentWindow?.location.reload();
             }}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
             title={loading ? "Stop" : "Reload"}
@@ -679,23 +808,38 @@ function BrowserWindowMounted() {
         {/* -- main split ------------------------------------------ */}
         <div className="flex min-h-0 flex-1">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-            {cannotRenderWebview ? (
-              <DesktopOnlyState message={preloadError!} />
-            ) : !preloadUrl ? (
+            {cannotRenderBrowser ? (
+              <BrowserUnavailableState message={preloadError!} />
+            ) : browserInitializing || cloudInitializing ? (
               <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
                 Initializing browser…
               </div>
-            ) : (
+            ) : isElectron ? (
               <webview
                 ref={handleWebviewRef as unknown as Ref<HTMLElement>}
                 src="about:blank"
-                preload={preloadUrl}
+                preload={preloadUrl!}
                 partition="persist:browser"
                 style={{
                   display: "inline-flex",
                   width: "100%",
                   height: "100%",
                 }}
+              />
+            ) : (
+              <iframe
+                ref={iframeRef}
+                src={cloudFrameSrc ?? undefined}
+                className="pg-cloud-browser-iframe h-full w-full border-0 bg-white"
+                title="In-app browser"
+                // No `allow-same-origin`: the proxied page lives at our
+                // origin, so without sandboxing its scripts could read
+                // Supabase tokens from localStorage. Stripping it forces
+                // an opaque origin and isolates the page. Some sites
+                // (anything that needs to read its own cookies) will
+                // render in logged-out state — acceptable tradeoff.
+                sandbox="allow-scripts allow-popups allow-forms"
+                onLoad={() => setLoading(false)}
               />
             )}
             {flash ? (
@@ -717,7 +861,11 @@ function BrowserWindowMounted() {
             onRemove={removeHighlight}
             onClear={() => {
               clearHighlights();
-              webviewRef.current?.send("pg-clear-highlights");
+              if (isElectron) {
+                webviewRef.current?.send("pg-clear-highlights");
+              } else {
+                postToCloudFrame("pg-clear-highlights");
+              }
             }}
           />
         </div>
@@ -754,7 +902,7 @@ function BrowserWindowMounted() {
   );
 }
 
-function DesktopOnlyState({ message }: { message: string }) {
+function BrowserUnavailableState({ message }: { message: string }) {
   return (
     <div className="flex flex-1 items-center justify-center px-8">
       <div className="max-w-md text-center">
@@ -763,10 +911,6 @@ function DesktopOnlyState({ message }: { message: string }) {
           Browser unavailable
         </div>
         <p className="text-[12px] text-[var(--pg-fg-soft)]">{message}</p>
-        <p className="mt-3 text-[11px] text-[var(--pg-muted)]">
-          You can still add a Link node from the dock and paste a URL — the
-          reader-view + highlight flow works in the browser too.
-        </p>
       </div>
     </div>
   );

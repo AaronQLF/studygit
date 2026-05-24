@@ -187,14 +187,34 @@ export type AiProvenance = {
 
 export type AiTurnStatus = "idle" | "running" | "error";
 
+// Inline attachment (currently always an image) the user paste/drop/picked
+// into the composer. Stored as a data URL so the conversation is fully
+// self-contained — no orphaned object-storage references — and re-fed to
+// the model verbatim on every turn that includes it. Sized down on the
+// client before being stamped onto the turn.
+export type AiAttachment = {
+  kind: "image";
+  // `data:image/<png|jpeg|webp|gif>;base64,...`
+  dataUrl: string;
+  mimeType: string;
+  name?: string;
+  // Final pixel dimensions after client-side resize. Optional; used for
+  // layout hints in the user-turn renderer.
+  width?: number;
+  height?: number;
+};
+
 export type AiTurn = {
   id: string;
   role: "user" | "assistant";
-  // User turns store plain text; assistant turns store HTML (paragraphs +
-  // <span data-type="citation"…> pills emitted server-side). Click-jump
+  // User turns store plain text; assistant turns store HTML (Markdown
+  // rendered server-side + <span data-type="citation"…> pills). Click-jump
   // on those pills is wired up by the panel's delegated click handler.
   text: string;
   createdAt: number;
+  // Optional image attachments captured at compose time on user turns.
+  // Assistant turns never carry attachments.
+  attachments?: AiAttachment[];
   // Set on assistant turns. `status` flows running → idle/error during a
   // model call; `provenance` records the model/usage/citation counters
   // for the completed answer.

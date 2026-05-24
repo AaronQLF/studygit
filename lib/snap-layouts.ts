@@ -129,3 +129,40 @@ export function snapGeom(
   const height = cellH * rowSpan + (rowSpan - 1) * SNAP_GAP;
   return { x, y, width, height };
 }
+
+// Hit-test the pointer against every snap tile's pixel geometry. When
+// tiles overlap (a quadrant inside a half inside fullscreen), prefer the
+// smallest matching tile so drag-to-snap targets match the preview overlay.
+export function findSnapZoneAtPointer(
+  pointerX: number,
+  pointerY: number,
+  viewportWidth: number,
+  viewportHeight: number
+): { layout: SnapLayoutId; slot: number } | null {
+  const hits: Array<{ layout: SnapLayoutId; slot: number; area: number }> =
+    [];
+
+  for (const layoutId of SNAP_LAYOUT_ORDER) {
+    const def = SNAP_LAYOUTS[layoutId];
+    for (let slot = 0; slot < def.slots.length; slot += 1) {
+      const geom = snapGeom(layoutId, slot, viewportWidth, viewportHeight);
+      if (!geom) continue;
+      const inside =
+        pointerX >= geom.x &&
+        pointerX <= geom.x + geom.width &&
+        pointerY >= geom.y &&
+        pointerY <= geom.y + geom.height;
+      if (inside) {
+        hits.push({
+          layout: layoutId,
+          slot,
+          area: geom.width * geom.height,
+        });
+      }
+    }
+  }
+
+  if (hits.length === 0) return null;
+  hits.sort((a, b) => a.area - b.area);
+  return { layout: hits[0].layout, slot: hits[0].slot };
+}
