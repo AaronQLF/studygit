@@ -39,24 +39,38 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## Desktop build (Electron)
 
-The `electron` branch wraps the same Next.js app in an Electron shell that runs entirely offline in `file` persistence mode. The Electron main process forks `.next/standalone/server.js` on a fixed loopback port (`47821`, falling back to an ephemeral port if it's taken) and points a `BrowserWindow` at it — the renderer is the same React app that runs in the browser, so React Flow, Tiptap, PDF.js, server actions, and API routes all behave identically.
+The Electron app is a **thin shell over the hosted Studygit deployment** — the `BrowserWindow` loads `https://studygit-tau.vercel.app` (or whatever `STUDYGIT_HOSTED_URL` points at) directly. There is **no embedded Next server**, **no embedded chunk store**, and **no R2/Supabase secrets bundled inside the installer**. Auth, persistence, uploads, and AI calls all flow through the hosted backend exactly the same way they do in a normal browser tab.
 
-All writable state (the `data/state.json`, uploaded PDFs, the chunk cache) lives in the OS user-data directory rather than inside the read-only install dir:
+The shell still owns the native pieces a hosted page can't do on its own:
 
-| OS      | Path                                                     |
-| ------- | -------------------------------------------------------- |
-| macOS   | `~/Library/Application Support/Studygit`                 |
-| Windows | `%APPDATA%\Studygit`                                     |
-| Linux   | `~/.config/Studygit`                                     |
+- Frameless window with platform-appropriate chrome (macOS traffic lights, Windows/Linux titlebar overlay)
+- Auto-update via `electron-updater` + GitHub Releases (silent download, dialog-prompted restart)
+- A locked-down `<webview>` for the in-app Browser feature (forced preload, sandboxed partition)
+- The `window.studygit` preload bridge that exposes the app version + updater status to the renderer
+- A graceful offline page when the hosted URL can't be reached (network failure, DNS, certificate error)
 
-This is plumbed via the `STORAGE_ROOT` env var that `electron/main.ts` sets to `app.getPath("userData")` before forking the Next server. The same env var works in plain Next runs if you want to relocate state outside the repo.
+Earlier desktop builds shipped in `file` persistence mode with a forked `.next/standalone/server.js` running on a loopback port, writing everything to `app.getPath("userData")`. That bundle has been removed. If you have data from one of those builds at `~/Library/Application Support/Studygit/data/state.json` (or the Windows / Linux equivalent), use the migration script — see [Migration → Desktop (file mode) → cloud (Supabase)](#desktop-file-mode--cloud-supabase) — to lift it into your cloud account before upgrading.
+
+### Pointing at a different hosted URL
+
+`electron/main.ts` resolves the target URL in this order:
+
+1. `ELECTRON_DEV_URL` — set by `npm run electron:dev` to attach to a local `next dev`.
+2. `STUDYGIT_HOSTED_URL` — set at build time to override the default (useful for shipping a preview/staging build).
+3. The default `https://studygit-tau.vercel.app`.
+
+To ship a build pointing at a preview deployment:
+
+```bash
+STUDYGIT_HOSTED_URL=https://studygit-<your-preview>.vercel.app npm run dist
+```
 
 ### Scripts
 
 | Script                | Purpose                                                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run electron:dev`   | Launch `next dev` and Electron together; iterates as fast as a normal Next dev loop.           |
-| `npm run electron:build` | Produce `.next/standalone` + stitch in static/public + compile `electron/`. No installer.      |
+| `npm run electron:dev`   | Launch `next dev` (on `:3000`) and Electron together; the shell loads `http://127.0.0.1:3000`. |
+| `npm run electron:build` | Compile the Electron main + preload TypeScript. No installer.                                   |
 | `npm run dist`           | Build installers for the host OS (signed only if env vars below are set).                      |
 | `npm run dist:mac`       | macOS: `dmg` + `zip` for x64 and arm64.                                                        |
 | `npm run dist:win`       | Windows: `nsis` + `zip` for x64.                                                               |
@@ -64,10 +78,6 @@ This is plumbed via the `STORAGE_ROOT` env var that `electron/main.ts` sets to `
 | `npm run release`        | Same as `dist`, then publishes to GitHub Releases (requires `GH_TOKEN`).                       |
 
 Installers land in `release/`. Cross-platform builds work locally as long as the host OS can drive the target's signing tooling — practically that means macOS for `.dmg`, Windows or Wine for `.exe`, and any OS for `.AppImage`/`.deb`.
-
-### Native modules
-
-`@mongodb-js/zstd` ships a native Node addon. The `postinstall` script runs `electron-rebuild -f -w @mongodb-js/zstd` to rebuild it against Electron's Node ABI. If you ever switch Electron versions, re-run `npm install` (or `npx electron-rebuild`) to refresh the binary.
 
 ### Code-signing & notarization
 

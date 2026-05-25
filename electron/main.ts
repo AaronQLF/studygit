@@ -8,9 +8,6 @@ import {
   type IpcMainEvent,
 } from "electron";
 import { autoUpdater } from "electron-updater";
-import { ChildProcess, fork } from "node:child_process";
-import { createServer } from "node:net";
-import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
@@ -18,13 +15,19 @@ import * as fs from "node:fs";
 // Constants and runtime mode
 // --------------------------------------------------------------------------
 
-const PREFERRED_PORT = 47821;
 const APP_NAME = "Studygit";
+
+// `ELECTRON_DEV_URL` is set by `npm run electron:dev` so the shell points
+// at the developer's local `next dev` server instead of the production
+// deployment. `STUDYGIT_HOSTED_URL` lets ops point preview builds at a
+// staging URL (e.g. a Vercel preview deployment) without recompiling.
+// Falls back to the stable production alias.
 const DEV_URL = process.env.ELECTRON_DEV_URL ?? null;
+const HOSTED_URL =
+  process.env.STUDYGIT_HOSTED_URL ?? "https://studygit-tau.vercel.app";
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
-let nextProcess: ChildProcess | null = null;
 let resolvedAppUrl: string | null = null;
 
 // Keep the dev electron's Chromium state (singleton lock, cookies, cache)
@@ -67,152 +70,84 @@ if (!gotLock) {
   });
 }
 
-// Hard cap on how long we wait for the embedded Next server to become
-// reachable. If we hit this, something is very wrong (port already taken
-// by a non-Next process, native module rebuild missing, etc.) and we
-// surface a real error rather than a perpetual splash.
-const SERVER_READY_TIMEOUT_MS = 30_000;
-
 // --------------------------------------------------------------------------
-// Port discovery
+// Offline fallback
 // --------------------------------------------------------------------------
+//
+// The shell is a thin window over the hosted Vercel deployment, so it
+// depends on a working network connection to do anything. When the page
+// fails to load (offline, DNS failure, Vercel outage, certificate
+// error), we replace Chromium's default "this site can't be reached"
+// chrome with something that matches the app's aesthetic and offers a
+// one-click retry. The page is inlined as a data URL so it works even
+// when nothing else does.
 
-function probePort(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer();
-    server.unref();
-    server.on("error", () => resolve(false));
-    server.listen({ port, host: "127.0.0.1", exclusive: true }, () => {
-      server.close(() => resolve(true));
-    });
-  });
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function ephemeralPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen({ port: 0, host: "127.0.0.1", exclusive: true }, () => {
-      const addr = server.address();
-      if (!addr || typeof addr === "string") {
-        server.close();
-        reject(new Error("Failed to acquire ephemeral port"));
-        return;
-      }
-      const port = addr.port;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-async function pickPort(): Promise<number> {
-  if (await probePort(PREFERRED_PORT)) return PREFERRED_PORT;
-  return ephemeralPort();
-}
-
-// --------------------------------------------------------------------------
-// Embedded Next.js standalone server
-// --------------------------------------------------------------------------
-
-function resolveStandaloneServerEntry(): string {
-  // When packaged with `asarUnpack: ["**/.next/standalone/**"]`, the
-  // standalone build lives outside the asar so child_process.fork can load
-  // it directly.
-  const candidates = app.isPackaged
-    ? [
-        path.join(
-          process.resourcesPath,
-          "app.asar.unpacked",
-          ".next",
-          "standalone",
-          "server.js"
-        ),
-        path.join(process.resourcesPath, "app", ".next", "standalone", "server.js"),
-      ]
-    : [path.join(__dirname, "..", "..", ".next", "standalone", "server.js")];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) return candidate;
+function offlineDataUrl(retryUrl: string, message: string): string {
+  // Both interpolations are HTML-escaped; the retry URL is *also*
+  // JSON-encoded so it survives being assigned to `location.href` from a
+  // string literal without breaking on the quote characters that legal
+  // URLs sometimes contain (encoded brackets, etc.).
+  const safeRetry = JSON.stringify(retryUrl);
+  const safeMsg = escapeHtml(message || "");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Studygit — offline</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0b0b10;
+    color: #ede4d3;
+    font: 14px/1.5 -apple-system, "SF Pro Text", system-ui, sans-serif;
+    -webkit-app-region: drag;
   }
-  throw new Error(
-    `Could not locate Next.js standalone server. Looked in:\n${candidates.join(
-      "\n"
-    )}`
-  );
-}
-
-function startNextServer(port: number): ChildProcess {
-  const serverEntry = resolveStandaloneServerEntry();
-  const storageRoot = app.getPath("userData");
-
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    NODE_ENV: "production",
-    PORT: String(port),
-    HOSTNAME: "127.0.0.1",
-    PERSISTENCE: "file",
-    STORAGE_ROOT: storageRoot,
-    // Preserve the original PATH but strip variables that would let the
-    // embedded server try to reach the public internet for things it
-    // shouldn't (e.g. Next telemetry).
-    NEXT_TELEMETRY_DISABLED: "1",
-  };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_DEV_URL;
-
-  const child = fork(serverEntry, [], {
-    cwd: path.dirname(serverEntry),
-    env,
-    stdio: ["ignore", "pipe", "pipe", "ipc"],
-  });
-
-  child.stdout?.on("data", (chunk) => {
-    process.stdout.write(`[next] ${chunk}`);
-  });
-  child.stderr?.on("data", (chunk) => {
-    process.stderr.write(`[next] ${chunk}`);
-  });
-  child.on("exit", (code, signal) => {
-    console.error(`[next] exited (code=${code}, signal=${signal})`);
-    nextProcess = null;
-    if (!app.isQuitting) {
-      // If the embedded server dies under us, take the whole app down so
-      // the user gets a clean restart rather than a half-broken window.
-      app.quit();
-    }
-  });
-
-  return child;
-}
-
-function waitForServer(url: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      const req = http.get(url, (res) => {
-        res.resume();
-        if (res.statusCode && res.statusCode < 500) {
-          resolve();
-        } else {
-          retry();
-        }
-      });
-      req.on("error", retry);
-      req.setTimeout(2000, () => {
-        req.destroy();
-        retry();
-      });
-    };
-    const retry = () => {
-      if (Date.now() > deadline) {
-        reject(new Error(`Timed out waiting for ${url}`));
-        return;
-      }
-      setTimeout(attempt, 250);
-    };
-    attempt();
-  });
+  .card {
+    -webkit-app-region: no-drag;
+    max-width: 360px;
+    padding: 24px;
+    text-align: center;
+  }
+  h1 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+  p { margin: 0 0 16px; color: #a9997f; }
+  .reason {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 12px;
+    opacity: 0.7;
+    word-break: break-word;
+  }
+  button {
+    background: #c44a2b; color: white; border: 0;
+    padding: 8px 14px; border-radius: 6px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Can't reach Studygit</h1>
+    <p>Studygit needs an internet connection to load your workspace.</p>
+    <p class="reason">${safeMsg}</p>
+    <button onclick="location.href = ${safeRetry}">Try again</button>
+  </div>
+</body>
+</html>`;
+  return "data:text/html;charset=utf-8," + encodeURIComponent(html);
 }
 
 // --------------------------------------------------------------------------
@@ -345,6 +280,29 @@ function createMainWindow(appUrl: string): BrowserWindow {
     // update still sitting in ~/Library/Caches/studygit-updater/.
     maybePromptPendingUpdate();
   });
+
+  // Network-failure fallback. Catches the cases where the hosted page
+  // can't load at all (offline, DNS failure, Vercel outage, TLS error,
+  // sandbox is up but firewall blocks the domain). We ignore:
+  //   -3  ABORTED — user-initiated navigation interruption (e.g. clicked
+  //                 another link before the first one finished). Showing
+  //                 the offline page here would clobber the legitimate
+  //                 in-flight navigation.
+  //   subframe failures — only main-frame failures break the whole UX.
+  win.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) return;
+      if (errorCode === -3) return;
+      // Don't recurse if the offline page itself fails to load.
+      if (validatedURL.startsWith("data:")) return;
+      const retry = validatedURL || `${appUrl}/app`;
+      const reason = errorDescription
+        ? `${errorDescription} (${errorCode})`
+        : `Network error (${errorCode})`;
+      void win.loadURL(offlineDataUrl(retry, reason));
+    }
+  );
 
   void win.loadURL(`${appUrl}/app`);
   return win;
@@ -606,26 +564,23 @@ async function bootstrap(): Promise<void> {
   splashWindow = createSplashWindow();
 
   try {
-    let appUrl: string;
-    if (DEV_URL) {
-      // Dev mode: the user already started `next dev` on a known URL and
-      // we just attach to it.
-      appUrl = DEV_URL;
-      await waitForServer(appUrl, SERVER_READY_TIMEOUT_MS);
-    } else {
-      const port = await pickPort();
-      nextProcess = startNextServer(port);
-      appUrl = `http://127.0.0.1:${port}`;
-      await waitForServer(appUrl, SERVER_READY_TIMEOUT_MS);
-    }
+    // Thin shell. The renderer lives on Vercel (or wherever
+    // STUDYGIT_HOSTED_URL points). The dev override lets `electron:dev`
+    // attach to a local `next dev` for fast iteration. There is no
+    // embedded Next server in the packaged build — every API route,
+    // every Supabase call, every R2 upload runs on the hosted backend.
+    // That keeps R2 credentials and the service-role key out of the
+    // installer.
+    const appUrl = DEV_URL ?? HOSTED_URL;
     resolvedAppUrl = appUrl;
+    console.log(`[main] pointing main window at ${appUrl}`);
     // Preload reads this when the window is constructed.
     process.env.STUDYGIT_APP_VERSION = app.getVersion();
     wireAutoUpdate();
     mainWindow = createMainWindow(appUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[main] failed to start embedded server:", message);
+    console.error("[main] failed to start:", message);
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
     app.quit();
   }
@@ -633,9 +588,6 @@ async function bootstrap(): Promise<void> {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
-  if (nextProcess && !nextProcess.killed) {
-    nextProcess.kill();
-  }
 });
 
 app.on("window-all-closed", () => {
