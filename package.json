@@ -80,5 +80,8 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "wait-on": "^9.0.5"
+  },
+  "overrides": {
+    "@asamuzakjp/css-color": "4.1.1"
   }
 }
