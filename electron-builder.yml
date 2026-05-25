@@ -6,18 +6,27 @@ directories:
   buildResources: electron/build
   output: release
 
-# What lives inside the package. The standalone Next bundle plus the
-# Electron entry point is all the runtime needs; everything else (source
-# TS, Supabase scripts, dev env files, the local dev userData dir) is
-# excluded explicitly so it can't ship by accident.
+# What lives inside the package.
+#
+# The shell is a thin wrapper around the hosted Vercel deployment.
+# Every web-side npm dep (Tiptap, pdfjs-dist, mupdf, Next, the AWS S3
+# client, etc.) belongs on Vercel and would otherwise bloat the asar
+# from ~10 MB to 400+ MB.
+#
+# We can't trim those via `files` alone — electron-builder runs an
+# independent production-dependency walker over package.json. The
+# slimming is done in `scripts/electron-prepack.mjs` (invoked by
+# `electron:build`), which writes a temporary package.json containing
+# only `electron-updater` for the duration of the packaging step. The
+# real package.json is restored afterwards so the web build is
+# unaffected.
 files:
   - "electron/dist/**/*"
   - "electron/splash.html"
   - "electron/build/icon.png"
   - "package.json"
-  - ".next/standalone/**/*"
   - "!**/.git/**"
-  - "!**/.next/cache/**"
+  - "!**/.next/**"
   - "!.env*"
   - "!data/**"
   - "!.electron-userdata-dev/**"
@@ -27,15 +36,11 @@ files:
   - "!**/*.md"
   - "!**/*.tsbuildinfo"
   - "!**/tsconfig*.json"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples,coverage,docs}/**"
+  - "!**/node_modules/*/{*.d.ts,*.map,LICENSE*,CHANGELOG*,HISTORY*}"
 
-# child_process.fork can't load JS from inside an asar archive (the v8
-# loader can require asar paths but Node's fork() needs a real file on
-# disk). Unpacking standalone keeps it loadable. The native zstd addon
-# similarly has to live on the real filesystem so dlopen can find it.
 asar: true
 asarUnpack:
-  - ".next/standalone/**/*"
-  - "node_modules/@mongodb-js/zstd/**/*"
   # Electron <webview preload="…"> only accepts file:// URLs; preloads
   # inside an asar archive are rejected. Unpack the in-app browser's
   # selection/highlight preload so Chromium can load it directly.
