@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { Check, Monitor, Moon, Palette, RotateCcw, Sun, X } from "lucide-react";
+import { Check, Grid3x3, Monitor, Moon, Palette, RotateCcw, Sun, X } from "lucide-react";
 import {
   applyThemePreset,
   DEFAULT_THEME_ID,
@@ -15,6 +15,16 @@ import {
   writeThemePreset,
   type ThemeId,
 } from "@/lib/themes";
+import {
+  DEFAULT_GRID,
+  GRID_DENSITY_LABELS,
+  GRID_STYLE_LABELS,
+  readGridPrefs,
+  writeGridPrefs,
+  type GridDensity,
+  type GridPrefs,
+  type GridStyle,
+} from "@/lib/canvas-grid";
 import {
   readThemePreference,
   writeThemePreference,
@@ -56,6 +66,7 @@ export function ThemeSettingsDialog({
   const [mode, setMode] = useState<ThemeMode>("system");
   const [presetId, setPresetId] = useState<ThemeId>(DEFAULT_THEME_ID);
   const [accent, setAccent] = useState<string | null>(null);
+  const [grid, setGrid] = useState<GridPrefs>(DEFAULT_GRID);
 
   // Hydrate from localStorage when the dialog opens (and refresh if it
   // gets re-opened after the user changed mode via the header toggle).
@@ -67,6 +78,7 @@ export function ThemeSettingsDialog({
       setMode(readThemePreference());
       setPresetId(readThemePresetId());
       setAccent(readAccentOverride());
+      setGrid(readGridPrefs());
     });
   }, [open]);
 
@@ -106,9 +118,23 @@ export function ThemeSettingsDialog({
     }
   };
 
+  const pickGridStyle = (style: GridStyle) => {
+    const next: GridPrefs = { ...grid, style };
+    setGrid(next);
+    writeGridPrefs(next);
+  };
+
+  const pickGridDensity = (density: GridDensity) => {
+    const next: GridPrefs = { ...grid, density };
+    setGrid(next);
+    writeGridPrefs(next);
+  };
+
   const reset = () => {
     pickPreset(DEFAULT_THEME_ID);
     pickAccent(null);
+    setGrid(DEFAULT_GRID);
+    writeGridPrefs(DEFAULT_GRID);
   };
 
   if (!open) return null;
@@ -211,6 +237,48 @@ export function ThemeSettingsDialog({
               ) : null}
             </div>
           </Section>
+
+          <Section
+            label="Canvas grid"
+            hint="Pattern drawn behind the canvas nodes."
+          >
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(Object.keys(GRID_STYLE_LABELS) as GridStyle[]).map((style) => (
+                <GridStyleCard
+                  key={style}
+                  style={style}
+                  active={style === grid.style}
+                  onPick={() => pickGridStyle(style)}
+                />
+              ))}
+            </div>
+            <div className="mt-3 inline-flex rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] p-0.5">
+              {(Object.keys(GRID_DENSITY_LABELS) as GridDensity[]).map(
+                (density) => (
+                  <button
+                    key={density}
+                    type="button"
+                    onClick={() => pickGridDensity(density)}
+                    disabled={grid.style === "none"}
+                    className={clsx(
+                      "inline-flex h-7 items-center rounded-[var(--pg-radius)] px-2.5 text-[12px] transition-colors",
+                      grid.style === "none" && "opacity-50 cursor-not-allowed",
+                      grid.density === density
+                        ? "bg-[var(--pg-bg)] text-[var(--pg-fg)] shadow-[var(--pg-shadow-sm)]"
+                        : "text-[var(--pg-muted)] hover:text-[var(--pg-fg)]"
+                    )}
+                    title={
+                      grid.style === "none"
+                        ? "Density has no effect when the grid is hidden"
+                        : undefined
+                    }
+                  >
+                    {GRID_DENSITY_LABELS[density]}
+                  </button>
+                )
+              )}
+            </div>
+          </Section>
         </div>
       </div>
     </div>
@@ -302,6 +370,135 @@ function PresetCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function GridStyleCard({
+  style,
+  active,
+  onPick,
+}: {
+  style: GridStyle;
+  active: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      aria-pressed={active}
+      className={clsx(
+        "group flex flex-col items-center gap-1.5 rounded-[var(--pg-radius)] border p-2 text-center transition-colors",
+        active
+          ? "border-[var(--pg-accent)] bg-[var(--pg-accent-soft)]"
+          : "border-[var(--pg-border)] bg-[var(--pg-bg)] hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)]"
+      )}
+    >
+      <div className="relative h-12 w-full overflow-hidden rounded-[var(--pg-radius)] border border-[var(--pg-border)] bg-[var(--pg-bg-canvas)]">
+        <GridStylePreview style={style} />
+        {active ? (
+          <div className="absolute right-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--pg-accent)] text-white">
+            <Check size={10} />
+          </div>
+        ) : null}
+      </div>
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-[var(--pg-fg)]">
+        <Grid3x3 size={10} className="opacity-60" />
+        {GRID_STYLE_LABELS[style]}
+      </span>
+    </button>
+  );
+}
+
+// Tiny inline SVG preview for each grid variant. Drawn at the card's
+// natural size so the strokes/dots match what React Flow will paint at
+// zoom = 1 (modulo a slight scale to fit the thumbnail).
+function GridStylePreview({ style }: { style: GridStyle }) {
+  const stroke = "color-mix(in srgb, var(--pg-muted-soft) 70%, transparent)";
+  const fill = stroke;
+  if (style === "none") {
+    return (
+      <svg
+        viewBox="0 0 60 36"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+      >
+        <line
+          x1="6"
+          y1="30"
+          x2="54"
+          y2="6"
+          stroke={stroke}
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
+      </svg>
+    );
+  }
+  if (style === "lines") {
+    return (
+      <svg
+        viewBox="0 0 60 36"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+      >
+        {[10, 22, 34, 46].map((x) => (
+          <line
+            key={`v${x}`}
+            x1={x}
+            y1="0"
+            x2={x}
+            y2="36"
+            stroke={stroke}
+            strokeWidth="0.6"
+          />
+        ))}
+        {[10, 22].map((y) => (
+          <line
+            key={`h${y}`}
+            x1="0"
+            y1={y}
+            x2="60"
+            y2={y}
+            stroke={stroke}
+            strokeWidth="0.6"
+          />
+        ))}
+      </svg>
+    );
+  }
+  if (style === "cross") {
+    const xs = [10, 22, 34, 46];
+    const ys = [10, 22];
+    return (
+      <svg
+        viewBox="0 0 60 36"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+      >
+        {xs.flatMap((x) =>
+          ys.map((y) => (
+            <g key={`${x}-${y}`} stroke={stroke} strokeWidth="0.8">
+              <line x1={x - 2} y1={y} x2={x + 2} y2={y} />
+              <line x1={x} y1={y - 2} x2={x} y2={y + 2} />
+            </g>
+          ))
+        )}
+      </svg>
+    );
+  }
+  const xs = [8, 18, 28, 38, 48];
+  const ys = [8, 18, 28];
+  return (
+    <svg
+      viewBox="0 0 56 36"
+      className="absolute inset-0 h-full w-full"
+      aria-hidden
+    >
+      {xs.flatMap((x) =>
+        ys.map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1" fill={fill} />)
+      )}
+    </svg>
   );
 }
 

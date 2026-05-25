@@ -594,12 +594,14 @@ select,
   opacity: 1;
 }
 
-.pg-flow-dots {
+.pg-flow-grid {
   opacity: 1;
+  transition: opacity 160ms ease;
 }
 
-.pg-flow-dots-hidden {
+.pg-flow-grid-hidden {
   opacity: 0;
+  transition: opacity 160ms ease;
 }
 
 .line-clamp-3 {
@@ -1339,7 +1341,10 @@ select,
   font-style: normal;
 }
 
-/* Math blocks. */
+/* Math blocks.
+   The .pg-math-card-* family is intentionally NOT scoped under .pg-prose
+   so the same card UI can be reused by the inline-math popover, which
+   gets portalled into <body> and therefore lives outside the editor. */
 .pg-prose .pg-math-inline {
   display: inline-flex;
   align-items: center;
@@ -1350,29 +1355,12 @@ select,
 .pg-prose .pg-math-inline:hover:not(.is-editing) {
   background: var(--pg-bg-elevated);
 }
+.pg-prose .pg-math-inline.is-editing {
+  background: var(--pg-bg-elevated);
+  box-shadow: 0 0 0 1px var(--pg-accent);
+}
 .pg-prose .pg-math-inline .pg-math-rendered {
   cursor: text;
-}
-.pg-prose .pg-math-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--pg-bg-elevated);
-  border: 1px solid var(--pg-border-strong);
-}
-.pg-prose .pg-math-edit-prefix {
-  color: var(--pg-muted);
-}
-.pg-prose .pg-math-edit-input {
-  background: transparent;
-  outline: none;
-  border: none;
-  color: var(--pg-fg);
-  min-width: 6ch;
 }
 .pg-prose .pg-math-empty {
   color: var(--pg-muted);
@@ -1409,13 +1397,44 @@ select,
   overflow-x: auto;
 }
 
-/* Edit mode — a full-width card with header, two-pane editor/preview,
-   and footer actions. Mirrors Notion's "Add LaTeX" experience. */
-.pg-prose .pg-math-block-card {
+/* Inline-math popover — portalled into <body>, positioned by JS. Uses
+   the same card markup as the block editor so the two surfaces stay in
+   sync. The popover is a `container-type: inline-size` host so the
+   shared `@container` query at the bottom of this section flips the
+   split layout to stacked at narrow widths. */
+.pg-math-inline-popover {
+  position: fixed;
+  z-index: 1000;
+  /* The popover defines its own container context so the same
+     @container query that drives the block layout works here too. */
+  container-type: inline-size;
+  animation: pg-math-popover-in 120ms ease-out;
+}
+.pg-math-inline-popover.is-flipped {
+  transform-origin: bottom left;
+}
+@keyframes pg-math-popover-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* The shared editor card — header / split / footer. Used by both the
+   block math node view and the inline math popover. */
+.pg-math-card {
   display: flex;
   flex-direction: column;
+  background: var(--pg-bg);
+  border-radius: 8px;
 }
-.pg-prose .pg-math-block-header {
+/* Block math reuses the parent's border + shadow (the outer
+   .pg-math-block.is-editing already paints those). The inline popover
+   on the other hand stands on its own and needs its own chrome. */
+.pg-math-inline-popover .pg-math-card {
+  border: 1px solid var(--pg-border-strong);
+  box-shadow: var(--pg-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.18));
+  overflow: hidden;
+}
+.pg-math-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1424,7 +1443,7 @@ select,
   background: var(--pg-bg-subtle);
   border-radius: 8px 8px 0 0;
 }
-.pg-prose .pg-math-block-label {
+.pg-math-card-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1434,7 +1453,7 @@ select,
   text-transform: uppercase;
   color: var(--pg-muted);
 }
-.pg-prose .pg-math-block-hint {
+.pg-math-card-hint {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1442,7 +1461,7 @@ select,
   color: var(--pg-muted);
   font-family: var(--font-mono);
 }
-.pg-prose .pg-math-block-hint kbd {
+.pg-math-card-hint kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1457,39 +1476,40 @@ select,
   font-size: 10px;
   line-height: 1;
 }
-.pg-prose .pg-math-block-hint-sep {
+.pg-math-card-hint-sep {
   margin: 0 4px;
   color: var(--pg-muted-soft);
 }
 
-.pg-prose .pg-math-block-split {
+.pg-math-card-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 120px;
 }
-/* Stack the two panes when the editor host is narrow (e.g. a half-snap
-   panel). Preview falls underneath the input so the editor still has
-   priority real estate. */
+/* Stack the two panes when the card host is narrow (a half-snap panel
+   for the block editor, or a viewport-clamped inline popover). The
+   preview drops underneath the input so the editor keeps the priority
+   real estate. */
 @container (max-width: 520px) {
-  .pg-prose .pg-math-block-split {
+  .pg-math-card-split {
     grid-template-columns: 1fr;
   }
-  .pg-prose .pg-math-block-pane-edit {
+  .pg-math-card-pane-edit {
     border-right: none !important;
     border-bottom: 1px solid var(--pg-border);
   }
 }
 
-.pg-prose .pg-math-block-pane {
+.pg-math-card-pane {
   position: relative;
   padding: 12px;
   min-width: 0;
 }
-.pg-prose .pg-math-block-pane-edit {
+.pg-math-card-pane-edit {
   border-right: 1px solid var(--pg-border);
   background: var(--pg-bg);
 }
-.pg-prose .pg-math-block-pane-preview {
+.pg-math-card-pane-preview {
   background:
     repeating-linear-gradient(
       45deg,
@@ -1504,7 +1524,7 @@ select,
   align-items: stretch;
   justify-content: center;
 }
-.pg-prose .pg-math-block-pane-label {
+.pg-math-card-pane-label {
   position: absolute;
   top: 8px;
   right: 10px;
@@ -1515,7 +1535,7 @@ select,
   pointer-events: none;
 }
 
-.pg-prose .pg-math-block-input {
+.pg-math-card-input {
   width: 100%;
   height: 100%;
   min-height: 96px;
@@ -1532,27 +1552,36 @@ select,
      read when debugging a formula. */
   tab-size: 2;
 }
-.pg-prose .pg-math-block-input::placeholder {
+.pg-math-card-input::placeholder {
   color: var(--pg-muted);
 }
 
-.pg-prose .pg-math-block-live {
-  text-align: center;
+.pg-math-card-live {
   overflow-x: auto;
   overflow-y: hidden;
   max-width: 100%;
 }
-.pg-prose .pg-math-block-live .katex-display {
+.pg-math-card-live-block {
+  text-align: center;
+}
+.pg-math-card-live-block .katex-display {
   margin: 0;
 }
-.pg-prose .pg-math-block-placeholder {
+.pg-math-card-live-inline {
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 4px 0;
+  color: var(--pg-fg);
+}
+.pg-math-card-placeholder {
   font-size: 12px;
   color: var(--pg-muted);
   text-align: center;
   padding: 0 8px;
   line-height: 1.45;
 }
-.pg-prose .pg-math-block-error-state {
+.pg-math-card-error-state {
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -1564,21 +1593,21 @@ select,
   font-size: 12px;
   line-height: 1.45;
 }
-:root.dark .pg-prose .pg-math-block-error-state,
-.dark .pg-prose .pg-math-block-error-state {
+:root.dark .pg-math-card-error-state,
+.dark .pg-math-card-error-state {
   color: #fecaca;
 }
-.pg-prose .pg-math-block-error-icon {
+.pg-math-card-error-icon {
   margin-top: 2px;
   flex-shrink: 0;
 }
-.pg-prose .pg-math-block-error-msg {
+.pg-math-card-error-msg {
   font-family: var(--font-mono);
   font-size: 11.5px;
   word-break: break-word;
 }
 
-.pg-prose .pg-math-block-footer {
+.pg-math-card-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1588,7 +1617,7 @@ select,
   background: var(--pg-bg-subtle);
   border-radius: 0 0 8px 8px;
 }
-.pg-prose .pg-math-block-btn {
+.pg-math-card-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1600,25 +1629,25 @@ select,
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
 }
-.pg-prose .pg-math-block-btn:disabled {
+.pg-math-card-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.pg-prose .pg-math-block-btn-secondary {
+.pg-math-card-btn-secondary {
   border: 1px solid var(--pg-border);
   background: transparent;
   color: var(--pg-fg-soft);
 }
-.pg-prose .pg-math-block-btn-secondary:hover {
+.pg-math-card-btn-secondary:hover {
   background: var(--pg-bg-elevated);
   color: var(--pg-fg);
 }
-.pg-prose .pg-math-block-btn-primary {
+.pg-math-card-btn-primary {
   border: 1px solid transparent;
   background: var(--pg-accent);
   color: white;
 }
-.pg-prose .pg-math-block-btn-primary:hover {
+.pg-math-card-btn-primary:hover {
   opacity: 0.92;
 }
 
