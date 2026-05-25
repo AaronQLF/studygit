@@ -212,7 +212,14 @@ export function AppShell({ user }: AppShellProps = {}) {
             >
               <Palette size={14} />
             </button>
-            {user ? <UserMenu email={user.email} /> : null}
+            {/* Always render the menu — in file mode there's no auth
+                session, but the menu still hosts theme, AI settings,
+                and "Check for updates…" (the only explicitly labeled
+                update affordance in the renderer). Pre-fix this was
+                gated on `user`, which is always null in the packaged
+                desktop app, leaving the manual update check hidden
+                behind a tooltip on the version badge. */}
+            <UserMenu email={user?.email ?? null} />
           </div>
         </div>
       </header>

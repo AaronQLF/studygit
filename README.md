@@ -110,6 +110,73 @@ The bump commit lands on `main` as `chore(release): vX.Y.Z [skip release]`, sign
 
 Older `blog` nodes (markdown) auto-migrate to `page` nodes (Tiptap HTML) the first time the app hydrates against an old `data/state.json`. The conversion runs through `marked` once, then the new shape is persisted on the next save.
 
+### Desktop (file mode) → cloud (Supabase)
+
+If you've been using the packaged Electron desktop app — which runs in `file` mode and stores everything under your OS user-data directory — and want to lift those workspaces, pages, PDFs, and image uploads into a Supabase account, use `npm run migrate:state`. The script handles three layouts:
+
+| Source                | `--state-path` default                                   | `--uploads-dir` default                        |
+| --------------------- | -------------------------------------------------------- | ---------------------------------------------- |
+| Repo dev (default)    | `./data/state.json`                                      | `./public/uploads/`                            |
+| `--electron`          | `<userData>/Studygit/data/state.json`                    | `<userData>/Studygit/uploads/`                 |
+| `--electron-dev`      | `<userData>/StudygitDev/data/state.json`                 | `<userData>/StudygitDev/uploads/`              |
+| `--state-path` + `--uploads-dir` | (whatever you pass — both are required together) |                                                |
+
+`<userData>` resolves per-OS the same way Electron does:
+
+| OS      | Packaged                                          | Dev (`--electron-dev`)                                  |
+| ------- | ------------------------------------------------- | ------------------------------------------------------- |
+| macOS   | `~/Library/Application Support/Studygit`          | `~/Library/Application Support/StudygitDev`             |
+| Windows | `%APPDATA%\Studygit`                              | `%APPDATA%\StudygitDev`                                 |
+| Linux   | `~/.config/Studygit`                              | `~/.config/StudygitDev`                                 |
+
+#### Runbook
+
+1. **Quit the desktop app.** The next-server child writes `state.json` every few seconds while it's running; running the migration against a live install is racy.
+2. **Sign up in the cloud version.** Run the web app in Supabase mode (or visit the deployed instance) and create your account. The migration writes against an existing `auth.users` row — it does not create users.
+3. **Grab your user id.** In the Supabase dashboard, **Authentication → Users** → copy the UUID for the account you just created.
+4. **Configure `.env.local` for cloud writes.** From the repo, you need:
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (server-only, lets the script bypass RLS to write under any user)
+   - `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (so PDF/image bytes can land in the chunk store)
+
+   `PERSISTENCE` is forced to `supabase` by the script regardless of what's in your env.
+5. **Dry-check the source path.** Confirm the file exists where the script will look:
+   ```bash
+   ls -lh ~/Library/Application\ Support/Studygit/data/state.json   # macOS, packaged
+   ```
+6. **Run the migration:**
+   ```bash
+   # macOS / Linux / Windows — packaged Electron build:
+   npm run migrate:state -- --user-id <uuid> --electron
+
+   # Or the dev variant (StudygitDev, the one `npm run electron:dev` writes to):
+   npm run migrate:state -- --user-id <uuid> --electron-dev
+
+   # Or fully custom (must pass both):
+   npm run migrate:state -- --user-id <uuid> \
+     --state-path /abs/path/state.json \
+     --uploads-dir /abs/path/uploads
+   ```
+
+   The script prints one line per migrated PDF / image plus a summary at the end:
+
+   ```
+   PDFs:   migrated 14, skipped 2, missing 0
+   Images: migrated 7, skipped 0, missing 1
+   Bytes uploaded (pre-chunking): 312.4 MB
+   State saved for user 8c…
+   ```
+
+   - **skipped** counts PDFs/images that already point at a cloud URL (`/api/files/<key>` or `https://…`) — re-runs are idempotent.
+   - **missing** counts entries whose local file no longer exists on disk. Those nodes are still copied to Supabase with their existing URL; the file is just not uploaded.
+
+7. **Sign into the cloud app.** Your workspaces, pages, PDFs, and images should all be present, and PDF viewers should load the migrated files from the chunk store on first open.
+
+#### Notes / caveats
+
+- The script never touches your local desktop data — copying is one-way. Keep the Electron user-data dir until you've verified the cloud copy.
+- `selectedWorkspaceId` and `version` in `app_meta` are upserted on `user_id`, so re-running overwrites those two fields. Workspaces, nodes, and edges are upserted on their own ids, so re-running is safe for them.
+- Image uploads larger than a few MB and PDFs go through the full FastCDC + zstd-19 pipeline on the way up, which can take a few seconds each for big files — the script logs per-file progress so you can tell it's working.
+
 ## Asking Cursor to write pages
 
 When running in local-file mode (default), state lives in `data/state.json`, so you can ask Cursor in this repo:

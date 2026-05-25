@@ -34,6 +34,11 @@ import { useShallow } from "zustand/react/shallow";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { extractCitedNodeIds } from "@/lib/citations";
+import {
+  DENSITY_GAP,
+  STYLE_SIZE,
+  useGridPrefs,
+} from "@/lib/canvas-grid";
 import type {
   AnyNodeData,
   CanvasNode,
@@ -266,6 +271,7 @@ function CanvasInner() {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
   const [zoom, setZoom] = useState(1);
+  const grid = useGridPrefs();
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -492,6 +498,72 @@ function CanvasInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [addNode]);
 
+  // Replacement for React Flow's built-in delete-on-keypress (disabled
+  // via `deleteKeyCode={null}` on <ReactFlow>). The rule is simple and
+  // strict: if the keypress originated from inside a node's panel body
+  // — i.e. anywhere below `.react-flow__node` except the node wrapper
+  // element itself — we refuse to delete. That makes it impossible to
+  // accidentally nuke a panel by pressing Backspace while typing in it,
+  // closing a math/mermaid card, scrubbing a PDF viewer, etc. Deletion
+  // via the node menu and canvas context menu is unaffected.
+  //
+  // Selection-then-Backspace still works: clicking a node's frame moves
+  // focus to the `.react-flow__node` wrapper itself (target === node),
+  // so the guard lets the keypress through and we dispatch a `remove`
+  // change through the existing pipeline (which handles undo).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Standard text-entry guard — covers inputs/textareas/contenteditables
+      // anywhere on the page (sidebar search, dialog inputs, etc.).
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      // Don't delete when the keypress is bubbling out of a panel's
+      // content (anything strictly below the node wrapper). Some panel
+      // bodies — like the PDF viewer, image cropper, or any contenteditable
+      // that briefly drops focus during reflow — don't satisfy the input
+      // check above, which is precisely the misfire React Flow's default
+      // handler exhibits.
+      const nodeEl = target.closest(".react-flow__node");
+      if (nodeEl && target !== nodeEl) return;
+
+      // Defensive: also check `document.activeElement`. Some panel
+      // interactions (drag handles, native scrollbar interactions) leave
+      // `event.target` on document.body while keeping the panel focused.
+      const active = document.activeElement as HTMLElement | null;
+      if (active) {
+        if (
+          active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.isContentEditable
+        ) {
+          return;
+        }
+        const activeNodeEl = active.closest(".react-flow__node");
+        if (activeNodeEl && active !== activeNodeEl) return;
+      }
+
+      const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id);
+      if (selectedIds.length === 0) return;
+
+      event.preventDefault();
+      onNodesChange(selectedIds.map((id) => ({ type: "remove", id })));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [nodes, onNodesChange]);
+
   const onSelectionChange = useCallback(
     ({ nodes: selected }: { nodes: Node[]; edges: Edge[] }) => {
       setSelectedNode(selected[0]?.id ?? null);
@@ -561,14 +633,35 @@ function CanvasInner() {
         minZoom={0.1}
         maxZoom={3}
         colorMode="light"
+        // Disable React Flow's built-in delete-on-keypress. Its "is the
+        // user typing?" heuristic occasionally misfires inside complex
+        // panel bodies (TipTap editors, PDF viewers, contentEditable
+        // surfaces that briefly drop focus during reflows) and silently
+        // wipes the whole panel. We replace it with the scoped handler
+        // below that explicitly refuses to delete when focus is inside
+        // any panel content — see the Backspace useEffect.
+        deleteKeyCode={null}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={18}
-          size={0.8}
-          className={zoom > 0.6 ? "pg-flow-dots" : "pg-flow-dots-hidden"}
-          color="color-mix(in srgb, var(--pg-muted-soft) 56%, transparent)"
-        />
+        {grid.style !== "none" ? (
+          <Background
+            // `key` forces React Flow to remount the SVG defs when the
+            // variant changes; without it switching styles can leave
+            // the previous pattern lingering until the next viewport
+            // change.
+            key={grid.style}
+            variant={
+              grid.style === "lines"
+                ? BackgroundVariant.Lines
+                : grid.style === "cross"
+                  ? BackgroundVariant.Cross
+                  : BackgroundVariant.Dots
+            }
+            gap={DENSITY_GAP[grid.density]}
+            size={STYLE_SIZE[grid.style]}
+            className={zoom > 0.6 ? "pg-flow-grid" : "pg-flow-grid-hidden"}
+            color="color-mix(in srgb, var(--pg-muted-soft) 56%, transparent)"
+          />
+        ) : null}
         <Controls showInteractive={false} />
         <MiniMap
           pannable
