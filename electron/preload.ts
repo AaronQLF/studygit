@@ -18,6 +18,26 @@ type UpdateStatus =
   | { kind: "ready"; version: string }
   | { kind: "error"; message: string };
 
+// Mirrors the result shape of the `studygit:ai-fetch` IPC handler in
+// electron/main.ts. Kept inline (rather than imported) because the
+// preload TS project doesn't compile against the rest of the app.
+type AiFetchRequest = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  messages: unknown;
+  temperature?: number;
+};
+type AiFetchResult =
+  | { ok: true; json: unknown }
+  | {
+      ok: false;
+      kind: "provider" | "network" | "timeout" | "bad-input";
+      status?: number;
+      message: string;
+      details?: string;
+    };
+
 contextBridge.exposeInMainWorld("studygit", {
   appVersion: process.env.STUDYGIT_APP_VERSION ?? "dev",
   platform: process.platform,
@@ -53,4 +73,15 @@ contextBridge.exposeInMainWorld("studygit", {
   // or unpackaged (out of electron/dist next to this file).
   getWebviewPreloadUrl: (): Promise<string> =>
     ipcRenderer.invoke("studygit:get-webview-preload-url"),
+
+  // Make the AI chat-completions call from the main process instead of
+  // the renderer's /api/ai → Vercel function path. The packaged app's
+  // hosted backend cannot resolve corp/private hostnames (e.g.
+  // `*.stingray-private.com`), so when the user is in Electron we
+  // bypass Vercel entirely and let Node in the main process talk to
+  // whichever endpoint the user has configured. The renderer is still
+  // responsible for citation post-processing (it calls /api/ai with
+  // `mode: "process-only"` afterwards).
+  aiFetch: (args: AiFetchRequest): Promise<AiFetchResult> =>
+    ipcRenderer.invoke("studygit:ai-fetch", args),
 });

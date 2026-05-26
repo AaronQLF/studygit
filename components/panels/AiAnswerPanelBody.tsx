@@ -26,10 +26,10 @@ import {
 import { useStore } from "@/lib/store";
 import {
   AI_SETTINGS_DIALOG_EVENT,
-  aiRequestHeaders,
   hasAiCredentials,
   readAiSettings,
 } from "@/lib/ai-settings";
+import { sendAiRequest } from "@/lib/ai-client";
 import {
   rowToSourceRef,
   rowToSourceRefAsync,
@@ -340,10 +340,14 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
           },
         ];
 
-        const response = await fetch("/api/ai", {
-          method: "POST",
-          headers: aiRequestHeaders(readAiSettings()),
-          body: JSON.stringify({
+        // Dispatch via sendAiRequest, which picks the transport: the
+        // hosted /api/ai full path for the web build, or the Electron
+        // main-process IPC path for the packaged app. The packaged app
+        // requires the IPC path when the configured base URL is a
+        // corp/private host (e.g. *.stingray-private.com) that the
+        // Vercel function can't reach.
+        const result = await sendAiRequest(
+          {
             messages: history,
             sources: sources.map((s) => ({
               sid: s.sid,
@@ -354,16 +358,14 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
               highlightId: s.highlightId,
               page: s.page,
             })),
-          }),
-        });
+          },
+          readAiSettings()
+        );
 
-        if (!response.ok) {
-          const errPayload = (await response.json().catch(() => null)) as
-            | { error?: string; details?: string }
-            | null;
+        if (!result.ok) {
           const message =
-            (errPayload?.error ?? "AI request failed") +
-            (errPayload?.details ? ` — ${errPayload.details}` : "");
+            (result.error.error ?? "AI request failed") +
+            (result.error.details ? ` — ${result.error.details}` : "");
           updateAiTurn(nodeId, assistantTurn.id, {
             status: "error",
             error: message,
@@ -371,14 +373,10 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
           return;
         }
 
-        const payload = (await response.json()) as {
-          answer: string;
-          provenance: AiProvenance;
-        };
         updateAiTurn(nodeId, assistantTurn.id, {
           status: "idle",
-          text: payload.answer ?? "",
-          provenance: payload.provenance ?? null,
+          text: result.payload.answer ?? "",
+          provenance: (result.payload.provenance as AiProvenance) ?? null,
           error: undefined,
         });
       } catch (err) {

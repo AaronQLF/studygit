@@ -255,6 +255,49 @@ function createMainWindow(appUrl: string): BrowserWindow {
     }
   });
 
+  // Keep DevTools reachable in packaged builds. We strip the application
+  // menu above (no native menu = cleaner UI), which also removes
+  // Electron's default Cmd+Opt+I / Ctrl+Shift+I accelerator. Without an
+  // alternative, the packaged app has no way to inspect network/console
+  // when something goes wrong in the field — which makes diagnosing
+  // hosted-only bugs (e.g. /api/ai 502s) painful.
+  //
+  // We intercept the keydown in the webContents before it reaches the
+  // page so the renderer can't swallow it (some editor surfaces capture
+  // F12 / Cmd+Opt+I for their own shortcuts).
+  //
+  // Match on `input.code` (the physical key, e.g. "KeyI", "F12"), not
+  // `input.key`. On macOS the Option modifier remaps the produced
+  // character through the active keyboard layout — Cmd+Opt+I arrives
+  // as `input.key === "ˆ"` on a US layout, "˚" on others, etc. — so
+  // matching on `key` silently fails for non-trivial chords. `code` is
+  // layout-independent and reliable across every Mac keyboard.
+  const toggleDevTools = () => {
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools({ mode: "detach" });
+    }
+  };
+  win.webContents.on("before-input-event", (_event, input) => {
+    if (input.type !== "keyDown") return;
+    const code = input.code;
+    const macToggle =
+      process.platform === "darwin" &&
+      input.meta &&
+      input.alt &&
+      code === "KeyI";
+    const winToggle =
+      process.platform !== "darwin" &&
+      input.control &&
+      input.shift &&
+      code === "KeyI";
+    const f12 = code === "F12";
+    if (macToggle || winToggle || f12) {
+      toggleDevTools();
+    }
+  });
+
   win.on("closed", () => {
     // Drop the dead reference so anything that fires after the window is
     // torn down (second-instance, autoUpdater broadcast, etc.) doesn't
@@ -337,6 +380,206 @@ function webviewPreloadFileUrl(): string {
 
 ipcMain.handle("studygit:get-webview-preload-url", () =>
   webviewPreloadFileUrl()
+);
+
+// --------------------------------------------------------------------------
+// AI provider fetch (renderer → main → provider)
+// --------------------------------------------------------------------------
+//
+// The renderer can ask the main process to make the AI provider call on
+// its behalf. The motivation:
+//
+//   - The packaged app's hosted backend (Vercel) cannot resolve corp/VPN
+//     /LAN hostnames like `*.stingray-private.com`. Going renderer →
+//     /api/ai → provider hits ENOTFOUND in the Vercel function and the
+//     user sees a 502 "fetch failed" they can't act on.
+//   - Routing the call through the main process makes it leave the
+//     user's machine directly, which trivially works for any endpoint
+//     the user themselves can reach (intranet, VPN, localhost LLM, etc).
+//   - Bonus: the API key never leaves the user's machine — the renderer
+//     could already see it (it's in localStorage), but at least it's no
+//     longer round-tripping through a third-party host.
+//
+// We deliberately validate the inputs and *don't* forward arbitrary
+// headers from the renderer. The renderer asks "fetch this base URL,
+// for this model, with this OpenAI-shaped body, using this API key as
+// a bearer token" and that's all we'll do — never a generic proxy.
+// Citation processing still runs on the hosted backend via the
+// /api/ai `mode: "process-only"` branch (see app/api/ai/route.ts).
+
+// Hard caps on the request body forwarded to the AI provider. Anything
+// over this is almost certainly a bug (e.g. unbounded conversation
+// growth) — better to fail fast in the main process than ship 50MB of
+// JSON at the network and get a vague timeout.
+const AI_FETCH_MAX_BODY_BYTES = 24 * 1024 * 1024; // ~24 MB
+const AI_FETCH_TIMEOUT_MS = 120_000; // 2 minutes
+
+type AiFetchRequest = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  // OpenAI chat-completions `messages` array. Already system-prompted
+  // and source-block-decorated by the renderer using the shared helpers
+  // in lib/ai-request.ts.
+  messages: unknown;
+  // Optional sampling override; defaults to 0.3 to match the server
+  // route. Pinned to a small finite range to harden against the
+  // renderer accidentally posting NaN/Infinity.
+  temperature?: number;
+};
+
+type AiFetchResult =
+  | {
+      ok: true;
+      json: unknown;
+    }
+  | {
+      ok: false;
+      // "provider" — provider responded with non-2xx
+      // "network"  — couldn't even open the connection
+      // "timeout"  — fetch exceeded AI_FETCH_TIMEOUT_MS
+      // "bad-input"— renderer sent something we won't forward
+      kind: "provider" | "network" | "timeout" | "bad-input";
+      status?: number;
+      message: string;
+      details?: string;
+    };
+
+function isOpenAiBaseUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  try {
+    const u = new URL(trimmed);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.handle(
+  "studygit:ai-fetch",
+  async (_evt, args: AiFetchRequest): Promise<AiFetchResult> => {
+    if (!args || typeof args !== "object") {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: "missing arguments",
+      };
+    }
+    if (!isOpenAiBaseUrl(args.baseUrl)) {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: "baseUrl must be a http(s) URL",
+      };
+    }
+    if (typeof args.apiKey !== "string" || !args.apiKey.trim()) {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: "apiKey is required",
+      };
+    }
+    if (typeof args.model !== "string" || !args.model.trim()) {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: "model is required",
+      };
+    }
+    if (!Array.isArray(args.messages) || args.messages.length === 0) {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: "messages must be a non-empty array",
+      };
+    }
+
+    const temperature =
+      typeof args.temperature === "number" &&
+      Number.isFinite(args.temperature) &&
+      args.temperature >= 0 &&
+      args.temperature <= 2
+        ? args.temperature
+        : 0.3;
+
+    const body = JSON.stringify({
+      model: args.model.trim(),
+      temperature,
+      messages: args.messages,
+    });
+    if (Buffer.byteLength(body, "utf8") > AI_FETCH_MAX_BODY_BYTES) {
+      return {
+        ok: false,
+        kind: "bad-input",
+        message: `request body exceeds ${AI_FETCH_MAX_BODY_BYTES} bytes`,
+      };
+    }
+
+    const normalizedBase = args.baseUrl.trim().replace(/\/+$/, "");
+    const url = `${normalizedBase}/chat/completions`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AI_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${args.apiKey.trim()}`,
+        },
+        body,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const text = (await response.text().catch(() => "")).slice(0, 1000);
+        return {
+          ok: false,
+          kind: "provider",
+          status: response.status,
+          message: `Provider returned ${response.status}`,
+          details: text,
+        };
+      }
+      const json = await response.json().catch(() => null);
+      if (json === null) {
+        return {
+          ok: false,
+          kind: "provider",
+          status: response.status,
+          message: "Provider returned non-JSON response",
+        };
+      }
+      return { ok: true, json };
+    } catch (err) {
+      const aborted =
+        (err as { name?: string } | null)?.name === "AbortError" ||
+        controller.signal.aborted;
+      if (aborted) {
+        return {
+          ok: false,
+          kind: "timeout",
+          message: `Provider request exceeded ${AI_FETCH_TIMEOUT_MS}ms`,
+        };
+      }
+      const rawMessage = (err as Error)?.message ?? "ai request failed";
+      const cause = (err as { cause?: unknown }).cause;
+      const causeCode =
+        cause && typeof cause === "object" && "code" in cause
+          ? String((cause as { code: unknown }).code ?? "")
+          : "";
+      return {
+        ok: false,
+        kind: "network",
+        message: rawMessage,
+        details: causeCode || undefined,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 );
 
 function isInternalUrl(url: string): boolean {

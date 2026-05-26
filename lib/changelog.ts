@@ -27,6 +27,49 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.27",
+    date: "2026-05-26",
+    tagline:
+      "Desktop AI talks to private / VPN gateways again, and DevTools is back in packaged builds.",
+    sections: [
+      {
+        heading: "AI conversations \u2014 desktop",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Conversation node 502\u2019d with `fetch failed` in the packaged app whenever the configured AI base URL was a corp / VPN / LAN host (e.g. `*.stingray-private.com`, `*.internal`, a localhost LLM, a `10.x` / `192.168.x` IP). Root cause: the desktop shell is a thin window over the hosted Vercel deployment, so `POST /api/ai` ran inside a Vercel function in `iad1` \u2014 which has no line of sight to your corp DNS / VPN and ENOTFOUND\u2019d on the upstream `fetch` to the provider. Local dev didn\u2019t show this because `next dev` is on your laptop and can resolve the host normally.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Desktop AI requests now leave your machine directly. The renderer assembles the OpenAI chat-completions payload locally (via a new isomorphic `lib/ai-request.ts` shared with the route), asks the Electron main process to make the actual provider call over a new `studygit:ai-fetch` IPC, and only then posts the raw answer back to `/api/ai` in a new `mode: \"process-only\"` branch to reuse the server\u2019s JSDOM + marked + sanitize-html citation pipeline. Net effect: corp / VPN / LAN endpoints work in the packaged app for the same reason your browser tab on the same machine can reach them \u2014 the request goes out through your own network, not Vercel\u2019s.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Your AI API key no longer round-trips through the hosted backend on the desktop. The renderer used to hand the key to `/api/ai` as a header on every turn; in the new path the key stays on the user\u2019s machine and is consumed by the main-process fetch directly. The IPC handler refuses to forward anything other than the strictly-shaped `{ baseUrl, apiKey, model, messages, temperature }` payload, caps the body at 24\u202fMB, and aborts on a 2-minute timeout so a hung provider can\u2019t keep a renderer indefinitely.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Web build now returns an actionable error when `/api/ai` can\u2019t reach the configured provider. Where before the failed turn just said `fetch failed`, it now reads `Couldn\u2019t reach AI provider \u2014 the server couldn\u2019t connect to <host>` with the underlying error code (`ENOTFOUND`, `ECONNREFUSED`, `EAI_AGAIN`, etc.) attached. Loopback / private-range / corp-suffix hosts get an extra hint pointing you at the desktop app, since that\u2019s the only build that can talk to them.",
+          },
+        ],
+      },
+      {
+        heading: "Desktop \u2014 developer ergonomics",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "DevTools is reachable in packaged builds again \u2014 `\u2318+\u2325+I` on macOS, `Ctrl+Shift+I` on Windows / Linux, or `F12` anywhere. Stripping the native menu (we draw our own header) had also removed Electron\u2019s default DevTools accelerator, which made hosted-only bugs in the desktop app effectively un-inspectable. The handler watches `before-input-event` on physical key codes (`KeyI` / `F12`) rather than the produced character, so it works regardless of keyboard layout \u2014 holding Option on macOS remaps `i` to `\u02C6` and silently broke any naive key-string match.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.20",
     date: "2026-05-24",
     tagline:
