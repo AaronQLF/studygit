@@ -82,6 +82,7 @@
     "wait-on": "^9.0.5"
   },
   "overrides": {
-    "@asamuzakjp/css-color": "4.1.1"
+    "@asamuzakjp/css-color": "4.1.1",
+    "parse5": "7.3.0"
   }
 }
