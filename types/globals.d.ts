@@ -17,6 +17,28 @@ type StudygitUpdateStatus =
   | { kind: "ready"; version: string }
   | { kind: "error"; message: string };
 
+// Mirrors the request/result shapes of the `studygit:ai-fetch` IPC
+// handler in electron/main.ts. Kept inline so the renderer can use the
+// bridge without importing from the electron-only TS project.
+type StudygitAiFetchRequest = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  // OpenAI-shaped chat-completions `messages` array, already
+  // system-prompted and source-block-decorated by lib/ai-request.ts.
+  messages: unknown;
+  temperature?: number;
+};
+type StudygitAiFetchResult =
+  | { ok: true; json: unknown }
+  | {
+      ok: false;
+      kind: "provider" | "network" | "timeout" | "bad-input";
+      status?: number;
+      message: string;
+      details?: string;
+    };
+
 // Subset of the surface exposed by electron/preload.ts. Marked optional on
 // `Window` because the same renderer also runs in a regular browser during
 // `next dev`, where there's no preload script and `window.studygit` is
@@ -32,6 +54,9 @@ interface StudygitBridge {
   installUpdateAndRestart: () => void;
   getAppVersion: () => Promise<string>;
   getWebviewPreloadUrl: () => Promise<string>;
+  aiFetch: (
+    args: StudygitAiFetchRequest
+  ) => Promise<StudygitAiFetchResult>;
 }
 
 interface Window {
