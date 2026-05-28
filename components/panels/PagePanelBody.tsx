@@ -9,8 +9,8 @@ import {
   PageEditor,
   PageEditorToolbar,
   type PageEditorHandle,
-} from "../PageEditor";
-import { EditableTitle } from "../nodes/EditableTitle";
+} from "@/components/editors/PageEditor";
+import { EditableTitle } from "@/components/ui/EditableTitle";
 
 export function PagePanelBody({ node }: { node: CanvasNode }) {
   const updateNodeData = useStore((s) => s.updateNodeData);

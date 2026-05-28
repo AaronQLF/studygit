@@ -27,6 +27,59 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.28",
+    date: "2026-05-28",
+    tagline:
+      "Floating panels move freely without sticky snaps, and a top-to-bottom components refactor that nobody should be able to see.",
+    sections: [
+      {
+        heading: "Floating panels",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Dragging a panel no longer snaps the moment you release the mouse in the middle of the screen. The snap layouts (full / halves / thirds / quads) collectively tiled the entire viewport, so the drop-zone hit test in `findSnapZoneAtPointer` always matched something \u2014 you couldn\u2019t actually free-position a panel by drag. The hit test now requires the pointer to be within 24px of a viewport edge (Windows-11-style edge snap) before the snap preview lights up; anywhere in the middle of the screen the panel just drops where you released it.",
+          },
+          {
+            tag: "new",
+            text:
+              "Hold \u21E7 Shift while dragging to force the old behavior \u2014 the snap preview fires from anywhere on the screen, useful for quickly hammering a layout. The snap layout button in the panel header still works the same way for explicit, deliberate snapping.",
+          },
+        ],
+      },
+      {
+        heading: "Under the hood \u2014 components refactor",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "Reorganized the `components/` tree from one flat folder into eight feature folders \u2014 `ui/`, `shell/`, `canvas/`, `panels/`, `viewers/`, `editors/`, `auth/`, `marketing/` (plus `highlights/` for the shared highlight sidebar primitives). Moves were done with `git mv` so file history follows. No behavior change; the dev server, builds, and every panel look identical.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Pulled shared helpers and hooks out of components and into `lib/` so they have one home each: URL parsing (`lib/url.ts`), Electron probe (`lib/runtime.ts`), PDF geometry (`lib/pdf-geometry.ts`), citation-edge derivation (`lib/citation-edges.ts`), AI image attachment plumbing (`lib/ai-attachments.ts`), and five new hooks under `lib/hooks/` for pending-highlight jumps, outside-click dismiss, anchored popovers, list keyboard navigation, and debounced node-data writes. Each replaces 2\u20135 copy-pasted implementations scattered around the previous component files.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Built shared UI primitives for repeated patterns: `HighlightsListPanel`, `HighlightDetailPanel`, `CommentsThread` (replacing near-identical PDF/web/browser highlight UI), `NotesSidebar`, `SelectionColorToolbar` (used by both the PDF viewer and the in-app browser), `EmptyStateCard`, and `ToolbarButton` (the PDF-notes and page-editor toolbars used to literally have a comment saying \u201ckept in sync\u201d above their duplicated copies).",
+          },
+          {
+            tag: "improved",
+            text:
+              "Decomposed the seven largest god-components into co-located folders. Canvas 707\u2192299, Panel 630\u2192321, AiAnswerPanelBody 1385\u2192550, LinkPanelBody 1078\u2192548, BrowserWindow 1013\u2192750, ThemeSettingsDialog 574\u2192313, SourcePicker 593\u2192409, PdfViewer 568\u2192431. Each one is now a thin orchestrator next to a folder of hooks and presentational subcomponents \u2014 the snap-drag state machine, AI composer, AI turn renderer, link panel viewer / editor / empty / error states, browser chrome, PDF document loader, theme preset/grid/accent cards, source picker rows.",
+          },
+          {
+            tag: "improved",
+            text:
+              "TypeScript and ESLint pass with the exact same error/warning counts as before the refactor \u2014 zero regressions introduced. There are no automated tests for `components/`, so every change in this round is strictly behavior-preserving (rename, split, extract, dedupe). Future work to tighten React Flow `data` casts and clean up the pre-existing `react-hooks/set-state-in-effect` warnings is intentionally out of scope.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.27",
     date: "2026-05-26",
     tagline:

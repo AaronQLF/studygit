@@ -3,12 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { NOTE_COLORS } from "@/lib/defaults";
-import { useStore } from "@/lib/store";
+import { useDebouncedNodeData } from "@/lib/hooks/use-debounced-node-data";
 import type { CanvasNode, NoteNodeData } from "@/lib/types";
 
 export function NotePanelBody({ node }: { node: CanvasNode }) {
   const data = node.data as NoteNodeData;
-  const updateNodeData = useStore((s) => s.updateNodeData);
   const [noteText, setNoteText] = useState(data.text);
   const [noteColor, setNoteColor] = useState(data.color);
   const noteRef = useRef<HTMLTextAreaElement>(null);
@@ -24,15 +23,10 @@ export function NotePanelBody({ node }: { node: CanvasNode }) {
     return () => clearTimeout(timer);
   }, [node.id]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateNodeData(node.id, {
-        text: noteText,
-        color: noteColor,
-      } as Partial<NoteNodeData>);
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [noteColor, noteText, node.id, updateNodeData]);
+  useDebouncedNodeData<NoteNodeData>(node.id, {
+    text: noteText,
+    color: noteColor,
+  });
 
   return (
     <section className="flex-1 min-h-0 overflow-y-auto">

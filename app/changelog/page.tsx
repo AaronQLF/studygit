@@ -6,7 +6,7 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { SiteFooter, SiteNav } from "@/components/SiteChrome";
+import { SiteFooter, SiteNav } from "@/components/marketing/SiteChrome";
 import {
   CHANGELOG,
   type ChangelogEntry,

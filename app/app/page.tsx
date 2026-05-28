@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/AppShell";
+import { AppShell } from "@/components/shell/AppShell";
 import { tryGetCurrentUser } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
