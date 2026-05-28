@@ -93,9 +93,21 @@ function escapeHtml(s: string): string {
 
 function offlineDataUrl(retryUrl: string, message: string): string {
   // Both interpolations are HTML-escaped; the retry URL is *also*
-  // JSON-encoded so it survives being assigned to `location.href` from a
-  // string literal without breaking on the quote characters that legal
-  // URLs sometimes contain (encoded brackets, etc.).
+  // JSON-encoded so it survives being assigned to `location.href` from
+  // a string literal without breaking on the quote characters that
+  // legal URLs sometimes contain (encoded brackets, etc.).
+  //
+  // The page is a single inlined data URL — it needs to render with
+  // zero network access, so no external CSS, fonts, or images.
+  //
+  // Two background behaviors:
+  //   1. Auto-retry every 8s. The hosted `/app` is normally one HEAD
+  //      away from working; we don't make the user keep clicking.
+  //   2. Easter egg: type "snake" anywhere on the page to swap the
+  //      offline card for a small canvas Snake game. Arrow keys to
+  //      steer, R to restart, Esc to go back. Score persists across
+  //      game-overs within the same session. Pure vanilla JS, no
+  //      external assets, ~600 bytes minified.
   const safeRetry = JSON.stringify(retryUrl);
   const safeMsg = escapeHtml(message || "");
   const html = `<!doctype html>
@@ -118,7 +130,7 @@ function offlineDataUrl(retryUrl: string, message: string): string {
   }
   .card {
     -webkit-app-region: no-drag;
-    max-width: 360px;
+    max-width: 380px;
     padding: 24px;
     text-align: center;
   }
@@ -136,15 +148,255 @@ function offlineDataUrl(retryUrl: string, message: string): string {
     font-size: 13px; font-weight: 500; cursor: pointer;
   }
   button:hover { opacity: 0.9; }
+  .retry-status {
+    margin-top: 14px;
+    font-size: 11px;
+    color: #6a5e4d;
+    font-family: ui-monospace, "SF Mono", monospace;
+    min-height: 14px;
+  }
+  .hint {
+    margin-top: 22px;
+    font-size: 10.5px;
+    color: #4a4234;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  /* -- snake easter egg -- */
+  .game {
+    -webkit-app-region: no-drag;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .game.on { display: flex; }
+  .card.off { display: none; }
+  .game canvas {
+    image-rendering: pixelated;
+    background: #14141c;
+    border: 1px solid #2a2a36;
+    border-radius: 6px;
+  }
+  .game-hud {
+    display: flex;
+    gap: 18px;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 11px;
+    color: #a9997f;
+  }
+  .game-hud b { color: #ede4d3; font-weight: 600; }
+  .game-foot {
+    font-size: 10.5px;
+    color: #6a5e4d;
+    text-align: center;
+    max-width: 360px;
+  }
+  .game-foot kbd {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 10px;
+    background: #1a1a24;
+    border: 1px solid #2a2a36;
+    border-radius: 3px;
+    padding: 1px 4px;
+    color: #ede4d3;
+  }
+  .gameover {
+    color: #c44a2b;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 12px;
+    height: 16px;
+  }
 </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card" id="card">
     <h1>Can't reach Studygit</h1>
     <p>Studygit needs an internet connection to load your workspace.</p>
     <p class="reason">${safeMsg}</p>
     <button onclick="location.href = ${safeRetry}">Try again</button>
+    <div class="retry-status" id="retryStatus">Retrying automatically…</div>
+    <div class="hint">type "snake" to play</div>
   </div>
+
+  <div class="game" id="game">
+    <div class="game-hud">
+      <span>SCORE <b id="score">0</b></span>
+      <span>BEST <b id="best">0</b></span>
+    </div>
+    <canvas id="cv" width="400" height="280"></canvas>
+    <div class="gameover" id="over">&nbsp;</div>
+    <div class="game-foot">
+      <kbd>\u2190</kbd> <kbd>\u2191</kbd> <kbd>\u2193</kbd> <kbd>\u2192</kbd>
+      to steer \u00B7 <kbd>R</kbd> restart \u00B7 <kbd>Esc</kbd> back
+    </div>
+  </div>
+
+<script>
+(function () {
+  var RETRY_URL = ${safeRetry};
+
+  // -- background auto-retry ---------------------------------------
+  // Try a no-cors HEAD against the retry URL every 8s; on success
+  // (or any response that's not a hard network error) we navigate.
+  // The user can also still click "Try again" manually.
+  var status = document.getElementById("retryStatus");
+  var attempt = 0;
+  function nextRetry() {
+    attempt++;
+    if (status) status.textContent = "Retrying… (attempt " + attempt + ")";
+    fetch(RETRY_URL, { method: "HEAD", mode: "no-cors", cache: "no-store" })
+      .then(function () {
+        if (status) status.textContent = "Reconnected. Loading\u2026";
+        // Give the user a beat to see the message before we navigate.
+        setTimeout(function () { location.href = RETRY_URL; }, 400);
+      })
+      .catch(function () {
+        if (status) status.textContent =
+          "Still offline. Next retry in 8s.";
+        setTimeout(nextRetry, 8000);
+      });
+  }
+  setTimeout(nextRetry, 4000);
+
+  // -- snake easter egg --------------------------------------------
+  // Hidden trigger: type the word "snake" on the keyboard while the
+  // offline page is focused. Swaps the offline card for a tiny
+  // playable snake game. Esc swaps back. We deliberately don't
+  // surface this in the UI beyond the lowercase "type snake to play"
+  // hint at the bottom of the card — discoverability without
+  // shouting.
+  var TARGET = "snake";
+  var typed = "";
+  var card = document.getElementById("card");
+  var game = document.getElementById("game");
+  var scoreEl = document.getElementById("score");
+  var bestEl = document.getElementById("best");
+  var overEl = document.getElementById("over");
+  var canvas = document.getElementById("cv");
+  var ctx = canvas.getContext("2d");
+
+  var CELL = 16;
+  var COLS = canvas.width / CELL;
+  var ROWS = canvas.height / CELL;
+  var snake, dir, nextDir, food, score, best = 0, alive, tickTimer;
+
+  function reset() {
+    snake = [{ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }];
+    dir = { x: 1, y: 0 };
+    nextDir = dir;
+    score = 0;
+    alive = true;
+    placeFood();
+    overEl.innerHTML = "&nbsp;";
+    scoreEl.textContent = "0";
+    draw();
+    if (tickTimer) clearInterval(tickTimer);
+    tickTimer = setInterval(tick, 110);
+  }
+
+  function placeFood() {
+    while (true) {
+      var f = {
+        x: Math.floor(Math.random() * COLS),
+        y: Math.floor(Math.random() * ROWS),
+      };
+      var hit = false;
+      for (var i = 0; i < snake.length; i++) {
+        if (snake[i].x === f.x && snake[i].y === f.y) { hit = true; break; }
+      }
+      if (!hit) { food = f; return; }
+    }
+  }
+
+  function tick() {
+    if (!alive) return;
+    dir = nextDir;
+    var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    if (
+      head.x < 0 || head.x >= COLS ||
+      head.y < 0 || head.y >= ROWS
+    ) { gameOver(); return; }
+    for (var i = 0; i < snake.length; i++) {
+      if (snake[i].x === head.x && snake[i].y === head.y) {
+        gameOver();
+        return;
+      }
+    }
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      scoreEl.textContent = String(score);
+      placeFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function gameOver() {
+    alive = false;
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    if (score > best) {
+      best = score;
+      bestEl.textContent = String(best);
+    }
+    overEl.textContent = "GAME OVER \u2014 press R to retry";
+  }
+
+  function draw() {
+    ctx.fillStyle = "#14141c";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#c44a2b";
+    ctx.fillRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6);
+    for (var i = 0; i < snake.length; i++) {
+      var seg = snake[i];
+      ctx.fillStyle = i === 0 ? "#ede4d3" : "#a9997f";
+      ctx.fillRect(seg.x * CELL + 1, seg.y * CELL + 1, CELL - 2, CELL - 2);
+    }
+  }
+
+  function openGame() {
+    if (card) card.classList.add("off");
+    if (game) game.classList.add("on");
+    reset();
+  }
+
+  function closeGame() {
+    if (card) card.classList.remove("off");
+    if (game) game.classList.remove("on");
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    // While the game is open, route keys to it.
+    if (game && game.classList.contains("on")) {
+      if (e.key === "Escape") { e.preventDefault(); closeGame(); return; }
+      if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        reset();
+        return;
+      }
+      if (!alive) return;
+      var k = e.key;
+      if (k === "ArrowLeft" && dir.x !== 1)  nextDir = { x: -1, y: 0 };
+      else if (k === "ArrowRight" && dir.x !== -1) nextDir = { x: 1, y: 0 };
+      else if (k === "ArrowUp" && dir.y !== 1) nextDir = { x: 0, y: -1 };
+      else if (k === "ArrowDown" && dir.y !== -1) nextDir = { x: 0, y: 1 };
+      if (k.indexOf("Arrow") === 0) e.preventDefault();
+      return;
+    }
+    // Otherwise watch for the trigger word.
+    if (e.key && e.key.length === 1) {
+      typed = (typed + e.key.toLowerCase()).slice(-TARGET.length);
+      if (typed === TARGET) {
+        typed = "";
+        openGame();
+      }
+    }
+  });
+})();
+</script>
 </body>
 </html>`;
   return "data:text/html;charset=utf-8," + encodeURIComponent(html);
