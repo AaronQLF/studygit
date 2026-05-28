@@ -27,6 +27,29 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.29",
+    date: "2026-05-28",
+    tagline:
+      "Desktop offline screen now auto-reconnects in the background \u2014 and hides a small game for the wait.",
+    sections: [
+      {
+        heading: "Desktop \u2014 offline screen",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "The Electron shell is a thin window over the hosted Vercel deployment, so every web deploy reaches every desktop user immediately without an app update \u2014 already true since launch, but the offline screen used to make you click \u201cTry again\u201d manually every time the network came back. The offline page now retries the hosted URL in the background every 8 seconds with a no-cors HEAD request, surfacing the attempt count under the retry button and auto-navigating the moment the connection comes back. The button still works for the impatient.",
+          },
+          {
+            tag: "new",
+            text:
+              "Type \u201csnake\u201d while staring at the offline card and a tiny canvas Snake game takes over. Arrow keys to steer, R to restart, Esc to go back to the offline card. Score persists across game-overs in the same session. Pure vanilla JS / canvas inlined into the same data URL the offline page already lives in, so it works with zero network access. Background auto-retry keeps running while you play.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.28",
     date: "2026-05-28",
     tagline:
