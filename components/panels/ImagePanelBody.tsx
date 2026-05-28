@@ -1,25 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Image as ImageIcon } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { useDebouncedNodeData } from "@/lib/hooks/use-debounced-node-data";
 import type { CanvasNode, ImageNodeData } from "@/lib/types";
 
 export function ImagePanelBody({ node }: { node: CanvasNode }) {
   const data = node.data as ImageNodeData;
-  const updateNodeData = useStore((s) => s.updateNodeData);
   const [imageUrl, setImageUrl] = useState(data.url);
   const [imageCaption, setImageCaption] = useState(data.caption ?? "");
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateNodeData(node.id, {
-        url: imageUrl,
-        caption: imageCaption,
-      } as Partial<ImageNodeData>);
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [imageCaption, imageUrl, node.id, updateNodeData]);
+  useDebouncedNodeData<ImageNodeData>(node.id, {
+    url: imageUrl,
+    caption: imageCaption,
+  });
 
   return (
     <section className="flex-1 overflow-y-auto">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -9,29 +9,32 @@ import React, {
 } from "react";
 import clsx from "clsx";
 import {
-  ArrowLeft,
   BookOpen,
   ExternalLink,
   Globe,
-  Highlighter,
   Link2,
-  MessageSquare,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
   RefreshCw,
-  StickyNote,
-  Trash2,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
-import type { CanvasNode, LinkNodeData, WebHighlight } from "@/lib/types";
+import type { CanvasNode, LinkNodeData } from "@/lib/types";
 import {
   WebArticleViewer,
   type WebSelectionEvent,
   type WebViewerHandle,
-} from "../WebArticleViewer";
-import { RichTextEditor } from "../RichTextEditor";
-import { buildWebProxyUrl } from "@/lib/web-proxy";
+} from "@/components/viewers/WebArticleViewer";
+import { hostnameOf, normalizeUrl } from "@/lib/url";
+import { usePendingHighlightJump } from "@/lib/hooks/use-pending-highlight-jump";
+import { NotesSidebar } from "@/components/ui/NotesSidebar";
+import { HighlightsListPanel } from "@/components/highlights/HighlightsListPanel";
+import { HighlightDetailPanel } from "@/components/highlights/HighlightDetailPanel";
+import { LiveSourceView } from "./link/LiveSourceView";
+import { ArticleHeader } from "./link/ArticleHeader";
+import { EmptyUrlState } from "./link/EmptyUrlState";
+import { ExtractErrorState } from "./link/ExtractErrorState";
+import { LinkMetaEditor } from "./link/LinkMetaEditor";
 
 type ExtractResponse = {
   finalUrl: string;
@@ -42,21 +45,6 @@ type ExtractResponse = {
   contentHtml: string;
   fetchedAt: number;
 };
-
-function normalizeUrl(url: string) {
-  const value = url.trim();
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  return `https://${value}`;
-}
-
-function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
 
 export function LinkPanelBody({ node }: { node: CanvasNode }) {
   const data = node.data as LinkNodeData;
@@ -209,19 +197,7 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
     [nodeId, consumePendingHighlightJump]
   );
 
-  useEffect(() => {
-    const initial =
-      useStore.getState().pendingHighlightJumps[nodeId] ?? null;
-    if (initial) tryJumpToHighlight(initial);
-
-    const unsub = useStore.subscribe((state, prev) => {
-      const next = state.pendingHighlightJumps[nodeId] ?? null;
-      const before = prev.pendingHighlightJumps[nodeId] ?? null;
-      if (!next || next === before) return;
-      tryJumpToHighlight(next);
-    });
-    return unsub;
-  }, [nodeId, tryJumpToHighlight]);
+  usePendingHighlightJump(nodeId, tryJumpToHighlight);
 
   // -- highlight creation ------------------------------------------------
 
@@ -487,43 +463,23 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
       </div>
 
       {notesOpen ? (
-        <aside
-          className={clsx(
-            "flex shrink-0 flex-col border-[var(--pg-border)] bg-[var(--pg-bg)]",
+        <NotesSidebar
+          value={data.notes ?? ""}
+          onChange={(html) =>
+            updateNodeData(nodeId, { notes: html } as Partial<LinkNodeData>)
+          }
+          onClose={() => setNotesOpen(false)}
+          placeholder="Take notes on this article… press /cite to reference a highlight"
+          citationContext={{
+            sourceNodeId: nodeId,
+            workspaceId: node.workspaceId,
+          }}
+          widthClass={
             compactLayout
-              ? "absolute inset-y-0 right-0 z-30 w-[min(340px,92%)] border-l shadow-[var(--pg-shadow-lg)]"
-              : "w-[min(44%,640px)] min-w-[280px] max-w-[640px] border-l"
-          )}
-        >
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3">
-            <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--pg-muted)]">
-              <StickyNote size={12} />
-              Notes
-            </div>
-            <button
-              title="Close notes"
-              onClick={() => setNotesOpen(false)}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-            >
-              <PanelRightClose size={12} />
-            </button>
-          </div>
-          <div className="flex-1 min-h-0">
-            <RichTextEditor
-              value={data.notes ?? ""}
-              onChange={(html) =>
-                updateNodeData(nodeId, {
-                  notes: html,
-                } as Partial<LinkNodeData>)
-              }
-              placeholder="Take notes on this article… press /cite to reference a highlight"
-              citationContext={{
-                sourceNodeId: nodeId,
-                workspaceId: node.workspaceId,
-              }}
-            />
-          </div>
-        </aside>
+              ? "absolute inset-y-0 right-0 z-30 w-[min(340px,92%)] shadow-[var(--pg-shadow-lg)]"
+              : "w-[min(44%,640px)] min-w-[280px] max-w-[640px]"
+          }
+        />
       ) : null}
 
       {highlightsOpen ? (
@@ -536,9 +492,10 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
           )}
         >
           {activeHighlight ? (
-            <WebHighlightDetail
+            <HighlightDetailPanel
               highlight={activeHighlight}
-              hostname={articleHostname}
+              locatorLabel={`From ${articleHostname || "this article"}`}
+              jumpLabel="Scroll to"
               onBack={() => setActiveHighlightId(null)}
               onJump={() => {
                 setViewMode("reader");
@@ -560,9 +517,16 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
               }
             />
           ) : (
-            <WebHighlightsList
-              highlights={highlights}
-              hostname={articleHostname}
+            <HighlightsListPanel
+              highlights={highlights.map((h) => ({
+                id: h.id,
+                color: h.color,
+                text: h.text,
+                sortKey: h.createdAt,
+                locator: articleHostname || "Article",
+                commentCount: h.comments.length,
+              }))}
+              emptyHint="Select text in the article to create your first highlight."
               onOpen={(id) => {
                 setViewMode("reader");
                 setActiveHighlightId(id);
@@ -582,497 +546,3 @@ export function LinkPanelBody({ node }: { node: CanvasNode }) {
   );
 }
 
-// Renders the live original page. Inside Electron we mount a real
-// <webview> so cross-origin sites load without X-Frame-Options
-// problems; in a regular browser we fall back to a sandboxed iframe
-// (which most sites refuse via X-Frame-Options / CSP, hence the
-// "Open original" escape hatch overlay).
-function LiveSourceView({ url }: { url: string }) {
-  // The `studygit` global is set by the Electron preload script (see
-  // electron/preload.ts and the BrowserWindow component); its presence
-  // is a reliable signal that we're inside the desktop shell.
-  const [isElectron, setIsElectron] = useState(false);
-  const [iframeBlocked, setIframeBlocked] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    // Defer the setState a microtask so we don't sync-render twice
-    // during the initial mount (matches the pattern used in
-    // AppShell.tsx for the same platform-detection check).
-    queueMicrotask(() => {
-      setIsElectron(
-        typeof window !== "undefined" &&
-          !!(window as unknown as { studygit?: unknown }).studygit
-      );
-    });
-  }, []);
-
-  // Most cross-origin iframes that get blocked by X-Frame-Options
-  // don't fire a useful `onError` — they just stay blank. Surface a
-  // soft fallback after a beat so the user isn't staring at a void.
-  useEffect(() => {
-    if (isElectron) return;
-    queueMicrotask(() => setIframeBlocked(false));
-    const id = window.setTimeout(() => {
-      try {
-        const doc = iframeRef.current?.contentDocument;
-        if (!doc || doc.body?.childElementCount === 0) {
-          setIframeBlocked(true);
-        }
-      } catch {
-        // Cross-origin contentDocument access throws — that's a strong
-        // signal the iframe loaded SOMETHING (rather than being blank).
-        // Don't show the fallback in that case.
-      }
-    }, 1800);
-    return () => window.clearTimeout(id);
-  }, [isElectron, url]);
-
-  if (!url) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
-        No URL to load
-      </div>
-    );
-  }
-
-  if (isElectron) {
-    // The webview shares the persist:browser partition with the main
-    // in-app browser so a Substack / NYT login made there carries
-    // over to the source view of any saved link.
-    return (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      React.createElement("webview" as any, {
-        src: url,
-        partition: "persist:browser",
-        style: {
-          display: "inline-flex",
-          width: "100%",
-          height: "100%",
-          background: "white",
-        },
-      })
-    );
-  }
-
-  return (
-    <div className="relative flex min-h-0 flex-1 flex-col bg-white">
-      <iframe
-        ref={iframeRef}
-        src={buildWebProxyUrl(url)}
-        className="pg-live-source-iframe h-full w-full border-0"
-        // No `allow-same-origin` — see BrowserWindow.tsx for the
-        // rationale. Sites that need their own cookies render
-        // logged-out, but our XSS surface stays closed.
-        sandbox="allow-scripts allow-popups allow-forms"
-        title="Original page"
-      />
-      {iframeBlocked ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[color-mix(in_srgb,var(--pg-bg)_85%,transparent)]">
-          <div className="pointer-events-auto max-w-sm rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-bg-elevated)] p-4 text-center shadow-[var(--pg-shadow)]">
-            <Globe size={18} className="mx-auto mb-2 text-[var(--pg-muted)]" />
-            <div className="mb-1 text-[13px] font-medium text-[var(--pg-fg)]">
-              Couldn&rsquo;t load this page
-            </div>
-            <p className="mb-3 text-[12px] text-[var(--pg-fg-soft)]">
-              The server-side proxy couldn&rsquo;t fetch this URL. Try the
-              reader view, or open the original in a new tab.
-            </p>
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white hover:opacity-90"
-            >
-              <ExternalLink size={11} />
-              Open original
-            </a>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ArticleHeader({
-  title,
-  byline,
-  siteName,
-}: {
-  title: string | undefined;
-  byline: string | null | undefined;
-  siteName: string | null | undefined;
-}) {
-  if (!title && !byline && !siteName) return null;
-  return (
-    <div className="mx-auto w-full max-w-[720px] px-8 pt-8 pb-2">
-      {siteName ? (
-        <div className="mb-2 text-[11px] uppercase tracking-wider text-[var(--pg-muted)]">
-          {siteName}
-        </div>
-      ) : null}
-      {title ? (
-        <h1 className="pg-serif text-[28px] font-medium leading-tight text-[var(--pg-fg)]">
-          {title}
-        </h1>
-      ) : null}
-      {byline ? (
-        <p className="mt-1.5 text-[13px] text-[var(--pg-fg-soft)]">{byline}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function EmptyUrlState({ onSubmit }: { onSubmit: (url: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="w-full max-w-md rounded-lg border border-dashed border-[var(--pg-border-strong)] bg-[var(--pg-bg-subtle)] p-8 text-center">
-        <Link2 size={28} className="mx-auto mb-2 text-[var(--pg-muted)]" />
-        <div className="mb-1 text-sm font-semibold text-[var(--pg-fg)]">
-          No URL yet
-        </div>
-        <div className="mb-4 text-[12px] text-[var(--pg-fg-soft)]">
-          Paste a link to an article, blog post, or essay to load a clean
-          reader view you can highlight and cite.
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const next = value.trim();
-            if (next) onSubmit(next);
-          }}
-          className="flex items-center gap-2"
-        >
-          <input
-            className="flex-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] px-2.5 py-1.5 text-[13px] text-[var(--pg-fg)] outline-none focus:border-[var(--pg-accent)]"
-            placeholder="https://example.com/article"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white transition-opacity hover:opacity-90"
-          >
-            Load
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ExtractErrorState({
-  error,
-  url,
-  onRetry,
-}: {
-  error: string;
-  url: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="flex flex-1 items-center justify-center px-8">
-      <div className="max-w-md text-center">
-        <div className="mb-1 text-sm font-semibold text-[var(--pg-fg)]">
-          Couldn&rsquo;t load the article
-        </div>
-        <p className="mb-3 text-[12px] text-[var(--pg-fg-soft)]">{error}</p>
-        <p className="mb-4 break-all text-[11px] text-[var(--pg-muted)]">{url}</p>
-        <div className="flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-1.5 text-[12px] text-white hover:opacity-90"
-          >
-            <RefreshCw size={11} />
-            Try again
-          </button>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--pg-border-strong)] px-3 py-1.5 text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
-          >
-            <ExternalLink size={11} />
-            Open original
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LinkMetaEditor({
-  data,
-  onSave,
-  onCancel,
-}: {
-  data: LinkNodeData;
-  onSave: (patch: Partial<LinkNodeData>) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState(data.title ?? "");
-  const [url, setUrl] = useState(data.url ?? "");
-  return (
-    <div className="grid gap-2 border-b border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-3 py-2 md:grid-cols-[1fr_2fr_auto]">
-      <input
-        className="rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] px-2 py-1.5 text-[12px] text-[var(--pg-fg)] outline-none focus:border-[var(--pg-accent)]"
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        placeholder="Title"
-      />
-      <input
-        className="rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-bg)] px-2 py-1.5 font-mono text-[12px] text-[var(--pg-fg)] outline-none focus:border-[var(--pg-accent)]"
-        value={url}
-        onChange={(event) => setUrl(event.target.value)}
-        placeholder="https://…"
-      />
-      <div className="flex justify-end gap-1">
-        <button
-          type="button"
-          className="rounded-md px-2 py-1 text-[12px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="rounded-md bg-[var(--pg-accent)] px-2.5 py-1 text-[12px] text-white hover:opacity-90"
-          onClick={() => onSave({ title, url })}
-        >
-          Save
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function WebHighlightsList({
-  highlights,
-  hostname,
-  onOpen,
-  onDelete,
-}: {
-  highlights: WebHighlight[];
-  hostname: string;
-  onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  const sorted = highlights.slice().sort((a, b) => a.createdAt - b.createdAt);
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--pg-border)] px-4">
-        <div className="inline-flex items-center gap-2 text-[12px] text-[var(--pg-fg-soft)]">
-          <Highlighter size={13} className="text-[var(--pg-muted)]" />
-          <span className="font-medium">Highlights</span>
-          {highlights.length ? (
-            <span className="text-[var(--pg-muted)]">{highlights.length}</span>
-          ) : null}
-        </div>
-      </header>
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        {sorted.length === 0 ? (
-          <div className="mt-8 px-4 text-center">
-            <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] text-[var(--pg-muted)]">
-              <Highlighter size={16} />
-            </div>
-            <p className="text-[13px] text-[var(--pg-fg-soft)]">
-              No highlights yet
-            </p>
-            <p className="mt-1 text-[12px] leading-relaxed text-[var(--pg-muted)]">
-              Select text in the article to create your first highlight.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {sorted.map((highlight) => {
-              const preview =
-                highlight.text.length > 180
-                  ? highlight.text.slice(0, 180).trimEnd() + "…"
-                  : highlight.text;
-              return (
-                <div
-                  key={highlight.id}
-                  onClick={() => onOpen(highlight.id)}
-                  className="group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] p-3 pl-4 text-left transition-colors hover:border-[var(--pg-border-strong)] hover:bg-[var(--pg-bg-elevated)]"
-                >
-                  <span
-                    className="absolute inset-y-0 left-0 w-1"
-                    style={{ backgroundColor: highlight.color }}
-                    aria-hidden
-                  />
-                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
-                    <span className="truncate">{hostname || "Article"}</span>
-                    <div className="flex items-center gap-2">
-                      {highlight.comments.length ? (
-                        <span className="inline-flex items-center gap-0.5">
-                          <MessageSquare size={10} />{" "}
-                          {highlight.comments.length}
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(highlight.id);
-                        }}
-                        className="inline-flex items-center rounded p-0.5 text-[var(--pg-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                        title="Remove highlight"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="line-clamp-3 text-[13px] leading-relaxed text-[var(--pg-fg)]">
-                    {preview}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function WebHighlightDetail({
-  highlight,
-  hostname,
-  onBack,
-  onJump,
-  onRemove,
-  commentDraft,
-  setCommentDraft,
-  onAddComment,
-  onDeleteComment,
-}: {
-  highlight: WebHighlight;
-  hostname: string;
-  onBack: () => void;
-  onJump: () => void;
-  onRemove: () => void;
-  commentDraft: string;
-  setCommentDraft: (value: string) => void;
-  onAddComment: (text: string) => void;
-  onDeleteComment: (commentId: string) => void;
-}) {
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const excerpt =
-    highlight.text.length > 320
-      ? highlight.text.slice(0, 320).trimEnd() + "…"
-      : highlight.text;
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--pg-border)] px-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-        >
-          <ArrowLeft size={14} />
-          All highlights
-        </button>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onJump}
-            className="rounded-md px-2 py-1 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
-            title="Scroll to highlight"
-          >
-            Scroll to
-          </button>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex items-center rounded-md p-1.5 text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-red-400"
-            title="Delete highlight"
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
-      </header>
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6 pt-4">
-        <div className="relative mb-5 overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] pl-3 pr-3 py-2.5">
-          <span
-            className="absolute inset-y-0 left-0 w-1"
-            style={{ backgroundColor: highlight.color }}
-            aria-hidden
-          />
-          <div className="pl-2">
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
-              From {hostname || "this article"}
-            </div>
-            <p className="text-[13px] leading-relaxed text-[var(--pg-fg-soft)]">
-              {excerpt}
-            </p>
-          </div>
-        </div>
-        <div className="mt-8 border-t border-[var(--pg-border)] pt-3">
-          <button
-            type="button"
-            onClick={() => setCommentsOpen((v) => !v)}
-            className="flex w-full items-center justify-between text-[11px] uppercase tracking-wider text-[var(--pg-muted)] hover:text-[var(--pg-fg-soft)]"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <MessageSquare size={12} />
-              Notes
-              {highlight.comments.length ? (
-                <span className="text-[var(--pg-fg-soft)]">
-                  ({highlight.comments.length})
-                </span>
-              ) : null}
-            </span>
-            <span>{commentsOpen ? "−" : "+"}</span>
-          </button>
-          {commentsOpen ? (
-            <div className="mt-2 space-y-2">
-              {highlight.comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="group rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-2"
-                >
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--pg-fg)]">
-                    {comment.text}
-                  </p>
-                  <div className="mt-1.5 flex items-center justify-between text-[10px] text-[var(--pg-muted)]">
-                    <span>
-                      {new Date(comment.createdAt).toLocaleDateString()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteComment(comment.id)}
-                      className="opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <textarea
-                className="w-full resize-none rounded-md border border-[var(--pg-border)] bg-[var(--pg-bg-subtle)] px-2.5 py-2 text-[13px] text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)] focus:border-[var(--pg-border-strong)]"
-                rows={2}
-                placeholder="Add a note… (⌘↵ to save)"
-                value={commentDraft}
-                onChange={(event) => setCommentDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    (event.metaKey || event.ctrlKey) &&
-                    event.key === "Enter"
-                  ) {
-                    event.preventDefault();
-                    const t = commentDraft.trim();
-                    if (!t) return;
-                    onAddComment(t);
-                    setCommentDraft("");
-                  }
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -16,6 +16,7 @@ import type {
   PdfNodeData,
   WebHighlight,
 } from "./types";
+import { hostnameOf } from "./url";
 
 // Synthetic "highlight" shape used by every non-highlight-anchored row
 // (whole pages, notes, AI conversations, full web articles). Lets the
@@ -102,15 +103,6 @@ export function isWholeNodeRow(row: SourceRow): boolean {
     row.kind === "page" ||
     row.kind === "note"
   );
-}
-
-function hostnameOf(url: string | undefined | null): string {
-  if (!url) return "";
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
 }
 
 function stripHtml(html: string): string {

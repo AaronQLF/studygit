@@ -130,15 +130,61 @@ export function snapGeom(
   return { x, y, width, height };
 }
 
-// Hit-test the pointer against every snap tile's pixel geometry. When
-// tiles overlap (a quadrant inside a half inside fullscreen), prefer the
-// smallest matching tile so drag-to-snap targets match the preview overlay.
-export function findSnapZoneAtPointer(
+// How close to an edge / corner the pointer has to be for a drag to
+// arm the snap preview. Below this the user is "just moving the
+// window" and we leave them alone — they can still snap explicitly via
+// the snap chooser button in the panel header.
+export const SNAP_EDGE_THRESHOLD = 24;
+
+export type SnapPointerOptions = {
+  /**
+   * When true, the snap zone is returned regardless of where the
+   * pointer is. Used to let a held modifier key (Shift by default)
+   * force-snap from anywhere on the screen.
+   */
+  force?: boolean;
+};
+
+// Returns true when the pointer is within SNAP_EDGE_THRESHOLD of any
+// viewport edge. We use this as the gate for drag-to-snap so the user
+// can move panels freely around the middle of the screen without the
+// snap preview lighting up on every release.
+function isPointerNearEdge(
   pointerX: number,
   pointerY: number,
   viewportWidth: number,
   viewportHeight: number
+): boolean {
+  return (
+    pointerX <= SNAP_EDGE_THRESHOLD ||
+    pointerY <= SNAP_EDGE_THRESHOLD ||
+    pointerX >= viewportWidth - SNAP_EDGE_THRESHOLD ||
+    pointerY >= viewportHeight - SNAP_EDGE_THRESHOLD
+  );
+}
+
+// Hit-test the pointer against every snap tile's pixel geometry. When
+// tiles overlap (a quadrant inside a half inside fullscreen), prefer
+// the smallest matching tile so drag-to-snap targets match the
+// preview overlay.
+//
+// By default this only fires when the pointer is near a viewport edge
+// (Windows 11-style edge snap); pass `force: true` to bypass that
+// gate, which the panel drag code does when the user is holding Shift.
+export function findSnapZoneAtPointer(
+  pointerX: number,
+  pointerY: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  options: SnapPointerOptions = {}
 ): { layout: SnapLayoutId; slot: number } | null {
+  if (
+    !options.force &&
+    !isPointerNearEdge(pointerX, pointerY, viewportWidth, viewportHeight)
+  ) {
+    return null;
+  }
+
   const hits: Array<{ layout: SnapLayoutId; slot: number; area: number }> =
     [];
 

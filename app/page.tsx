@@ -13,7 +13,7 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
-import { SiteFooter, SiteNav } from "@/components/SiteChrome";
+import { SiteFooter, SiteNav } from "@/components/marketing/SiteChrome";
 import { tryGetCurrentUser } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
