@@ -1,26 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { nanoid } from "nanoid";
 import { useStore } from "@/lib/store";
-import { hasAiCredentials, readAiSettings } from "@/lib/ai-settings";
-import { sendAiRequest } from "@/lib/ai-client";
-import {
-  rowToSourceRef,
-  rowToSourceRefAsync,
-  type SourceRow,
-} from "@/lib/source-rows";
+import { attachSourceRow } from "@/lib/source-attach";
+import { useConversation } from "@/lib/hooks/use-conversation";
+import { type SourceRow } from "@/lib/source-rows";
+import type { AiRequestSource } from "@/lib/ai-request";
 import type {
   AiAnswerNodeData,
   AiAttachment,
-  AiProvenance,
   AiSourceRef,
   AiTurn,
   CanvasNode,
 } from "@/lib/types";
 import { SourcePicker } from "@/components/viewers/SourcePicker";
 import { usePendingHighlightJump } from "@/lib/hooks/use-pending-highlight-jump";
-import { attachmentsForWire } from "@/lib/ai-attachments";
 import { AiComposer } from "./ai/AiComposer";
 import { AiTurn as AiTurnView, AiEmptyState } from "./ai/AiTurn";
 import {
@@ -31,9 +25,11 @@ import {
 } from "./ai/AiSourcesStrip";
 
 // Conversation node panel: title + sticky sources strip + scrolling thread
-// of user/assistant turns + composer. Each assistant turn renders the
-// server-emitted HTML (with <citation> pills that click-jump to the
-// source) and a small provenance line.
+// of user/assistant turns + composer. The send/retry lifecycle and composer
+// state live in useConversation (shared with the Study Buddy dock); this
+// component supplies the node-backed thread + sources and keeps the bits
+// unique to a canvas node (title editing, per-chip mode swap, citation
+// click-jump to a specific turn).
 
 export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
   const d = node.data as AiAnswerNodeData;
@@ -47,10 +43,6 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
     (s) => s.consumePendingHighlightJump
   );
 
-  const [composer, setComposer] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<AiAttachment[]>([]);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [credsMissing, setCredsMissing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   // sid of the chip whose mode-swap popover is currently open, or null.
   // The popover reuses SourcePicker with `restrictToNodeId` so only rows
@@ -65,6 +57,88 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const swapAnchorRef = useRef<HTMLElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // The model's view of sources only needs to be stable within one turn,
+  // but we keep the sid stamped on the source itself so the citation
+  // pills the model emits stay resolvable later. Re-stamp the sources to
+  // s1..sN at send time so we always start clean.
+  const restampSources = useCallback((): AiSourceRef[] => {
+    const restamped = d.sources.map((s, i) => ({ ...s, sid: `s${i + 1}` }));
+    if (restamped.some((s, i) => s.sid !== d.sources[i].sid)) {
+      updateNodeData(nodeId, {
+        sources: restamped,
+      } as Partial<AiAnswerNodeData>);
+    }
+    return restamped;
+  }, [d.sources, nodeId, updateNodeData]);
+
+  const getSendSources = useCallback((): AiRequestSource[] => {
+    // Defensively drop sources that never finished extracting (the user
+    // pressed Enter before pdf.js was done, or extraction errored). The
+    // chip stays attached so they can retry, but it's a no-op this send.
+    return restampSources()
+      .filter(
+        (s) =>
+          s.excerpt !== EXTRACTING_SENTINEL &&
+          !s.excerpt.startsWith(ERROR_SENTINEL_PREFIX)
+      )
+      .map((s) => ({
+        sid: s.sid,
+        label: s.label,
+        locator: s.locator,
+        excerpt: s.excerpt,
+        nodeId: s.nodeId,
+        highlightId: s.highlightId,
+        page: s.page,
+      }));
+  }, [restampSources]);
+
+  // First turn? Auto-derive a title from the prompt — saves a click and
+  // gives the canvas card a real label. Untouched once the user has
+  // customized it (anything other than the default placeholder).
+  const onFirstTurn = useCallback(
+    (promptText: string, attachments: AiAttachment[]) => {
+      if (d.title && d.title !== "Ask AI") return;
+      const seed =
+        promptText ||
+        (attachments.length > 0 ? `Image (${attachments.length})` : "Untitled");
+      updateNodeData(nodeId, {
+        title: seed.length > 60 ? `${seed.slice(0, 60)}…` : seed,
+      } as Partial<AiAnswerNodeData>);
+    },
+    [d.title, nodeId, updateNodeData]
+  );
+
+  const appendTurn = useCallback(
+    (turn: AiTurn) => appendAiTurn(nodeId, turn),
+    [appendAiTurn, nodeId]
+  );
+  const updateTurn = useCallback(
+    (turnId: string, patch: Partial<AiTurn>) =>
+      updateAiTurn(nodeId, turnId, patch),
+    [updateAiTurn, nodeId]
+  );
+  const removeTurn = useCallback(
+    (turnId: string) => removeAiTurn(nodeId, turnId),
+    [removeAiTurn, nodeId]
+  );
+
+  const {
+    composer,
+    setComposer,
+    pendingAttachments,
+    setPendingAttachments,
+    attachmentError,
+    setAttachmentError,
+    credsMissing,
+    turnRunning,
+    send,
+    retryFrom,
+  } = useConversation({
+    thread: { turns: d.turns, appendTurn, updateTurn, removeTurn },
+    getSendSources,
+    onFirstTurn,
+  });
 
   // Auto-scroll the thread to the bottom whenever a turn is added or a
   // running turn finishes. Keeping the cursor at the latest exchange is
@@ -128,61 +202,55 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
     } as Partial<AiAnswerNodeData>);
   };
 
+  // Source writers handed to attachSourceRow — they own *where* a ref
+  // lands (append / replace by sid) while the helper owns the optimistic
+  // whole-PDF extraction flow. Each re-reads the live node so concurrent
+  // attaches don't clobber each other through a stale closure.
+  const addSource = useCallback(
+    (ref: AiSourceRef) => {
+      const live = useStore.getState().nodes.find((n) => n.id === nodeId);
+      if (!live || live.data.kind !== "ai") return;
+      updateNodeData(nodeId, {
+        sources: [...(live.data as AiAnswerNodeData).sources, ref],
+      } as Partial<AiAnswerNodeData>);
+    },
+    [nodeId, updateNodeData]
+  );
+  const replaceSourceBySid = useCallback(
+    (sid: string, ref: AiSourceRef) => {
+      const live = useStore.getState().nodes.find((n) => n.id === nodeId);
+      if (!live || live.data.kind !== "ai") return;
+      updateNodeData(nodeId, {
+        sources: (live.data as AiAnswerNodeData).sources.map((s) =>
+          s.sid === sid ? ref : s
+        ),
+      } as Partial<AiAnswerNodeData>);
+    },
+    [nodeId, updateNodeData]
+  );
+  const setSourceExcerptBySid = useCallback(
+    (sid: string, excerpt: string) => {
+      const live = useStore.getState().nodes.find((n) => n.id === nodeId);
+      if (!live || live.data.kind !== "ai") return;
+      updateNodeData(nodeId, {
+        sources: (live.data as AiAnswerNodeData).sources.map((s) =>
+          s.sid === sid ? { ...s, excerpt } : s
+        ),
+      } as Partial<AiAnswerNodeData>);
+    },
+    [nodeId, updateNodeData]
+  );
+
   // Replace the source identified by `sid` with one derived from the
   // given row, keeping the sid stable so any in-flight assistant turn's
   // citation pills (and the conversation's overall provenance) keep
   // making sense.
   const swapSourceMode = (sid: string, row: SourceRow) => {
-    const sourceNode =
-      useStore.getState().nodes.find((n) => n.id === row.sourceNodeId) ?? null;
-    const placeholder = rowToSourceRef(row, sourceNode);
-
-    if (row.kind === "pdf-whole") {
-      // Optimistically show the "extracting…" state on the same chip,
-      // then swap in the real ref when pdf.js finishes.
-      const fresh = useStore.getState().nodes.find((n) => n.id === nodeId);
-      if (!fresh || fresh.data.kind !== "ai") return;
-      const data = fresh.data as AiAnswerNodeData;
-      updateNodeData(nodeId, {
-        sources: data.sources.map((s) =>
-          s.sid === sid
-            ? {
-                ...placeholder,
-                sid,
-                excerpt: EXTRACTING_SENTINEL,
-              }
-            : s
-        ),
-      } as Partial<AiAnswerNodeData>);
-      void rowToSourceRefAsync(row, sourceNode)
-        .then((finalRef) => {
-          const live = useStore.getState().nodes.find((n) => n.id === nodeId);
-          if (!live || live.data.kind !== "ai") return;
-          updateNodeData(nodeId, {
-            sources: (live.data as AiAnswerNodeData).sources.map((s) =>
-              s.sid === sid ? { ...finalRef, sid } : s
-            ),
-          } as Partial<AiAnswerNodeData>);
-        })
-        .catch((err: Error) => {
-          const live = useStore.getState().nodes.find((n) => n.id === nodeId);
-          if (!live || live.data.kind !== "ai") return;
-          updateNodeData(nodeId, {
-            sources: (live.data as AiAnswerNodeData).sources.map((s) =>
-              s.sid === sid
-                ? { ...s, excerpt: `${ERROR_SENTINEL_PREFIX}${err.message}` }
-                : s
-            ),
-          } as Partial<AiAnswerNodeData>);
-        });
-      return;
-    }
-
-    updateNodeData(nodeId, {
-      sources: d.sources.map((s) =>
-        s.sid === sid ? { ...placeholder, sid } : s
-      ),
-    } as Partial<AiAnswerNodeData>);
+    attachSourceRow(row, sid, {
+      write: (ref) => replaceSourceBySid(sid, ref),
+      resolve: replaceSourceBySid,
+      fail: setSourceExcerptBySid,
+    });
   };
 
   const openSwapPopover = (sid: string, anchor: HTMLElement) => {
@@ -209,184 +277,6 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
     );
     return set;
   }, [swapTargetSource]);
-
-  // The model's view of sources only needs to be stable within one turn,
-  // but we keep the sid stamped on the source itself so the citation
-  // pills the model emits stay resolvable later. Re-stamp the sources to
-  // s1..sN at send time so we always start clean.
-  const restampSources = useCallback((): AiSourceRef[] => {
-    const restamped = d.sources.map((s, i) => ({ ...s, sid: `s${i + 1}` }));
-    if (restamped.some((s, i) => s.sid !== d.sources[i].sid)) {
-      updateNodeData(nodeId, {
-        sources: restamped,
-      } as Partial<AiAnswerNodeData>);
-    }
-    return restamped;
-  }, [d.sources, nodeId, updateNodeData]);
-
-  // Send a new user message. The thread becomes:
-  //   ...prior turns, { user: text, attachments? }, { assistant: status=running }
-  // We persist both before kicking off the fetch so the panel reflects
-  // the in-flight state if the user closes / reopens it mid-call.
-  const send = useCallback(
-    async (text: string, attachments: AiAttachment[] = []) => {
-      const promptText = text.trim();
-      // Allow image-only messages — the model can describe / answer
-      // questions about the attached image on its own.
-      if (!promptText && attachments.length === 0) return;
-
-      if (!hasAiCredentials()) {
-        setCredsMissing(true);
-        return;
-      }
-      setCredsMissing(false);
-
-      // Defensively drop sources that never finished extracting (the
-      // user pressed Enter before pdf.js was done, or extraction errored
-      // and they're sending anyway). The error/extracting chip stays
-      // attached so the user can decide whether to retry or remove it,
-      // but it's a no-op for this particular send.
-      const sources = restampSources().filter(
-        (s) =>
-          s.excerpt !== EXTRACTING_SENTINEL &&
-          !s.excerpt.startsWith(ERROR_SENTINEL_PREFIX)
-      );
-      const userTurn: AiTurn = {
-        id: nanoid(8),
-        role: "user",
-        text: promptText,
-        createdAt: Date.now(),
-        attachments: attachments.length > 0 ? attachments : undefined,
-      };
-      const assistantTurn: AiTurn = {
-        id: nanoid(8),
-        role: "assistant",
-        text: "",
-        createdAt: Date.now(),
-        status: "running",
-      };
-
-      appendAiTurn(nodeId, userTurn);
-      appendAiTurn(nodeId, assistantTurn);
-      setComposer("");
-      setPendingAttachments([]);
-      setAttachmentError(null);
-
-      // First turn? Auto-derive a title from the prompt — saves a click
-      // and gives the canvas card a real label. Untouched once the user
-      // has customized it (anything other than the default placeholder).
-      if (d.turns.length === 0 && (!d.title || d.title === "Ask AI")) {
-        const seed =
-          promptText ||
-          (attachments.length > 0
-            ? `Image (${attachments.length})`
-            : "Untitled");
-        updateNodeData(nodeId, {
-          title: seed.length > 60 ? `${seed.slice(0, 60)}…` : seed,
-        } as Partial<AiAnswerNodeData>);
-      }
-
-      try {
-        // Re-send full history so the model sees the prior context. We
-        // pass attachments only for user turns; assistant attachments
-        // never exist. Re-feeding images on every turn keeps the
-        // model's visual context intact across multi-turn questions.
-        const history = [
-          ...d.turns
-            .filter(
-              (t) =>
-                t.role === "user" ||
-                (t.text && t.status !== "error")
-            )
-            .map((t) => ({
-              role: t.role,
-              text: t.text,
-              attachments:
-                t.role === "user" ? attachmentsForWire(t.attachments) : undefined,
-            })),
-          {
-            role: "user" as const,
-            text: promptText,
-            attachments: attachmentsForWire(attachments),
-          },
-        ];
-
-        // Dispatch via sendAiRequest, which picks the transport: the
-        // hosted /api/ai full path for the web build, or the Electron
-        // main-process IPC path for the packaged app. The packaged app
-        // requires the IPC path when the configured base URL is a
-        // corp/private host (e.g. *.stingray-private.com) that the
-        // Vercel function can't reach.
-        const result = await sendAiRequest(
-          {
-            messages: history,
-            sources: sources.map((s) => ({
-              sid: s.sid,
-              label: s.label,
-              locator: s.locator,
-              excerpt: s.excerpt,
-              nodeId: s.nodeId,
-              highlightId: s.highlightId,
-              page: s.page,
-            })),
-          },
-          readAiSettings()
-        );
-
-        if (!result.ok) {
-          const message =
-            (result.error.error ?? "AI request failed") +
-            (result.error.details ? ` — ${result.error.details}` : "");
-          updateAiTurn(nodeId, assistantTurn.id, {
-            status: "error",
-            error: message,
-          });
-          return;
-        }
-
-        updateAiTurn(nodeId, assistantTurn.id, {
-          status: "idle",
-          text: result.payload.answer ?? "",
-          provenance: (result.payload.provenance as AiProvenance) ?? null,
-          error: undefined,
-        });
-      } catch (err) {
-        updateAiTurn(nodeId, assistantTurn.id, {
-          status: "error",
-          error: (err as Error)?.message ?? "Network error",
-        });
-      }
-    },
-    [
-      appendAiTurn,
-      d.title,
-      d.turns,
-      nodeId,
-      restampSources,
-      updateAiTurn,
-      updateNodeData,
-    ]
-  );
-
-  // Re-run an assistant turn: drop it (and any later turns) and resend
-  // the user message immediately above. Same semantics as Claude/ChatGPT's
-  // "regenerate" affordance.
-  const retryFrom = useCallback(
-    (assistantTurnId: string) => {
-      const idx = d.turns.findIndex((t) => t.id === assistantTurnId);
-      if (idx < 1) return;
-      const previous = d.turns[idx - 1];
-      if (previous.role !== "user") return;
-      // Remove this assistant turn and anything after it.
-      const toRemove = d.turns.slice(idx).map((t) => t.id);
-      for (const id of toRemove) removeAiTurn(nodeId, id);
-      // Also drop the user turn we're about to replay, so send() can
-      // re-add it cleanly with a fresh timestamp.
-      removeAiTurn(nodeId, previous.id);
-      void send(previous.text, previous.attachments ?? []);
-    },
-    [d.turns, nodeId, removeAiTurn, send]
-  );
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--pg-bg)]">
@@ -435,69 +325,12 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onSelect={(row) => {
-          // Pull the full content from the live store at attach time so
-          // whole-node sources (page/note/link/ai) carry their complete
-          // text into the conversation, not just the picker preview.
-          const sourceNode =
-            useStore.getState().nodes.find((n) => n.id === row.sourceNodeId) ??
-            null;
-          const placeholder = rowToSourceRef(row, sourceNode);
           const tempSid = `s${d.sources.length + 1}`;
-
-          if (row.kind === "pdf-whole") {
-            // Optimistically attach a "extracting…" chip, then swap in
-            // the real ref once pdf.js finishes. Failure leaves the chip
-            // with an error excerpt so the user can retry by re-adding.
-            const placeholderRef: AiSourceRef = {
-              ...placeholder,
-              sid: tempSid,
-              // Sentinel excerpt the chip detects to render the spinner
-              // state. We strip it at send time if extraction never
-              // completes — see send().
-              excerpt: "__extracting__",
-            };
-            updateNodeData(nodeId, {
-              sources: [...d.sources, placeholderRef],
-            } as Partial<AiAnswerNodeData>);
-
-            void rowToSourceRefAsync(row, sourceNode)
-              .then((finalRef) => {
-                const fresh = useStore
-                  .getState()
-                  .nodes.find((n) => n.id === nodeId);
-                if (!fresh || fresh.data.kind !== "ai") return;
-                const data = fresh.data as AiAnswerNodeData;
-                updateNodeData(nodeId, {
-                  sources: data.sources.map((s) =>
-                    s.sid === tempSid
-                      ? { ...finalRef, sid: s.sid }
-                      : s
-                  ),
-                } as Partial<AiAnswerNodeData>);
-              })
-              .catch((err: Error) => {
-                const fresh = useStore
-                  .getState()
-                  .nodes.find((n) => n.id === nodeId);
-                if (!fresh || fresh.data.kind !== "ai") return;
-                const data = fresh.data as AiAnswerNodeData;
-                updateNodeData(nodeId, {
-                  sources: data.sources.map((s) =>
-                    s.sid === tempSid
-                      ? { ...s, excerpt: `__error__:${err.message}` }
-                      : s
-                  ),
-                } as Partial<AiAnswerNodeData>);
-              });
-            return;
-          }
-
-          updateNodeData(nodeId, {
-            sources: [
-              ...d.sources,
-              { ...placeholder, sid: tempSid },
-            ],
-          } as Partial<AiAnswerNodeData>);
+          attachSourceRow(row, tempSid, {
+            write: addSource,
+            resolve: replaceSourceBySid,
+            fail: setSourceExcerptBySid,
+          });
         }}
         anchorRef={addBtnRef}
         workspaceId={node.workspaceId}
@@ -505,10 +338,7 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
         excludeKeys={excludeKeys}
       />
 
-      <div
-        ref={scrollerRef}
-        className="flex-1 min-h-0 overflow-y-auto"
-      >
+      <div ref={scrollerRef} className="flex-1 min-h-0 overflow-y-auto">
         {d.turns.length === 0 ? (
           <AiEmptyState />
         ) : (
@@ -536,8 +366,7 @@ export function AiAnswerPanelBody({ node }: { node: CanvasNode }) {
         onChange={setComposer}
         onSend={() => send(composer, pendingAttachments)}
         disabled={
-          d.turns.some((t) => t.status === "running") ||
-          d.sources.some((s) => s.excerpt === EXTRACTING_SENTINEL)
+          turnRunning || d.sources.some((s) => s.excerpt === EXTRACTING_SENTINEL)
         }
         credsMissing={credsMissing}
         attachments={pendingAttachments}

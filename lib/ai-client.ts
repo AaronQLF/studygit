@@ -39,6 +39,7 @@ import {
   hostnameOrEmpty,
   renderSourcesBlock,
   sanitizeSources,
+  sanitizeSystemPromptExtra,
   SYSTEM_PROMPT_RULES,
   type AiAnswerPayload,
   type AiRequestSource,
@@ -49,6 +50,11 @@ import {
 export type AiSendInput = {
   messages: AiWireMessage[];
   sources: AiRequestSource[];
+  // Optional surface-specific addendum to the system prompt. Used by
+  // the Study Buddy dock to teach the model the `pgedit` block format
+  // for proposed page edits without disturbing the canonical rules
+  // shared by every other AI surface in the app.
+  systemPromptExtra?: string;
 };
 
 // Same as the hosted `{ error, details? }` payload so the UI can show a
@@ -79,7 +85,11 @@ async function postHosted(
       [AI_HEADER_API_KEY]: settings.apiKey,
       [AI_HEADER_MODEL]: settings.model,
     },
-    body: JSON.stringify({ messages: input.messages, sources: input.sources }),
+    body: JSON.stringify({
+      messages: input.messages,
+      sources: input.sources,
+      systemPromptExtra: input.systemPromptExtra,
+    }),
   });
   if (!response.ok) {
     const err = (await response.json().catch(() => null)) as AiSendError | null;
@@ -154,15 +164,19 @@ async function sendViaElectron(
 
   const sources = sanitizeSources(input.sources);
   const sourcesBlock = renderSourcesBlock(sources);
+  const extra = sanitizeSystemPromptExtra(input.systemPromptExtra);
+  const systemPrompt = extra
+    ? `${SYSTEM_PROMPT_RULES}\n\n${extra}`
+    : SYSTEM_PROMPT_RULES;
   const providerMessages = buildProviderMessages(
-    SYSTEM_PROMPT_RULES,
+    systemPrompt,
     sourcesBlock,
     cleaned
   );
 
   const createdAt = Date.now();
   const promptHashPromise = computePromptHashHex(
-    SYSTEM_PROMPT_RULES,
+    systemPrompt,
     sourcesBlock,
     JSON.stringify(cleaned)
   );

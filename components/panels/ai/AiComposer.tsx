@@ -10,6 +10,8 @@ import clsx from "clsx";
 import {
   ImagePlus,
   Loader2,
+  Mic,
+  MicOff,
   Send,
   Settings,
   TriangleAlert,
@@ -20,6 +22,7 @@ import {
   fileToImageAttachment,
   MAX_ATTACHMENTS,
 } from "@/lib/ai-attachments";
+import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
 import type { AiAttachment } from "@/lib/types";
 
 export type AiComposerProps = {
@@ -32,6 +35,11 @@ export type AiComposerProps = {
   onAttachmentsChange: (next: AiAttachment[]) => void;
   attachmentError: string | null;
   setAttachmentError: (msg: string | null) => void;
+  // When true, hide the built-in mic button. The buddy's hands-free
+  // mode owns the microphone at a higher level (auto-start, auto-send
+  // on silence, TTS playback) and a second SpeechRecognition instance
+  // here would fight the panel-level one for the audio device.
+  suppressVoiceInput?: boolean;
 };
 
 export function AiComposer({
@@ -44,15 +52,46 @@ export function AiComposer({
   onAttachmentsChange,
   attachmentError,
   setAttachmentError,
+  suppressVoiceInput = false,
 }: AiComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [attaching, setAttaching] = useState(false);
 
+  // Voice input — wraps the browser's SpeechRecognition API. Each
+  // finalized chunk is appended to the textarea via the standard
+  // onChange path so dictation flows through exactly the same store
+  // pipeline as typing. The hook holds the latest `value` in a ref
+  // so we don't have to recreate it on every keystroke.
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  const {
+    supported: voiceSupported,
+    listening,
+    interimTranscript,
+    error: voiceError,
+    start: startListening,
+    stop: stopListening,
+  } = useSpeechRecognition({
+    onFinalChunk: (chunk) => {
+      // Insert a leading space if the textarea already has content and
+      // doesn't end in whitespace, so consecutive utterances don't
+      // collide ("hellothere" instead of "hello there").
+      const current = valueRef.current;
+      const sep = current && !/\s$/.test(current) ? " " : "";
+      onChange(`${current}${sep}${chunk}`);
+    },
+  });
+
   // Auto-resize the textarea up to a generous cap. Keeps single-line
   // questions tight, lets multi-paragraph drafts breathe without
-  // requiring an internal scrollbar inside the panel.
+  // requiring an internal scrollbar inside the panel. Also accounts
+  // for the interim-transcript preview line so the textarea doesn't
+  // jitter when dictation streams in.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -63,10 +102,33 @@ export function AiComposer({
   const canSend =
     !disabled && (value.trim().length > 0 || attachments.length > 0);
 
+  const onMicClick = () => {
+    if (listening) stopListening();
+    else startListening();
+  };
+
+  // Stop the mic whenever the composer is disabled mid-session — most
+  // commonly because the parent panel kicked off a turn while dictation
+  // was still running. Without this the engine would keep capturing
+  // audio that lands in a stale textarea after the parent clears the
+  // value, which is both confusing and a privacy footgun.
+  useEffect(() => {
+    if (disabled && listening) stopListening();
+  }, [disabled, listening, stopListening]);
+
+  // Wrap the send callback so pressing Enter or clicking the send
+  // button also ends the current dictation session. Otherwise the
+  // engine's "next final chunk" would land in the freshly-cleared
+  // composer, surprising the user with phantom text after they sent.
+  const handleSend = useCallback(() => {
+    if (listening) stopListening();
+    onSend();
+  }, [listening, onSend, stopListening]);
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (canSend) onSend();
+      if (canSend) handleSend();
     }
   };
 
@@ -161,6 +223,12 @@ export function AiComposer({
           {attachmentError}
         </div>
       ) : null}
+      {voiceError ? (
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded-[var(--pg-radius)] border border-amber-500/40 px-2.5 py-1 text-[12px] text-amber-600 dark:text-amber-400">
+          <MicOff size={11} />
+          {voiceError}
+        </div>
+      ) : null}
       <div
         onDragEnter={(event) => {
           if (Array.from(event.dataTransfer.types).includes("Files")) {
@@ -226,6 +294,42 @@ export function AiComposer({
               <ImagePlus size={13} />
             )}
           </button>
+          {/* Voice input button — only rendered when the runtime
+              supports SpeechRecognition (Chromium incl. Electron, and
+              Safari) AND the parent isn't already orchestrating the
+              mic at a higher level (e.g. hands-free buddy mode). On
+              Firefox / unsupported browsers we hide it entirely rather
+              than show a disabled button users can't act on. */}
+          {voiceSupported && !suppressVoiceInput ? (
+            <button
+              type="button"
+              onClick={onMicClick}
+              disabled={disabled && !listening}
+              className={clsx(
+                "relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--pg-radius)] transition-colors",
+                listening
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  : disabled
+                    ? "text-[var(--pg-muted)]"
+                    : "text-[var(--pg-muted)] hover:bg-[var(--pg-bg-subtle)] hover:text-[var(--pg-fg)]"
+              )}
+              title={
+                listening
+                  ? "Stop dictation"
+                  : "Dictate your question (your browser streams audio to its speech service)"
+              }
+              aria-pressed={listening}
+              aria-label={listening ? "Stop dictation" : "Start dictation"}
+            >
+              {listening ? <MicOff size={13} /> : <Mic size={13} />}
+              {listening ? (
+                <span
+                  aria-hidden
+                  className="absolute -right-0.5 -top-0.5 inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
+                />
+              ) : null}
+            </button>
+          ) : null}
           <input
             ref={fileInputRef}
             type="file"
@@ -239,23 +343,39 @@ export function AiComposer({
               event.target.value = "";
             }}
           />
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            rows={1}
-            placeholder={
-              attachments.length > 0
-                ? "Ask about these images… (⇧⏎ for newline)"
-                : "Ask a follow-up… (⇧⏎ for newline, paste or drop images)"
-            }
-            className="flex-1 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
-          />
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              rows={1}
+              placeholder={
+                listening
+                  ? "Listening… speak naturally; press the mic again to stop."
+                  : attachments.length > 0
+                    ? "Ask about these images… (⇧⏎ for newline)"
+                    : "Ask a follow-up… (⇧⏎ for newline, paste or drop images)"
+              }
+              className="w-full resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-[var(--pg-fg)] outline-none placeholder:text-[var(--pg-muted)]"
+            />
+            {/* In-flight dictation preview: the engine's interim guess
+                appears under the textarea as a dimmed italic line so
+                the user has live confirmation their voice is being
+                heard, without the textarea jittering as the engine
+                refines its hypothesis. The text gets committed to the
+                textarea proper only when the engine marks a chunk as
+                final. */}
+            {listening && interimTranscript ? (
+              <div className="pointer-events-none px-2 pb-1 text-[12.5px] italic leading-snug text-[var(--pg-muted)]">
+                {interimTranscript}
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
-            onClick={onSend}
+            onClick={handleSend}
             disabled={!canSend}
             className={clsx(
               "inline-flex h-7 w-7 items-center justify-center rounded-[var(--pg-radius)] transition-colors",

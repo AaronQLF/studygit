@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import type {
   AiAnswerNodeData,
   AiMessage,
+  AiSourceRef,
   AiTurn,
   AnyNodeData,
   AppState,
@@ -16,11 +17,18 @@ import type {
   PanelSnap,
   PdfHighlight,
   PdfHighlightRect,
+  StudyBuddyState,
   WebHighlight,
   Workspace,
 } from "./types";
 import type { SnapLayoutId } from "./snap-layouts";
-import { DEFAULT_WORKSPACE_ID, INITIAL_STATE } from "./defaults";
+import {
+  DEFAULT_WORKSPACE_ID,
+  INITIAL_STATE,
+  INITIAL_STUDY_BUDDY,
+  STUDY_BUDDY_MAX_WIDTH,
+  STUDY_BUDDY_MIN_WIDTH,
+} from "./defaults";
 import { migrateNode } from "./migrations";
 
 type LegacyFolder = {
@@ -133,6 +141,26 @@ type Store = AppState & {
   ) => void;
   removeAiTurn: (nodeId: string, turnId: string) => void;
 
+  // Study Buddy — app-wide persistent assistant docked on the right.
+  // Lives outside any single node so it follows the user across
+  // workspaces and reloads. State persists with the AppState snapshot.
+  studyBuddy: StudyBuddyState;
+  toggleStudyBuddy: () => void;
+  setStudyBuddyOpen: (open: boolean) => void;
+  setStudyBuddyWidth: (width: number) => void;
+  setStudyBuddyHandsFree: (handsFree: boolean) => void;
+  appendStudyBuddyTurn: (turn: AiTurn) => void;
+  updateStudyBuddyTurn: (turnId: string, patch: Partial<AiTurn>) => void;
+  removeStudyBuddyTurn: (turnId: string) => void;
+  clearStudyBuddyThread: () => void;
+  addStudyBuddyExtraSource: (source: AiSourceRef) => void;
+  updateStudyBuddyExtraSource: (
+    sid: string,
+    patch: Partial<AiSourceRef>
+  ) => void;
+  removeStudyBuddyExtraSource: (sid: string) => void;
+  restampStudyBuddyExtraSources: () => AiSourceRef[];
+
   addWebHighlight: (
     nodeId: string,
     text: string,
@@ -183,6 +211,11 @@ const ADDITIVE_OFFSET = 32;
 function viewportSize(): { vw: number; vh: number } {
   if (typeof window === "undefined") return { vw: 1280, vh: 800 };
   return { vw: window.innerWidth, vh: window.innerHeight };
+}
+
+function clampBuddyWidth(raw: unknown): number {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : INITIAL_STUDY_BUDDY.width;
+  return Math.max(STUDY_BUDDY_MIN_WIDTH, Math.min(STUDY_BUDDY_MAX_WIDTH, Math.round(n)));
 }
 
 function defaultPanelGeom(existing: FloatingPanel[]): {
@@ -295,6 +328,7 @@ function flushOnUnload(get: () => Store): void {
       edges: s.edges,
       selectedWorkspaceId: s.selectedWorkspaceId,
       version: s.version + 1,
+      studyBuddy: s.studyBuddy,
     };
     const blob = new Blob([JSON.stringify(snapshot)], {
       type: "application/json",
@@ -351,6 +385,7 @@ function scheduleSave(get: () => Store, set: (patch: Partial<Store>) => void) {
         edges: s.edges,
         selectedWorkspaceId: s.selectedWorkspaceId,
         version: s.version + 1,
+        studyBuddy: s.studyBuddy,
       };
       // Stringify + send inside the idle callback so the main thread
       // stays responsive during typing bursts.
@@ -388,6 +423,7 @@ export const useStore = create<Store>((set, get) => ({
   selectedNodeId: null,
   sidebarCollapsed: false,
   pendingHighlightJumps: {},
+  studyBuddy: INITIAL_STUDY_BUDDY,
 
   hydrate: async () => {
     installUnloadFlush(get);
@@ -482,6 +518,37 @@ export const useStore = create<Store>((set, get) => ({
               folderToWs.get(data.selectedFolderId)) ||
             fallbackWsId;
 
+      // Hydrate the Study Buddy slot defensively — older snapshots
+      // predate this field, and we want to gracefully ignore any
+      // malformed data that wandered into the persisted blob without
+      // dropping the rest of the workspace.
+      const incomingBuddy = (data as { studyBuddy?: unknown }).studyBuddy;
+      const studyBuddy: StudyBuddyState =
+        incomingBuddy && typeof incomingBuddy === "object"
+          ? {
+              open:
+                typeof (incomingBuddy as StudyBuddyState).open === "boolean"
+                  ? (incomingBuddy as StudyBuddyState).open
+                  : INITIAL_STUDY_BUDDY.open,
+              width: clampBuddyWidth(
+                (incomingBuddy as StudyBuddyState).width ??
+                  INITIAL_STUDY_BUDDY.width
+              ),
+              turns: Array.isArray((incomingBuddy as StudyBuddyState).turns)
+                ? (incomingBuddy as StudyBuddyState).turns
+                : [],
+              extraSources: Array.isArray(
+                (incomingBuddy as StudyBuddyState).extraSources
+              )
+                ? (incomingBuddy as StudyBuddyState).extraSources
+                : [],
+              handsFree:
+                typeof (incomingBuddy as StudyBuddyState).handsFree === "boolean"
+                  ? (incomingBuddy as StudyBuddyState).handsFree
+                  : INITIAL_STUDY_BUDDY.handsFree,
+            }
+          : INITIAL_STUDY_BUDDY;
+
       set({
         workspaces,
         nodes,
@@ -492,6 +559,7 @@ export const useStore = create<Store>((set, get) => ({
         isDirty: false,
         justSaved: false,
         lastSavedAt: Date.now(),
+        studyBuddy,
       });
 
       const needsMigration =
@@ -1012,6 +1080,125 @@ export const useStore = create<Store>((set, get) => ({
       }),
     }));
     scheduleSave(get, set);
+  },
+
+  // ----- Study Buddy ------------------------------------------------
+  // Open/close is treated as workspace state (persisted) so the dock
+  // remembers whether the user wanted it open. Width follows the same
+  // rule. Thread + extra sources are persisted so the buddy genuinely
+  // is "continuous" across reloads.
+  toggleStudyBuddy: () => {
+    set((s) => ({ studyBuddy: { ...s.studyBuddy, open: !s.studyBuddy.open } }));
+    scheduleSave(get, set);
+  },
+
+  setStudyBuddyOpen: (open) => {
+    set((s) => ({ studyBuddy: { ...s.studyBuddy, open } }));
+    scheduleSave(get, set);
+  },
+
+  setStudyBuddyWidth: (width) => {
+    set((s) => ({
+      studyBuddy: { ...s.studyBuddy, width: clampBuddyWidth(width) },
+    }));
+    scheduleSave(get, set);
+  },
+
+  setStudyBuddyHandsFree: (handsFree) => {
+    set((s) => ({ studyBuddy: { ...s.studyBuddy, handsFree } }));
+    scheduleSave(get, set);
+  },
+
+  appendStudyBuddyTurn: (turn) => {
+    set((s) => ({
+      studyBuddy: { ...s.studyBuddy, turns: [...s.studyBuddy.turns, turn] },
+    }));
+    scheduleSave(get, set);
+  },
+
+  updateStudyBuddyTurn: (turnId, patch) => {
+    set((s) => ({
+      studyBuddy: {
+        ...s.studyBuddy,
+        turns: s.studyBuddy.turns.map((t) =>
+          t.id === turnId ? { ...t, ...patch } : t
+        ),
+      },
+    }));
+    scheduleSave(get, set);
+  },
+
+  removeStudyBuddyTurn: (turnId) => {
+    set((s) => ({
+      studyBuddy: {
+        ...s.studyBuddy,
+        turns: s.studyBuddy.turns.filter((t) => t.id !== turnId),
+      },
+    }));
+    scheduleSave(get, set);
+  },
+
+  clearStudyBuddyThread: () => {
+    set((s) => ({
+      studyBuddy: { ...s.studyBuddy, turns: [], extraSources: [] },
+    }));
+    scheduleSave(get, set);
+  },
+
+  addStudyBuddyExtraSource: (source) => {
+    set((s) => {
+      // Dedupe: don't attach the same node+highlight twice.
+      const key = `${source.nodeId}:${source.highlightId ?? source.nodeId}`;
+      const exists = s.studyBuddy.extraSources.some(
+        (e) => `${e.nodeId}:${e.highlightId ?? e.nodeId}` === key
+      );
+      if (exists) return s;
+      return {
+        studyBuddy: {
+          ...s.studyBuddy,
+          extraSources: [...s.studyBuddy.extraSources, source],
+        },
+      };
+    });
+    scheduleSave(get, set);
+  },
+
+  updateStudyBuddyExtraSource: (sid, patch) => {
+    set((s) => ({
+      studyBuddy: {
+        ...s.studyBuddy,
+        extraSources: s.studyBuddy.extraSources.map((src) =>
+          src.sid === sid ? { ...src, ...patch } : src
+        ),
+      },
+    }));
+    scheduleSave(get, set);
+  },
+
+  removeStudyBuddyExtraSource: (sid) => {
+    set((s) => ({
+      studyBuddy: {
+        ...s.studyBuddy,
+        extraSources: s.studyBuddy.extraSources.filter((src) => src.sid !== sid),
+      },
+    }));
+    scheduleSave(get, set);
+  },
+
+  // Re-stamp extra source sids to e1..eN at send time so the model
+  // gets a clean, stable numbering each turn. Sids on the auto-attached
+  // current node (s1) are stamped by the panel itself — see
+  // StudyBuddyPanel's send() — so they don't collide with these.
+  restampStudyBuddyExtraSources: () => {
+    const current = get().studyBuddy.extraSources;
+    const restamped = current.map((s, i) => ({ ...s, sid: `e${i + 1}` }));
+    const changed = restamped.some((s, i) => s.sid !== current[i].sid);
+    if (changed) {
+      set((s) => ({
+        studyBuddy: { ...s.studyBuddy, extraSources: restamped },
+      }));
+    }
+    return restamped;
   },
 
   addWebHighlight: (nodeId, text, prefix, suffix, color) => {

@@ -288,10 +288,34 @@ export type FloatingPanel = {
   snap?: PanelSnap;
 };
 
+// Persistent app-wide Study Buddy state. Lives next to the canvas (not
+// inside any one node) so it follows the user across workspaces and
+// reloads. The buddy auto-attaches the currently focused node as its
+// primary source at send time; `extraSources` are any additional sources
+// the user has manually pinned to the conversation via the dock's
+// SourcePicker (same flow as AI conversation nodes).
+export type StudyBuddyState = {
+  open: boolean;
+  // Pixel width of the right-side dock. Persisted so resizing sticks.
+  width: number;
+  turns: AiTurn[];
+  extraSources: AiSourceRef[];
+  // Hands-free conversation mode. When true, the buddy auto-listens,
+  // auto-sends each utterance once the user finishes speaking, and
+  // reads each reply back via the browser's speech-synthesis engine —
+  // approximating the OpenAI Realtime API loop using only the existing
+  // /api/ai endpoint and the user's configured AI provider. Persisted
+  // so the user doesn't have to re-engage it every session.
+  handsFree: boolean;
+};
+
 export type AppState = {
   workspaces: Workspace[];
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   selectedWorkspaceId: string | null;
   version: number;
+  // Optional for back-compat with snapshots saved before the Study
+  // Buddy feature shipped — a missing buddy slot hydrates to defaults.
+  studyBuddy?: StudyBuddyState;
 };
