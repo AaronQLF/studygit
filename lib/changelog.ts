@@ -27,6 +27,49 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.31",
+    date: "2026-06-08",
+    tagline:
+      "Meet Study Buddy \u2014 a docked AI partner that follows what you\u2019re reading, talks back hands-free, and proposes page edits you accept in a click.",
+    sections: [
+      {
+        heading: "Study Buddy",
+        items: [
+          {
+            tag: "new",
+            text:
+              "An app-wide AI study partner now docks to the right of the canvas \u2014 toggle it with \u2318J / Ctrl+J or the new \u201cBuddy\u201d button in the header. It follows you across workspaces and survives reloads, and it automatically attaches whatever you\u2019re currently looking at (the focused page, PDF, note, or link) as its primary source, so you can ask \u201cexplain the part I\u2019m on\u201d without re-pasting context every time. Pin extra sources with the same picker the canvas conversation nodes use, and resize the dock to taste \u2014 the width sticks.",
+          },
+          {
+            tag: "new",
+            text:
+              "Hands-free voice mode. Flip it on and the buddy listens, auto-sends each question the moment you stop talking, and reads its reply back out loud \u2014 a continuous spoken back-and-forth built on the browser\u2019s own speech-to-text and speech-synthesis engines plus your configured AI provider, with no separate realtime API. The mode is remembered between sessions so you don\u2019t have to re-arm it each time.",
+          },
+          {
+            tag: "new",
+            text:
+              "The buddy can edit your work, with your approval. When it proposes a change to the page or note you\u2019re on, the suggestion renders as an Accept / Reject card next to the reply; accepting applies it in one click \u2014 replace, append, or prepend \u2014 to the focused Page (rich text), Note (plain text), or a Link node\u2019s notes. Suggestions ride along inside the normal Markdown reply and are lifted out before display, and anything malformed is silently skipped so a bad proposal can never corrupt a document.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Under the hood, the canvas conversation node and the Study Buddy now run on one shared conversation engine (a new useConversation hook plus a common source-attach helper), so sending, retrying, the composer, and citation rendering behave identically in both surfaces \u2014 one implementation to maintain instead of two near-identical copies. The buddy\u2019s extra edit instructions are appended to the model\u2019s prompt through a length-bounded, sanitized channel that leaves the citation rules every other AI surface depends on untouched.",
+          },
+        ],
+      },
+      {
+        heading: "PDF uploads",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "A failed PDF upload now tells you why instead of showing a cryptic \u201cUnexpected token \u2018<\u2019\u201d. When your session isn\u2019t active the upload request gets bounced to the sign-in page, and the PDF card used to try to parse that login HTML as JSON and choke. Both the canvas PDF card and the in-panel uploader now detect the redirect (and any other non-JSON response) and surface a plain \u201cnot signed in\u201d message, sharing a single upload helper across both spots.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.29",
     date: "2026-05-28",
     tagline:
