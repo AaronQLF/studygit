@@ -93,6 +93,11 @@ export type AiRequestBody =
       mode?: "full";
       messages: AiWireMessage[];
       sources?: AiRequestSource[];
+      // Optional extra system-prompt rules appended after SYSTEM_PROMPT_RULES
+      // for surface-specific behaviour (e.g. the Study Buddy dock instructs
+      // the model to emit `pgedit` blocks for proposed edits). Bounded length
+      // so a misuse can't blow past the model's context budget.
+      systemPromptExtra?: string;
     }
   | {
       // "process-only" path used by the Electron renderer: the model
@@ -103,6 +108,22 @@ export type AiRequestBody =
       raw: string;
       sources?: AiRequestSource[];
     };
+
+export const MAX_SYSTEM_PROMPT_EXTRA_CHARS = 4000;
+
+// Defensively trim and normalize an extra system-prompt fragment before
+// it gets concatenated onto the canonical SYSTEM_PROMPT_RULES string.
+// Returns an empty string for missing/invalid values so callers can
+// safely template `${SYSTEM_PROMPT_RULES}\n\n${extra}` without branching.
+export function sanitizeSystemPromptExtra(input: unknown): string {
+  if (typeof input !== "string") return "";
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+  if (trimmed.length > MAX_SYSTEM_PROMPT_EXTRA_CHARS) {
+    return trimmed.slice(0, MAX_SYSTEM_PROMPT_EXTRA_CHARS);
+  }
+  return trimmed;
+}
 
 // --------------------------------------------------------------------
 // Attachment sanitization

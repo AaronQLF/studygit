@@ -15,6 +15,7 @@ import {
   hostnameOrEmpty,
   renderSourcesBlock,
   sanitizeSources,
+  sanitizeSystemPromptExtra,
   SYSTEM_PROMPT_RULES,
   type AiAnswerPayload,
   type AiProvenance,
@@ -116,15 +117,19 @@ export async function POST(request: Request) {
 
   const sources = sanitizeSources(body.sources);
   const sourcesBlock = renderSourcesBlock(sources);
+  const extra = sanitizeSystemPromptExtra(body.systemPromptExtra);
+  const systemPrompt = extra
+    ? `${SYSTEM_PROMPT_RULES}\n\n${extra}`
+    : SYSTEM_PROMPT_RULES;
   const providerMessages = buildProviderMessages(
-    SYSTEM_PROMPT_RULES,
+    systemPrompt,
     sourcesBlock,
     cleaned
   );
 
   const createdAt = Date.now();
   const promptHash = await computePromptHashHex(
-    SYSTEM_PROMPT_RULES,
+    systemPrompt,
     sourcesBlock,
     JSON.stringify(cleaned)
   );

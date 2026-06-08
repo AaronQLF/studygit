@@ -8,6 +8,7 @@ import {
   Palette,
   PanelLeftClose,
   PanelLeftOpen,
+  Sparkles,
 } from "lucide-react";
 // CSS only needed inside the app: KaTeX renders math in TipTap nodes and
 // in the web-article reader, tippy.js styles the slash/citation menus.
@@ -27,6 +28,7 @@ import { UserMenu } from "./UserMenu";
 import { UpdateBanner } from "./UpdateBanner";
 import { AppVersionBadge } from "./AppVersionBadge";
 import { BrowserWindow } from "@/components/viewers/BrowserWindow";
+import { StudyBuddyDock } from "@/components/buddy/StudyBuddyDock";
 import {
   THEME_DIALOG_EVENT,
   ThemeSettingsDialog,
@@ -60,6 +62,8 @@ export function AppShell({ user }: AppShellProps = {}) {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const openPanel = useStore((s) => s.openPanel);
+  const buddyOpen = useStore((s) => s.studyBuddy.open);
+  const toggleBuddy = useStore((s) => s.toggleStudyBuddy);
   const openBrowser = useBrowserSession((s) => s.openBrowser);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
@@ -110,6 +114,14 @@ export function AppShell({ user }: AppShellProps = {}) {
         setPaletteOpen((v) => !v);
         return;
       }
+      // Cmd/Ctrl+J — toggle the Study Buddy dock. Works while typing
+      // because the user often wants to summon the buddy mid-edit
+      // without first having to break focus out of a TipTap surface.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        toggleBuddy();
+        return;
+      }
       if (isTyping) return;
       if (event.key === "[") {
         event.preventDefault();
@@ -124,7 +136,7 @@ export function AppShell({ user }: AppShellProps = {}) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openPanel, paletteOpen, selectedNodeId, toggleSidebar]);
+  }, [openPanel, paletteOpen, selectedNodeId, toggleBuddy, toggleSidebar]);
 
   const currentWorkspace = useMemo(
     () => workspaces.find((w) => w.id === selectedWorkspaceId),
@@ -195,6 +207,21 @@ export function AppShell({ user }: AppShellProps = {}) {
               </span>
             </button>
             <button
+              className={
+                buddyOpen
+                  ? "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium tracking-tight bg-[var(--pg-accent-soft)] text-[var(--pg-accent)]"
+                  : "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
+              }
+              onClick={() => toggleBuddy()}
+              title="Toggle Study Buddy (⌘J / Ctrl+J)"
+              aria-pressed={buddyOpen}
+            >
+              <Sparkles size={13} />
+              <span className="hidden font-medium tracking-tight sm:inline">
+                Buddy
+              </span>
+            </button>
+            <button
               className="inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium tracking-tight text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => setPaletteOpen(true)}
               title="Open command palette (⌘K)"
@@ -233,6 +260,12 @@ export function AppShell({ user }: AppShellProps = {}) {
         <main className="relative flex-1 flex flex-col overflow-hidden min-w-0">
           <Canvas />
         </main>
+        {/* The Study Buddy dock sits to the right of the canvas and
+            shrinks the main area when open. Floating panels still
+            render on top via `PanelManager` below — the dock is just
+            a sibling, not an overlay, so panels can be dragged into
+            view alongside it. */}
+        <StudyBuddyDock />
       </div>
 
       <PanelManager />

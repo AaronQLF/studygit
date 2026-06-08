@@ -1,6 +1,18 @@
-import type { AppState } from "./types";
+import type { AppState, StudyBuddyState } from "./types";
 
 export const DEFAULT_WORKSPACE_ID = "ws-personal";
+
+export const DEFAULT_STUDY_BUDDY_WIDTH = 380;
+export const STUDY_BUDDY_MIN_WIDTH = 320;
+export const STUDY_BUDDY_MAX_WIDTH = 720;
+
+export const INITIAL_STUDY_BUDDY: StudyBuddyState = {
+  open: false,
+  width: DEFAULT_STUDY_BUDDY_WIDTH,
+  turns: [],
+  extraSources: [],
+  handsFree: false,
+};
 
 export const INITIAL_STATE: AppState = {
   workspaces: [
@@ -49,6 +61,7 @@ export const INITIAL_STATE: AppState = {
   edges: [],
   selectedWorkspaceId: DEFAULT_WORKSPACE_ID,
   version: 1,
+  studyBuddy: INITIAL_STUDY_BUDDY,
 };
 
 export const NOTE_COLORS = [
