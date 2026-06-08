@@ -8,6 +8,7 @@ import { NodeShell } from "./NodeShell";
 import { PdfThumbnail } from "./PdfThumbnail";
 import { EditableTitle } from "@/components/ui/EditableTitle";
 import { useStore } from "@/lib/store";
+import { uploadFileToServer } from "@/lib/upload-file";
 import type { PdfNodeData } from "@/lib/types";
 
 export function PdfNode({ id, data }: NodeProps) {
@@ -58,18 +59,11 @@ export function PdfNode({ id, data }: NodeProps) {
     setUploading(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `upload failed (${res.status})`);
-      }
-      const json = (await res.json()) as { url: string; name: string };
+      const { url, name } = await uploadFileToServer(file);
       updateNodeData(id, {
-        src: json.url,
-        fileName: json.name,
-        title: d.title || json.name.replace(/\.pdf$/i, ""),
+        src: url,
+        fileName: name,
+        title: d.title || name.replace(/\.pdf$/i, ""),
       } as Partial<PdfNodeData>);
     } catch (err) {
       setError((err as Error).message);

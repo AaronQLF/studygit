@@ -8,6 +8,7 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { uploadFileToServer } from "@/lib/upload-file";
 import { usePendingHighlightJump } from "@/lib/hooks/use-pending-highlight-jump";
 import type { CanvasNode, PdfNodeData } from "@/lib/types";
 import {
@@ -87,21 +88,14 @@ export function PdfPanelBody({ node }: { node: CanvasNode }) {
     setPdfReplacing(true);
     setPdfUploadError(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `upload failed (${res.status})`);
-      }
-      const json = (await res.json()) as { url: string; name: string };
+      const { url, name } = await uploadFileToServer(file);
       updateNodeData(nodeId, {
-        src: json.url,
-        fileName: json.name,
+        src: url,
+        fileName: name,
         title:
           pdfData.title && pdfData.title !== "New PDF"
             ? pdfData.title
-            : json.name.replace(/\.pdf$/i, ""),
+            : name.replace(/\.pdf$/i, ""),
       } as Partial<PdfNodeData>);
     } catch (err) {
       setPdfUploadError((err as Error).message);
