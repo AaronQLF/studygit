@@ -29,6 +29,7 @@ import { UpdateBanner } from "./UpdateBanner";
 import { AppVersionBadge } from "./AppVersionBadge";
 import { BrowserWindow } from "@/components/viewers/BrowserWindow";
 import { StudyBuddyDock } from "@/components/buddy/StudyBuddyDock";
+import { StudyTodayButton } from "@/components/study/StudyTodayButton";
 import {
   THEME_DIALOG_EVENT,
   ThemeSettingsDialog,
@@ -54,6 +55,9 @@ const Canvas = dynamic(() => import("@/components/canvas/Canvas").then((m) => m.
 export function AppShell({ user }: AppShellProps = {}) {
   const hydrate = useStore((s) => s.hydrate);
   const hydrated = useStore((s) => s.hydrated);
+  const hydrateFailed = useStore((s) => s.hydrateFailed);
+  const saveError = useStore((s) => s.error);
+  const retrySave = useStore((s) => s.retrySave);
   const isDirty = useStore((s) => s.isDirty);
   const justSaved = useStore((s) => s.justSaved);
   const workspaces = useStore((s) => s.workspaces);
@@ -151,6 +155,29 @@ export function AppShell({ user }: AppShellProps = {}) {
     );
   }
 
+  // Initial load failed: refuse to render an editable canvas. The store
+  // is still sitting on the default welcome state, and any edit made on
+  // top of it would try to persist that over the user's real data.
+  if (hydrateFailed) {
+    return (
+      <div className="flex-1 flex h-screen flex-col items-center justify-center gap-3 bg-[var(--pg-bg)] px-6 text-center">
+        <div className="pg-serif text-[20px] font-semibold text-[var(--pg-fg)]">
+          Couldn&apos;t load your workspace
+        </div>
+        <div className="max-w-sm text-[13px] text-[var(--pg-muted)]">
+          {saveError ?? "The server couldn't be reached."} Your data is safe —
+          nothing loads or saves until the connection is back.
+        </div>
+        <button
+          onClick={() => hydrate()}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--pg-border-strong)] px-3.5 py-1.5 text-[13px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   const saveStatus = isDirty
     ? "saving..."
     : justSaved
@@ -193,9 +220,20 @@ export function AppShell({ user }: AppShellProps = {}) {
           </div>
           <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
             <AppVersionBadge />
-            <span className="pg-section-label inline-flex h-7 items-center px-2">
-              {saveStatus}
-            </span>
+            {saveError ? (
+              <button
+                onClick={retrySave}
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-red-500/10 px-2 text-[11px] font-medium text-red-500 hover:bg-red-500/20"
+                title={`${saveError} Click to retry now.`}
+              >
+                save failed — retry
+              </button>
+            ) : (
+              <span className="pg-section-label inline-flex h-7 items-center px-2">
+                {saveStatus}
+              </span>
+            )}
+            <StudyTodayButton />
             <button
               className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
               onClick={() => openBrowser()}

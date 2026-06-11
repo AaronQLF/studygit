@@ -57,6 +57,10 @@ interface StudygitBridge {
   aiFetch: (
     args: StudygitAiFetchRequest
   ) => Promise<StudygitAiFetchResult>;
+  // Dock badge for due flashcards. Optional: older installed shells
+  // predate it, so callers must feature-detect (window.studygit?.
+  // setBadgeCount?.(n)).
+  setBadgeCount?: (count: number) => void;
 }
 
 interface Window {

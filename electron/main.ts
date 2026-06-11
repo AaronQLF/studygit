@@ -1005,6 +1005,19 @@ function wireAutoUpdate(): void {
     autoUpdater.quitAndInstall(false, true);
   });
 
+  // Dock/taskbar badge — number of flashcards due for review. macOS shows
+  // it on the dock icon; Linux needs a Unity-style launcher; Windows is a
+  // no-op (overlay icons would need extra work). Clamp defensively since
+  // the value crosses the IPC boundary.
+  ipcMain.on("studygit:set-badge", (_event, count: unknown) => {
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    try {
+      app.setBadgeCount(n);
+    } catch {
+      // Unsupported platform — ignore.
+    }
+  });
+
   ipcMain.handle("studygit:get-app-version", () => app.getVersion());
 
   ipcMain.handle("studygit:get-update-status", () => latestUpdateStatus);
