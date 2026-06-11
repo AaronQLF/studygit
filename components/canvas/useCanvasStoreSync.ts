@@ -102,8 +102,15 @@ export function useCanvasStoreSync({
         type: n.data.kind,
         position: n.position,
         data: n.data as unknown as Record<string, unknown>,
-        width: n.width,
-        height: n.height,
+        // Explicit width/height are FORCED inline dimensions in React
+        // Flow v12. Only shapes need them (NodeResizer-driven, body is
+        // w-full/h-full). Content nodes size themselves — forcing their
+        // persisted card dimensions kept the invisible wrapper at full
+        // card size when the zoomed-out chip rendered, stranding the
+        // edge handles at the old bottom edge.
+        ...(n.data.kind === "shape"
+          ? { width: n.width, height: n.height }
+          : {}),
         // Shapes are organizational backdrops, so they always sit behind
         // the content nodes regardless of insertion order.
         zIndex: n.data.kind === "shape" ? 0 : 10,

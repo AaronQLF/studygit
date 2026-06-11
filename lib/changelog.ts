@@ -116,6 +116,11 @@ export const CHANGELOG: ChangelogEntry[] = [
               "Dialogs can no longer hide behind your windows. Every panel focus used to push that panel's z-index higher forever — after ten clicks, panels covered the theme dialog, the AI settings, even ⌘K. Panels now stack inside their own isolated layer with a documented app-wide z-scale, so dialogs, menus, and toasts always render above them no matter how long the session.",
           },
           {
+            tag: "fixed",
+            text:
+              "Edges now hug the compact chips when zoomed out. Connections used to stop where the full-size card's bottom edge had been — the node's invisible frame stayed card-sized under the chip. Content nodes no longer carry forced dimensions, so the frame collapses with the chip and connection lines track it exactly.",
+          },
+          {
             tag: "improved",
             text:
               "The sidebar grew up: each workspace gets a colored monogram tile (a stable hue derived from its identity), a node count at a glance, a clearer selected state, and Move up / Move down in the row menu for reordering — order syncs to your account (migration 0005 adds the column). Row menus also close when you click elsewhere now.",
