@@ -88,6 +88,10 @@ async function loadStateFromSupabase(): Promise<AppState> {
     supabase
       .from("workspaces")
       .select("id,name,created_at")
+      // Sidebar order (array position, stamped by save_state since
+      // migration 0005). Nulls last so pre-migration rows keep their
+      // old created_at ordering until the next save backfills them.
+      .order("sort_order", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
     supabase.from("nodes").select("id,workspace_id,position,width,height,data"),
     supabase.from("edges").select("id,workspace_id,source,target"),

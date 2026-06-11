@@ -104,6 +104,8 @@ type Store = AppState & {
   renameWorkspace: (id: string, name: string) => void;
   deleteWorkspace: (id: string) => void;
   selectWorkspace: (id: string) => void;
+  // Reorder within the sidebar list (array order is display order).
+  moveWorkspace: (id: string, dir: -1 | 1) => void;
 
   addNode: (
     workspaceId: string,
@@ -969,6 +971,18 @@ export const useStore = create<Store>((set, get) => ({
         focusedNodeId: focusedNodeIdFromPanels(remainingPanels),
         selectedNodeId: null,
       };
+    });
+    scheduleSave(get, set);
+  },
+
+  moveWorkspace: (id, dir) => {
+    set((s) => {
+      const idx = s.workspaces.findIndex((w) => w.id === id);
+      const target = idx + dir;
+      if (idx === -1 || target < 0 || target >= s.workspaces.length) return s;
+      const next = [...s.workspaces];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return { workspaces: next };
     });
     scheduleSave(get, set);
   },

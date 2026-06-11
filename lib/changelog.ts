@@ -110,6 +110,16 @@ export const CHANGELOG: ChangelogEntry[] = [
             text:
               "The design system got locked in: a shared radius scale and button/input/chip primitives in CSS, and the flashcards green promoted to a theme token (--pg-study) with a proper dark-mode variant — so every study surface now adapts to dark mode and future theme presets can tune it. Edges tint on hover, and the PDF card's width no longer disagrees with its stored size.",
           },
+          {
+            tag: "fixed",
+            text:
+              "Dialogs can no longer hide behind your windows. Every panel focus used to push that panel's z-index higher forever — after ten clicks, panels covered the theme dialog, the AI settings, even ⌘K. Panels now stack inside their own isolated layer with a documented app-wide z-scale, so dialogs, menus, and toasts always render above them no matter how long the session.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The sidebar grew up: each workspace gets a colored monogram tile (a stable hue derived from its identity), a node count at a glance, a clearer selected state, and Move up / Move down in the row menu for reordering — order syncs to your account (migration 0005 adds the column). Row menus also close when you click elsewhere now.",
+          },
         ],
       },
       {
