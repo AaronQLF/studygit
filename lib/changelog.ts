@@ -128,6 +128,16 @@ export const CHANGELOG: ChangelogEntry[] = [
         ],
       },
       {
+        heading: "Quiz Me",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Every study session now has a Flip / Quiz toggle. In Quiz mode you answer from memory — typed or dictated by voice — and the AI judges it against the card's reference answer: correct, partially right, or not quite, with a one-line explanation of what you got right and what was missing. The verdict maps to an FSRS grade you accept with Enter or override 1–4, so active recall feeds the scheduler directly. This is the loop nothing else closes: a tutor that asks and evaluates, wired to spaced repetition. Works for basic and cloze cards in both the deck panel and the cross-deck Today session; image-occlusion cards stay on flip.",
+          },
+        ],
+      },
+      {
         heading: "Find & review",
         items: [
           {

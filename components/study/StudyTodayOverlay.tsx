@@ -18,6 +18,9 @@ import {
 } from "@/lib/flashcards";
 import { CardFace } from "./CardFace";
 import { GRADE_BUTTONS } from "./grade-buttons";
+import { QuizPanel } from "./QuizPanel";
+import { StudyModeToggle, type StudyMode } from "./StudyModeToggle";
+import { isQuizzable } from "@/lib/quiz";
 import type { Flashcard, FlashcardsNodeData } from "@/lib/types";
 
 type QueueEntry = { nodeId: string; cardId: string; deckTitle: string };
@@ -38,6 +41,7 @@ export function StudyTodayOverlay({
   const [sessionTotal, setSessionTotal] = useState(0);
   const [reviewed, setReviewed] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [mode, setMode] = useState<StudyMode>("flip");
 
   // Snapshot the due queue when the overlay opens.
   useEffect(() => {
@@ -111,10 +115,20 @@ export function StudyTodayOverlay({
     [current, updateNodeData, recordStudyDay]
   );
 
-  // Keyboard: Space/Enter flips, 1–4 grades, Esc closes.
+  const quizMode = mode === "quiz" && current ? isQuizzable(current.card) : false;
+
+  // Keyboard: Space/Enter flips, 1–4 grades, Esc closes. Esc stays live
+  // in quiz mode (the QuizPanel owns Enter / typing there).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (quizMode) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -122,12 +136,6 @@ export function StudyTodayOverlay({
           target.tagName === "TEXTAREA" ||
           target.isContentEditable)
       ) {
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
         return;
       }
       if (e.key === " " || e.key === "Enter") {
@@ -146,7 +154,7 @@ export function StudyTodayOverlay({
     // also fire while the overlay is up.
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, flipped, grade, onClose]);
+  }, [open, flipped, grade, onClose, quizMode]);
 
   if (!open) return null;
 
@@ -174,6 +182,7 @@ export function StudyTodayOverlay({
             {streak.count}-day streak
           </span>
         ) : null}
+        {current ? <StudyModeToggle mode={mode} onChange={setMode} /> : null}
         <div className="h-1.5 max-w-md flex-1 overflow-hidden rounded-full bg-[var(--pg-bg-subtle)]">
           <div
             className="h-full rounded-full bg-[var(--pg-study)] transition-[width] duration-300"
@@ -227,15 +236,16 @@ export function StudyTodayOverlay({
               className="flex max-h-full w-full max-w-2xl flex-col items-center justify-center gap-4 rounded-[var(--pg-radius-xl)] border border-[var(--pg-border)] bg-[var(--pg-bg)] px-10 py-12 text-center shadow-[var(--pg-shadow-lg)] transition-shadow hover:shadow-xl"
             >
               <span className="text-[10.5px] uppercase tracking-[0.14em] text-[var(--pg-muted)]">
-                {current.deckTitle} · {flipped ? "Answer" : "Question"}
+                {current.deckTitle} ·{" "}
+                {!quizMode && flipped ? "Answer" : "Question"}
               </span>
               <span className="pg-serif overflow-y-auto whitespace-pre-wrap text-[20px] font-medium leading-relaxed text-[var(--pg-fg)]">
                 <CardFace
                   card={current.card}
-                  side={flipped ? "answer" : "question"}
+                  side={!quizMode && flipped ? "answer" : "question"}
                 />
               </span>
-              {!flipped ? (
+              {!quizMode && !flipped ? (
                 <span className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] text-[var(--pg-muted)]">
                   <RotateCcw size={11} />
                   Click or press Space to reveal
@@ -245,7 +255,9 @@ export function StudyTodayOverlay({
           </div>
 
           <div className="shrink-0 px-6 pb-8">
-            {flipped ? (
+            {quizMode ? (
+              <QuizPanel key={current.cardId} card={current.card} onGraded={grade} />
+            ) : flipped ? (
               <div className="mx-auto flex max-w-2xl items-center justify-center gap-2">
                 {GRADE_BUTTONS.map((g) => (
                   <button
