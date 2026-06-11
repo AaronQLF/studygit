@@ -25,7 +25,10 @@ import { useStore } from "@/lib/store";
 import { STUDY_BUDDY_PROMPT_EXTRA } from "@/lib/buddy-prompt";
 import { attachSourceRow } from "@/lib/source-attach";
 import { useConversation } from "@/lib/hooks/use-conversation";
-import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
+import {
+  FATAL_SPEECH_ERROR_CODES,
+  useSpeechRecognition,
+} from "@/lib/hooks/use-speech-recognition";
 import { plainTextForSpeech, useTextToSpeech } from "@/lib/hooks/use-text-to-speech";
 import { type SourceRow } from "@/lib/source-rows";
 import type { AiRequestSource } from "@/lib/ai-request";
@@ -37,6 +40,7 @@ import {
   chipState,
 } from "@/components/panels/ai/AiSourcesStrip";
 import { StudyBuddyTurn, StudyBuddyEmptyState } from "./StudyBuddyTurn";
+import { useToastStore } from "@/components/ui/Toast";
 
 // ---- helpers ---------------------------------------------------------
 
@@ -331,6 +335,8 @@ export function StudyBuddyPanel() {
   const {
     supported: sttSupported,
     listening: sttListening,
+    error: sttError,
+    errorCode: sttErrorCode,
     start: sttStart,
     stop: sttStop,
   } = handsFreeStt;
@@ -354,12 +360,28 @@ export function StudyBuddyPanel() {
     lastSpokenTurnIdRef.current = null;
   }, [handsFree, sttListening, sttStop, ttsCancel]);
 
+  // Fatal mic failure (denied permission, no hardware): disengage
+  // hands-free and tell the user why, instead of letting the
+  // auto-listen effect below re-arm the dead mic every 250ms forever.
+  useEffect(() => {
+    if (!handsFree) return;
+    if (!sttErrorCode || !FATAL_SPEECH_ERROR_CODES.has(sttErrorCode)) return;
+    setHandsFree(false);
+    useToastStore
+      .getState()
+      .push(
+        { message: sttError ?? "Hands-free stopped: microphone unavailable." },
+        7000
+      );
+  }, [handsFree, sttErrorCode, sttError, setHandsFree]);
+
   // Auto-listen tick: while hands-free is on and nothing else is
   // happening, arm the mic for the next utterance after a small
   // debounce. Re-runs on every state transition that could matter.
   useEffect(() => {
     if (!handsFree) return;
     if (!sttSupported) return;
+    if (sttErrorCode && FATAL_SPEECH_ERROR_CODES.has(sttErrorCode)) return;
     if (sttListening) return;
     if (ttsSpeaking) return;
     if (turnRunning) return;
@@ -377,7 +399,7 @@ export function StudyBuddyPanel() {
         restartTimerRef.current = null;
       }
     };
-  }, [handsFree, sttSupported, sttListening, ttsSpeaking, turnRunning, sttStart]);
+  }, [handsFree, sttSupported, sttErrorCode, sttListening, ttsSpeaking, turnRunning, sttStart]);
 
   // Speak each new assistant turn aloud, guarded against re-speaking the
   // same turn on incidental re-renders. ttsSpeaking flipping back to

@@ -107,6 +107,18 @@ export type AiRequestBody =
       mode: "process-only";
       raw: string;
       sources?: AiRequestSource[];
+    }
+  | {
+      // "raw" path for structured generation (e.g. flashcards): same
+      // provider call as "full" but the answer is returned verbatim —
+      // no markdown→HTML, no citation pills — so the client can parse
+      // it (JSON etc). `systemPromptExtra` REPLACES the canonical chat
+      // rules here instead of appending, because the markdown/citation
+      // instructions would fight a JSON-only output contract.
+      mode: "raw";
+      messages: AiWireMessage[];
+      sources?: AiRequestSource[];
+      systemPromptExtra?: string;
     };
 
 export const MAX_SYSTEM_PROMPT_EXTRA_CHARS = 4000;
@@ -256,6 +268,19 @@ export function cleanMessages(
 // Sources block (system prompt)
 // --------------------------------------------------------------------
 
+// Escape a value before interpolating it into a <source> tag attribute.
+// Labels and locators are user/source-derived (a PDF title, an article
+// headline); without escaping, a crafted title like `" injected="` can
+// break out of the attribute and smuggle text the model reads as tag
+// structure or instructions.
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function renderSourcesBlock(sources: AiSourceInput[]): string {
   if (sources.length === 0) {
     return "No sources were attached. Answer from general knowledge and say so explicitly.";
@@ -270,11 +295,13 @@ export function renderSourcesBlock(sources: AiSourceInput[]): string {
   ];
   for (const s of sources) {
     const locator = s.locator
-      ? ` locator="${s.locator}"`
+      ? ` locator="${escapeXmlAttr(s.locator)}"`
       : s.page != null
       ? ` locator="p${s.page}"`
       : "";
-    lines.push(`<source id="${s.sid}" label="${s.label}"${locator}>`);
+    lines.push(
+      `<source id="${escapeXmlAttr(s.sid)}" label="${escapeXmlAttr(s.label)}"${locator}>`
+    );
     lines.push(s.excerpt.trim());
     lines.push(`</source>`);
     lines.push("");

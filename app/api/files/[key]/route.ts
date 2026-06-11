@@ -52,6 +52,14 @@ export async function GET(
     );
   }
 
+  // Ownership check. Manifests written since ownership shipped carry the
+  // uploader's user id; refuse to serve them to anyone else. Answer 404
+  // (not 403) so probing a key doesn't confirm it exists. Legacy
+  // ownerless manifests stay readable by any authenticated user.
+  if (manifest.owner && manifest.owner !== user.id) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const range = parseRangeHeader(request.headers.get("range"), manifest.size);
   if (range === "invalid") {
     return new Response(null, {

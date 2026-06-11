@@ -12,9 +12,20 @@ export type NodeKind =
   | "pdf"
   | "page"
   | "shape"
-  | "ai";
+  | "ai"
+  | "flashcards";
 
-export type ShapeVariant = "rectangle" | "rounded" | "ellipse" | "diamond";
+export type ShapeVariant =
+  | "rectangle"
+  | "rounded"
+  | "ellipse"
+  | "diamond"
+  | "pill"
+  | "triangle"
+  | "parallelogram"
+  | "hexagon"
+  | "arrow"
+  | "star";
 
 export type Comment = {
   id: string;
@@ -135,6 +146,10 @@ export type ShapeNodeData = {
   stroke: string;
   borderStyle?: ShapeBorderStyle;
   label?: string;
+  // Where the label sits. Undefined falls back to a per-variant default:
+  // "top" for boxy frames (rectangle/rounded/ellipse/pill), "center" for
+  // pointy flowchart shapes whose top edge is clipped away.
+  labelPosition?: "top" | "center";
   // Text styling for the label. All optional — sensible defaults applied
   // at render time when undefined.
   textColor?: string;
@@ -235,6 +250,64 @@ export type AiAnswerNodeData = {
   turns: AiTurn[];
 };
 
+// Card content types:
+//   basic     — front/back Q&A (default when `type` is undefined)
+//   cloze     — `front` holds the full text with {{hidden parts}} markers;
+//               the question blanks them, the answer reveals them
+//   occlusion — `imageUrl` + normalized `occlusionRects` cover regions of
+//               a diagram; `front` is an optional hint line
+export type FlashcardKind = "basic" | "cloze" | "occlusion";
+
+// FSRS scheduler state (ts-fsrs). Cards graded before FSRS shipped have
+// no `fsrs` slot — their state is seeded from the legacy SM-2 fields on
+// first review. `state` follows ts-fsrs: 0 New, 1 Learning, 2 Review,
+// 3 Relearning.
+export type FlashcardFsrs = {
+  stability: number;
+  difficulty: number;
+  reps: number;
+  lapses: number;
+  learningSteps: number;
+  state: 0 | 1 | 2 | 3;
+  lastReview: number | null;
+};
+
+// One spaced-repetition flashcard. `dueAt` (epoch ms) is the canonical
+// "when is this due" across the app; `interval` mirrors the last
+// scheduled gap in days for display. `reps`/`ease` are legacy SM-2
+// fields kept for back-compat and FSRS seeding. New cards are due
+// immediately (dueAt = createdAt) so they show up in the first study
+// session after creation.
+export type Flashcard = {
+  id: string;
+  front: string;
+  back: string;
+  createdAt: number;
+  reps: number;
+  interval: number;
+  ease: number;
+  dueAt: number;
+  lastReviewedAt: number | null;
+  type?: FlashcardKind;
+  fsrs?: FlashcardFsrs;
+  // Occlusion-only payload.
+  imageUrl?: string;
+  occlusionRects?: PdfHighlightRect[];
+  // Set when the card was AI-generated from workspace sources — points at
+  // the node the content came from so the deck can show provenance.
+  sourceNodeId?: string | null;
+};
+
+export type FlashcardsNodeData = {
+  kind: "flashcards";
+  title: string;
+  cards: Flashcard[];
+  // Optional exam deadline (epoch ms, local end-of-day). When set and in
+  // the future, the scheduler caps review intervals so every card is
+  // seen again before the exam.
+  examDate?: number | null;
+};
+
 export type AnyNodeData =
   | LinkNodeData
   | ImageNodeData
@@ -243,7 +316,8 @@ export type AnyNodeData =
   | PdfNodeData
   | PageNodeData
   | ShapeNodeData
-  | AiAnswerNodeData;
+  | AiAnswerNodeData
+  | FlashcardsNodeData;
 
 export type CanvasNode = {
   id: string;
@@ -309,6 +383,15 @@ export type StudyBuddyState = {
   handsFree: boolean;
 };
 
+// Daily review streak. `lastDay` is a local-timezone YYYY-MM-DD stamp of
+// the most recent day with at least one completed review; `count` is the
+// run of consecutive such days. Synced with the snapshot so the streak
+// follows the user across devices.
+export type StudyStreak = {
+  count: number;
+  lastDay: string;
+};
+
 export type AppState = {
   workspaces: Workspace[];
   nodes: CanvasNode[];
@@ -318,4 +401,6 @@ export type AppState = {
   // Optional for back-compat with snapshots saved before the Study
   // Buddy feature shipped — a missing buddy slot hydrates to defaults.
   studyBuddy?: StudyBuddyState;
+  // Optional for back-compat — missing means "no streak yet".
+  studyStreak?: StudyStreak;
 };

@@ -48,6 +48,15 @@ export type Manifest = {
   name?: string;
   /** MIME type to use as Content-Type on the way out. */
   mime: string;
+  /**
+   * Auth user id that uploaded the file. /api/files/<key> refuses to
+   * serve a manifest whose owner doesn't match the requester. Optional +
+   * nullable for manifests written before ownership existed — those stay
+   * readable by any authenticated user (their keys are unguessable
+   * nanoids, and re-stamping them retroactively isn't possible without
+   * knowing who uploaded what).
+   */
+  owner?: string | null;
   /** Total decompressed (logical) size in bytes — pre-chunking total. */
   size: number;
   /** sha256 of the entire concatenated plaintext, lowercase hex. */
