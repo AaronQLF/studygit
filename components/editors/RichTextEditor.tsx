@@ -25,6 +25,7 @@ import {
   type CitationContext,
 } from "./extensions";
 import { ColorPickerButton } from "@/components/ui/ColorPickerButton";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { ToolbarButton } from "@/components/ui/ToolbarButton";
 
 function Toolbar({ editor }: { editor: Editor }) {
@@ -252,6 +253,7 @@ export function RichTextEditor({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Toolbar editor={editor} />
+      <SelectionToolbar editor={editor} citationContext={citationContext} />
       <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--pg-bg)]">
         <EditorContent editor={editor} className="h-full" />
       </div>

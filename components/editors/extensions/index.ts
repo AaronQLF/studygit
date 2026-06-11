@@ -9,8 +9,10 @@ import Highlight from "@tiptap/extension-highlight";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Typography from "@tiptap/extension-typography";
+import Underline from "@tiptap/extension-underline";
 import Image from "@tiptap/extension-image";
 import Blockquote from "@tiptap/extension-blockquote";
+import { TableKit } from "@tiptap/extension-table";
 import {
   TextStyle,
   Color,
@@ -47,6 +49,7 @@ import sql from "highlight.js/lib/languages/sql";
 import rust from "highlight.js/lib/languages/rust";
 import type { AnyExtension } from "@tiptap/core";
 
+import { BlockKeys } from "./BlockKeys";
 import { MathInline } from "./MathInline";
 import { MathBlock } from "./MathBlock";
 import { MermaidBlock } from "./MermaidBlock";
@@ -254,8 +257,15 @@ export function createBaseExtensions({
     Color,
     BackgroundColor,
     Typography,
+    Underline,
     TaskList,
     TaskItem.configure({ nested: true }),
+    // Notion-style tables: resizable columns, header row by default
+    // (insertTable opts), cell selection. Styled via .pg-prose CSS.
+    TableKit.configure({
+      table: { resizable: true, HTMLAttributes: { class: "pg-table" } },
+    }),
+    BlockKeys,
     Image.configure({
       inline: false,
       allowBase64: false,

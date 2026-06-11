@@ -26,6 +26,7 @@ import {
   Quote,
   Sigma,
   Sparkles,
+  Table as TableIcon,
   type LucideIcon,
 } from "lucide-react";
 import { type CalloutVariant } from "./CalloutBlock";
@@ -107,6 +108,19 @@ const ALL_ITEMS: SlashItem[] = [
         .focus()
         .deleteRange(range)
         .setNode("heading", { level: 3 })
+        .run(),
+  },
+  {
+    title: "Table",
+    description: "3×3 table with a header row",
+    icon: TableIcon,
+    keywords: ["table", "grid", "rows", "columns", "matrix", "compare"],
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
         .run(),
   },
   {
