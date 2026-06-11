@@ -1,6 +1,12 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import clsx from "clsx";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
@@ -15,6 +21,7 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  ListTree,
   Minus,
   Plus,
   Quote,
@@ -29,6 +36,7 @@ import {
   type CitationContext,
 } from "./extensions";
 import { ColorPickerButton } from "@/components/ui/ColorPickerButton";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { SUBPAGE_CREATE_EVENT } from "./extensions/PageLinkCreator";
 import {
   PAGE_ZOOM_DEFAULT,
@@ -173,6 +181,7 @@ export function PageEditorToolbar({ editor }: { editor: Editor }) {
           narrow panels (the right cluster just flows onto the next
           line instead of clipping). */}
       <span className="ml-auto" aria-hidden />
+      <OutlineButton editor={editor} />
       <ToolbarButton
         title="Undo (⌘Z)"
         icon={Undo2}
@@ -186,6 +195,120 @@ export function PageEditorToolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().redo().run()}
       />
       <ZoomControls />
+    </div>
+  );
+}
+
+// Heading outline ("table of contents") popover — scans the document for
+// headings on open and jumps the editor to the one the user picks. Long
+// study notes get navigable without scrolling blind.
+function OutlineButton({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<
+    Array<{ level: number; text: string; pos: number }>
+  >([]);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  const toggle = () => {
+    if (!open) {
+      const found: Array<{ level: number; text: string; pos: number }> = [];
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === "heading") {
+          found.push({
+            level: (node.attrs.level as number) ?? 1,
+            text: node.textContent.trim() || "Untitled heading",
+            pos,
+          });
+        }
+      });
+      setItems(found);
+    }
+    setOpen((v) => !v);
+  };
+
+  const jumpTo = (pos: number) => {
+    setOpen(false);
+    editor.chain().focus().setTextSelection(pos + 1).run();
+    const dom = editor.view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) {
+      dom.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative inline-flex">
+      <ToolbarButton title="Outline" icon={ListTree} onClick={toggle} active={open} />
+      {open ? (
+        <div className="absolute right-0 top-7 z-40 max-h-[320px] min-w-[220px] overflow-y-auto rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-1 shadow-[var(--pg-shadow)]">
+          {items.length === 0 ? (
+            <div className="px-2 py-2 text-[11.5px] text-[var(--pg-muted)]">
+              No headings yet — add one with <code>#</code> or the slash menu.
+            </div>
+          ) : (
+            items.map((item, i) => (
+              <button
+                key={`${item.pos}-${i}`}
+                type="button"
+                onClick={() => jumpTo(item.pos)}
+                className="block w-full truncate rounded-md px-2 py-1 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+                style={{ paddingLeft: 8 + (item.level - 1) * 14 }}
+              >
+                {item.text}
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Live word count + reading time, debounced off the editor's update
+// events so typing bursts don't recount a long doc per keystroke.
+function EditorStats({ editor }: { editor: Editor }) {
+  const [stats, setStats] = useState<{ words: number; minutes: number }>({
+    words: 0,
+    minutes: 0,
+  });
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const recount = () => {
+      const doc = editor.state.doc;
+      const text = doc.textBetween(0, doc.content.size, " ", " ");
+      const words = (text.match(/\S+/g) ?? []).length;
+      setStats({ words, minutes: Math.max(1, Math.ceil(words / 200)) });
+    };
+    const onUpdate = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(recount, 300);
+    };
+    // Initial count deferred to a microtask (codebase rule: no sync
+    // setState inside the effect body).
+    queueMicrotask(recount);
+    editor.on("update", onUpdate);
+    return () => {
+      editor.off("update", onUpdate);
+      if (timer) clearTimeout(timer);
+    };
+  }, [editor]);
+
+  if (stats.words === 0) return null;
+  return (
+    <div className="pointer-events-none shrink-0 select-none border-t border-[var(--pg-border)]/60 px-4 py-1 text-right text-[10.5px] tabular-nums text-[var(--pg-muted)]">
+      {stats.words.toLocaleString()} {stats.words === 1 ? "word" : "words"} ·{" "}
+      {stats.minutes} min read
     </div>
   );
 }
@@ -401,9 +524,11 @@ export const PageEditor = forwardRef<
   return (
     <div className="flex h-full min-h-0 flex-col">
       {showToolbar ? <PageEditorToolbar editor={editor} /> : null}
+      <SelectionToolbar editor={editor} citationContext={citationContext} />
       <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--pg-bg)]">
         <EditorContent editor={editor} className="h-full" />
       </div>
+      <EditorStats editor={editor} />
     </div>
   );
 });
