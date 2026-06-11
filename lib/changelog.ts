@@ -27,6 +27,189 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.32",
+    date: "2026-06-10",
+    tagline:
+      "Flashcards with spaced repetition, a Notion-grade writing upgrade, and saves that can no longer lose your work.",
+    sections: [
+      {
+        heading: "Flashcards",
+        items: [
+          {
+            tag: "new",
+            text:
+              "A new Flashcards node (press F, or find it in the dock, right-click menu, and ⌘K) turns your materials into a study deck. Attach any source — a whole PDF, a single highlight, an article, a page, even a past AI answer — pick how many cards you want, and the AI drafts question/answer pairs grounded strictly in what you attached. Every card is editable, and you can write your own by hand too.",
+          },
+          {
+            tag: "new",
+            text:
+              "Study mode runs a classic SM-2 spaced-repetition scheduler: flip with Space, grade with 1–4 (Again / Hard / Good / Easy). Intervals grow as you succeed (1 day → 3 days → longer), lapsed cards come back ten minutes later within the same session, and the canvas card shows what’s due at a glance — so the deck tells you when it’s time to review.",
+          },
+          {
+            tag: "new",
+            text:
+              "Select any passage while writing and click “Card” in the new selection toolbar — the selection becomes flashcards in a deck automatically created beside the page and wired to it on the canvas. With AI configured you get 1–3 generated cards from the exact excerpt; without, the selection lands as a card front for you to answer.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Scheduling upgraded from SM-2 to FSRS — the machine-learned spaced-repetition algorithm Anki adopted — which reaches the same retention with meaningfully fewer reviews. Existing cards keep their progress (their history seeds the new scheduler), lapsed cards go through proper relearning steps, and every grade button now shows exactly when you'd see the card again (1m / 10m / 3d / 2mo).",
+          },
+          {
+            tag: "new",
+            text:
+              "Cloze deletions: write a sentence and wrap the part to hide in {{double braces}} — the question shows blanks, the answer highlights what was hidden. Select words in the card editor and hit the {{ }} button to wrap them, and the AI generator now emits cloze cards on its own when a fact reads best as fill-in-the-blank.",
+          },
+          {
+            tag: "new",
+            text:
+              "Image occlusion: upload or paste a diagram, drag boxes over the labels, and study it like Anki's image occlusion — covered on the question side, outlined on reveal. Made for anatomy, maps, circuit diagrams, and every other label-the-parts subject.",
+          },
+          {
+            tag: "new",
+            text:
+              "Exam-aware scheduling: give a deck an exam date and the scheduler caps every interval so each card cycles again before the day — no more “next review in 3 months” on material you're tested on in two weeks. The deck shows an “Exam in Nd” countdown, and both study surfaces respect it.",
+          },
+        ],
+      },
+      {
+        heading: "Writing",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Select text and a floating toolbar appears right over the selection — bold, italic, underline, strikethrough, inline code, text and highlight colors, a proper link editor (no more browser prompt), and a “turn into” menu that converts the block between text, headings, lists, todos, quotes, and code blocks without touching the top toolbar.",
+          },
+          {
+            tag: "new",
+            text:
+              "Inline AI rewrites, right in the selection toolbar: Improve writing, Fix grammar & spelling, Make shorter, Make longer, and Simplify language. The rewrite replaces the selection in a single step — ⌘Z brings the original straight back — and runs through your own configured AI provider, same as every other AI feature.",
+          },
+          {
+            tag: "new",
+            text:
+              "Tables. Type /table for a 3×3 grid with a header row, drag column edges to resize, and manage rows and columns from the selection toolbar while your cursor is inside one.",
+          },
+          {
+            tag: "new",
+            text:
+              "Block ergonomics and orientation: Alt+↑/↓ moves the current block (or list item) up and down, ⌘D duplicates it, an outline button in the page toolbar jumps between headings in long notes, and a quiet footer shows live word count and reading time.",
+          },
+        ],
+      },
+      {
+        heading: "Design",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "Zoomed-out canvases are finally legible: below ~45% zoom, pages, PDFs, links, notes, conversations, and decks render as large-type title chips instead of shrunken full cards — the level-of-detail treatment serious canvas tools use. Images and shapes stay full-fidelity, edges keep their anchors, and double-click still opens the panel. Zooming also no longer churns saves: presentation-only size changes are never persisted.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The design system got locked in: a shared radius scale and button/input/chip primitives in CSS, and the flashcards green promoted to a theme token (--pg-study) with a proper dark-mode variant — so every study surface now adapts to dark mode and future theme presets can tune it. Edges tint on hover, and the PDF card's width no longer disagrees with its stored size.",
+          },
+        ],
+      },
+      {
+        heading: "Find & review",
+        items: [
+          {
+            tag: "new",
+            text:
+              "⌘K now searches your actual content, not just commands. Pages, notes, articles, PDF and web highlights, flashcards, and AI replies across every workspace — type two characters and matching results appear first, with the match shown in context and the workspace named on the right. Selecting a result jumps straight there, switching workspaces and scrolling to the exact highlight when the match lives inside one.",
+          },
+          {
+            tag: "new",
+            text:
+              "A Study button in the header collects every due card from every deck in every workspace into one daily session, with a badge showing how many are waiting (mirrored on the desktop app's dock icon). Reviewing keeps a daily streak that syncs with your account — the loop that makes spaced repetition actually happen.",
+          },
+        ],
+      },
+      {
+        heading: "PDF reading",
+        items: [
+          {
+            tag: "performance",
+            text:
+              "The PDF viewer is now virtualized: only the pages near your viewport are actually rendered, and pages that scroll far away release their canvas memory. Previously every page of the document rendered eagerly — and re-rendered on every zoom step — so a 600-page textbook is now smooth instead of a slideshow.",
+          },
+          {
+            tag: "new",
+            text:
+              "Search inside PDFs. Press ⌘F while reading (or click the magnifier) to search the whole document — matches highlight in amber right on the page, Enter / Shift+Enter step through them across pages, and the counter shows where you are. The text index builds once per document, on first search.",
+          },
+          {
+            tag: "new",
+            text:
+              "Real page navigation: a current-page indicator that tracks as you scroll, an editable page number to jump anywhere, and prev/next buttons. Zooming now stays anchored on the spot you were reading instead of dumping you somewhere else in the document.",
+          },
+          {
+            tag: "new",
+            text:
+              "Dim reading mode — the moon button inverts page colors for late-night reading, while your highlights keep their true colors. The preference sticks per device.",
+          },
+        ],
+      },
+      {
+        heading: "Shapes",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Six new shape variants — pill, triangle, parallelogram, hexagon, arrow, and star — alongside the original four, with the picker now previewing each shape's actual geometry. The ellipse also finally renders as a true ellipse (it was secretly a pill before).",
+          },
+          {
+            tag: "new",
+            text:
+              "Labels can sit at the top (frames) or dead center (flowchart shapes) — pointy variants default to centered so the label no longer hides in a clipped-off corner, and you can override per shape.",
+          },
+          {
+            tag: "new",
+            text:
+              "Bring to front / send to back. Overlapping frames and shapes can finally be reordered — nest a small frame on top of a backdrop frame without the stacking order fighting you.",
+          },
+        ],
+      },
+      {
+        heading: "Saving — reliability",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Two open tabs (or your laptop and the desktop app) could silently overwrite each other’s changes — last write won, no warning. Saves are now versioned end to end: the server rejects stale snapshots, the losing tab reloads the newest state and tells you, and tabs broadcast their saves to each other so everyone stays in sync before a conflict can even form.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Failed saves used to fail silently — the header said “saving…” forever and the error was never shown. Saves now retry automatically with backoff, and the header pill turns into a “save failed — retry” button while anything is unsaved. And if the app can’t load your workspace at all, it shows a retry screen instead of an editable default canvas — which previously could overwrite your real data with the welcome page on the next save.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "An AI reply interrupted by a reload used to stay stuck “running” forever, permanently blocking that conversation (and the Study Buddy). Interrupted replies are now marked as retryable errors on load.",
+          },
+        ],
+      },
+      {
+        heading: "Security & hardening",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Uploads are now stamped with their owner and the file endpoint refuses to serve another account’s files; the AI endpoint requires a signed-in session on the hosted deployment (it was previously an open relay); source titles are escaped before entering the model prompt; uploads are capped at 100 MB; and hands-free mode now stops cleanly with an explanation when microphone access is denied instead of silently retrying forever.",
+          },
+          {
+            tag: "improved",
+            text:
+              "Panels stranded off-screen by a window resize pull themselves back into reach, the Study Buddy dock can no longer swallow a small window, and the command palette highlight follows your search as you type.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.31",
     date: "2026-06-08",
     tagline:
