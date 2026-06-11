@@ -7,6 +7,7 @@ import type { ComponentType } from "react";
 import {
   FileSearch,
   Image as ImageIcon,
+  Layers,
   Link2,
   NotebookPen,
   Shapes,
@@ -25,6 +26,7 @@ export const KIND_LABELS: Record<NodeKind, string> = {
   pdf: "PDF",
   shape: "Shape",
   ai: "Ask AI",
+  flashcards: "Flashcards",
 };
 
 export const KIND_ICONS: Record<NodeKind, ComponentType<{ size?: number }>> = {
@@ -36,6 +38,7 @@ export const KIND_ICONS: Record<NodeKind, ComponentType<{ size?: number }>> = {
   pdf: FileSearch,
   shape: Shapes,
   ai: Sparkles,
+  flashcards: Layers,
 };
 
 /** Add-from-canvas palette order; excludes legacy `blog` (same UX as `page`). */
@@ -47,6 +50,7 @@ export const CONTEXT_MENU_KINDS: NodeKind[] = [
   "pdf",
   "shape",
   "ai",
+  "flashcards",
 ];
 
 /**
@@ -96,6 +100,12 @@ export function defaultDataFor(kind: NodeKind): AnyNodeData {
         title: "Ask AI",
         sources: [],
         turns: [],
+      };
+    case "flashcards":
+      return {
+        kind,
+        title: "New deck",
+        cards: [],
       };
   }
 }

@@ -34,3 +34,8 @@ export const LazyAiAnswerPanelBody = dynamic(
   () => import("./AiAnswerPanelBody").then((m) => m.AiAnswerPanelBody),
   { ssr: false, loading: PanelLoading }
 );
+
+export const LazyFlashcardsPanelBody = dynamic(
+  () => import("./FlashcardsPanelBody").then((m) => m.FlashcardsPanelBody),
+  { ssr: false, loading: PanelLoading }
+);
