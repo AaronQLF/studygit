@@ -18,6 +18,7 @@ const ADD_NODE_KEYS: Record<string, NodeKind> = {
   p: "pdf",
   s: "shape",
   a: "ai",
+  f: "flashcards",
 };
 
 function isTypingInTarget(el: HTMLElement | null): boolean {

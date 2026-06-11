@@ -3,6 +3,7 @@
 
 import { BezierEdge } from "@xyflow/react";
 import { AiAnswerNode } from "./nodes/AiAnswerNode";
+import { FlashcardsNode } from "./nodes/FlashcardsNode";
 import { ImageNode } from "./nodes/ImageNode";
 import { LinkNode } from "./nodes/LinkNode";
 import { NoteNode } from "./nodes/NoteNode";
@@ -20,6 +21,7 @@ export const nodeTypes = {
   pdf: PdfNode,
   shape: ShapeNode,
   ai: AiAnswerNode,
+  flashcards: FlashcardsNode,
 };
 
 // React Flow's built-in edge types are `default` (bezier-shaped),

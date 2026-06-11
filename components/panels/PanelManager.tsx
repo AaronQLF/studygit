@@ -9,6 +9,7 @@ import { ImagePanelBody } from "./ImagePanelBody";
 import { NotePanelBody } from "./NotePanelBody";
 import {
   LazyAiAnswerPanelBody,
+  LazyFlashcardsPanelBody,
   LazyLinkPanelBody,
   LazyPagePanelBody,
   LazyPdfPanelBody,
@@ -38,6 +39,8 @@ function PanelBody({ node }: { node: CanvasNode }) {
       return <LazyPdfPanelBody node={node} />;
     case "ai":
       return <LazyAiAnswerPanelBody node={node} />;
+    case "flashcards":
+      return <LazyFlashcardsPanelBody node={node} />;
     default:
       return (
         <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--pg-muted)]">
@@ -73,6 +76,39 @@ export function PanelManager() {
   const snapPanel = useStore((s) => s.snapPanel);
   const unsnapPanel = useStore((s) => s.unsnapPanel);
   const togglePanelMaximize = useStore((s) => s.togglePanelMaximize);
+  const movePanel = useStore((s) => s.movePanel);
+
+  // Recover panels stranded off-screen by a viewport shrink (window
+  // resized, monitor unplugged, browser zoom). Free-floating geometry is
+  // absolute pixels, so a panel parked at x=1800 on a wide monitor is
+  // unreachable at vw=1280 — clamp every free panel back to the same
+  // header-visible bounds the drag handler enforces. Snapped/maximized
+  // panels already derive their geometry from the viewport.
+  useEffect(() => {
+    let timer: number | null = null;
+    const clampAll = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      for (const p of useStore.getState().panels) {
+        if (p.maximized || p.snap) continue;
+        const x = Math.max(-p.width + 64, Math.min(vw - 64, p.x));
+        const y = Math.max(0, Math.min(vh - 32, p.y));
+        if (x !== p.x || y !== p.y) movePanel(p.id, x, y);
+      }
+    };
+    const onResize = () => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        clampAll();
+      }, 150);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [movePanel]);
 
   const visiblePanels = useMemo(() => {
     const knownIds = new Set(knownNodeIds);
