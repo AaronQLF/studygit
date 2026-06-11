@@ -23,19 +23,41 @@ import { cycleTheme, readThemePreference, writeThemePreference } from "@/compone
 import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
 import { useStore } from "@/lib/store";
 import { useBrowserSession } from "@/lib/browser-session";
+import { searchContent, type SearchHit } from "@/lib/search";
+import { KIND_ICONS } from "@/components/canvas/node-defaults";
 import { NEW_WORKSPACE_EVENT } from "./Sidebar";
 import type { AnyNodeData, NodeKind } from "@/lib/types";
 
 type PaletteItem = {
   id: string;
-  section: "Add" | "Workspaces" | "View";
+  section: "Content" | "Add" | "Workspaces" | "View";
   label: string;
   hint?: string;
+  // Second muted line under the label — used by content search results
+  // to show the match in context.
+  detail?: string;
+  // Right-aligned muted tag (workspace name on content results).
+  meta?: string;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
   disabled?: boolean;
   keywords?: string[];
   onSelect: () => void;
 };
+
+// Jump to a content hit: highlight-anchored hits deep-link through
+// requestHighlightJump (which switches workspace + opens the panel +
+// scrolls); whole-node hits switch workspace and open the panel.
+function jumpToHit(hit: SearchHit): void {
+  const s = useStore.getState();
+  if (hit.highlightId) {
+    s.requestHighlightJump(hit.nodeId, hit.highlightId);
+    return;
+  }
+  if (hit.workspaceId !== s.selectedWorkspaceId) {
+    s.selectWorkspace(hit.workspaceId);
+  }
+  s.openPanel(hit.nodeId);
+}
 
 function defaultDataFor(kind: NodeKind): AnyNodeData {
   switch (kind) {
@@ -64,6 +86,12 @@ function defaultDataFor(kind: NodeKind): AnyNodeData {
         title: "Ask AI",
         sources: [],
         turns: [],
+      };
+    case "flashcards":
+      return {
+        kind,
+        title: "New deck",
+        cards: [],
       };
   }
 }
@@ -102,6 +130,7 @@ export function CommandPalette({
       { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => wsId && addNode(wsId, defaultDataFor("page"), randomPos()), disabled: !wsId },
       { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => wsId && addNode(wsId, defaultDataFor("pdf"), randomPos()), disabled: !wsId },
       { id: "add-shape", section: "Add", label: "Add shape", icon: Shapes, hint: "S", keywords: ["shape", "frame", "group", "color", "organize", "rectangle", "ellipse", "diamond"], onSelect: () => wsId && addNode(wsId, defaultDataFor("shape"), randomPos()), disabled: !wsId },
+      { id: "add-flashcards", section: "Add", label: "Add flashcards", icon: Layers, hint: "F", keywords: ["flashcards", "cards", "deck", "study", "review", "spaced repetition", "anki", "quiz"], onSelect: () => wsId && addNode(wsId, defaultDataFor("flashcards"), randomPos()), disabled: !wsId },
     ];
 
     const workspaceActions: PaletteItem[] = [
@@ -209,15 +238,36 @@ export function CommandPalette({
     workspaces,
   ]);
 
+  // Content search across every workspace — pages, notes, highlights,
+  // cards, AI replies. Reads the store lazily so the palette doesn't
+  // subscribe to (and re-render on) every node edit while closed.
+  const contentItems = useMemo<PaletteItem[]>(() => {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const s = useStore.getState();
+    return searchContent(s.nodes, s.workspaces, q, 8).map((hit) => ({
+      id: `content-${hit.nodeId}-${hit.highlightId ?? "node"}`,
+      section: "Content" as const,
+      label: hit.title,
+      detail: hit.snippet,
+      meta: hit.workspaceName,
+      icon: KIND_ICONS[hit.kind],
+      onSelect: () => jumpToHit(hit),
+    }));
+  }, [query]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) => {
+    const commands = items.filter((item) => {
       if (item.label.toLowerCase().includes(q)) return true;
       if (item.section.toLowerCase().includes(q)) return true;
       return (item.keywords ?? []).some((kw) => kw.toLowerCase().includes(q));
     });
-  }, [items, query]);
+    // Content first: when someone types a phrase, they're far more often
+    // hunting their own notes than a command.
+    return [...contentItems, ...commands];
+  }, [items, query, contentItems]);
 
   useEffect(() => {
     if (!open) return;
@@ -280,7 +330,12 @@ export function CommandPalette({
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              // New query → new result list; highlight the top hit
+              // instead of whatever row index the old list was on.
+              setActiveIndex(0);
+            }}
             placeholder="what would you like to do?"
             className="pg-command-search w-full bg-transparent text-[13.5px] text-[var(--pg-fg)] outline-none placeholder:italic placeholder:text-[var(--pg-muted)]"
           />
@@ -319,17 +374,33 @@ export function CommandPalette({
                       onClose();
                     }}
                   >
-                    <span className="inline-flex items-center gap-2.5 text-[13px] text-[var(--pg-fg)]">
+                    <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[13px] text-[var(--pg-fg)]">
                       {Icon ? (
                         <Icon
                           size={14}
-                          className={index === clampedActiveIndex ? "text-[var(--pg-accent)]" : "text-[var(--pg-muted)]"}
+                          className={clsx(
+                            "shrink-0",
+                            index === clampedActiveIndex
+                              ? "text-[var(--pg-accent)]"
+                              : "text-[var(--pg-muted)]"
+                          )}
                         />
                       ) : null}
-                      {item.label}
+                      <span className="min-w-0">
+                        <span className="block truncate">{item.label}</span>
+                        {item.detail ? (
+                          <span className="block truncate text-[11px] text-[var(--pg-muted)]">
+                            {item.detail}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
-                    {item.hint ? (
-                      <span className="text-[10.5px] text-[var(--pg-muted)] border border-[var(--pg-border)] rounded px-1.5 py-0.5">
+                    {item.meta ? (
+                      <span className="ml-2 shrink-0 text-[10.5px] text-[var(--pg-muted)]">
+                        {item.meta}
+                      </span>
+                    ) : item.hint ? (
+                      <span className="ml-2 shrink-0 text-[10.5px] text-[var(--pg-muted)] border border-[var(--pg-border)] rounded px-1.5 py-0.5">
                         {item.hint}
                       </span>
                     ) : null}

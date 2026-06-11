@@ -84,4 +84,10 @@ contextBridge.exposeInMainWorld("studygit", {
   // `mode: "process-only"` afterwards).
   aiFetch: (args: AiFetchRequest): Promise<AiFetchResult> =>
     ipcRenderer.invoke("studygit:ai-fetch", args),
+
+  // Dock/taskbar badge with the number of flashcards due for review.
+  // Fire-and-forget; main clamps and applies via app.setBadgeCount.
+  setBadgeCount: (count: number): void => {
+    ipcRenderer.send("studygit:set-badge", count);
+  },
 });
