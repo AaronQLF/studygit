@@ -28,6 +28,7 @@ import type { NodeKind } from "@/lib/types";
 import { useToastStore } from "@/components/ui/Toast";
 import { AddDock } from "@/components/shell/AddDock";
 import { defaultDataFor } from "./node-defaults";
+import { COMPACT_ZOOM_THRESHOLD } from "./nodes/NodeShell";
 import { edgeTypes, nodeTypes } from "./node-types";
 import { CanvasContextMenu } from "./CanvasContextMenu";
 import { useCanvasShortcuts } from "./useCanvasShortcuts";
@@ -60,7 +61,7 @@ function CanvasInner() {
   const pushUndo = useToastStore((s) => s.pushUndo);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getZoom } = useReactFlow();
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
@@ -92,6 +93,21 @@ function CanvasInner() {
             pushUndo("Deleted node", () => restoreDeletedNode(snapshot));
           }
         } else if (c.type === "dimensions" && c.dimensions && !c.resizing) {
+          // Below the LOD threshold nodes render as compact chips — their
+          // measured size is a presentation artifact, not user intent, so
+          // persisting it would corrupt stored card dimensions (and churn
+          // a save on every zoom crossing). Also skip no-op writes: RF
+          // re-emits measurements when crossing back even when the values
+          // match what's stored.
+          if (getZoom() < COMPACT_ZOOM_THRESHOLD) continue;
+          const existing = storeNodes.find((n) => n.id === c.id);
+          if (
+            existing &&
+            existing.width === c.dimensions.width &&
+            existing.height === c.dimensions.height
+          ) {
+            continue;
+          }
           updateNode(c.id, {
             width: c.dimensions.width,
             height: c.dimensions.height,
@@ -101,9 +117,11 @@ function CanvasInner() {
     },
     [
       deleteNodeWithSnapshot,
+      getZoom,
       onNodesChangeBase,
       pushUndo,
       restoreDeletedNode,
+      storeNodes,
       updateNode,
     ]
   );

@@ -56,6 +56,7 @@ export function AiAnswerNode({ id, data }: NodeProps) {
       accentColor="#5a2a6b"
       WatermarkIcon={Sparkles}
       label="Conversation"
+      compactTitle={d.title || "Conversation"}
       actions={
         <button
           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"

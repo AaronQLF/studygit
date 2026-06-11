@@ -46,6 +46,7 @@ export function PageNode({ id, data }: NodeProps) {
       accentColor="#b53b1e"
       WatermarkIcon={FileText}
       label="Page"
+      compactTitle={d.title || "Untitled page"}
       actions={
         <button
           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
