@@ -190,11 +190,16 @@ export function PanelManager() {
   if (visiblePanels.length === 0) return null;
 
   return (
-    <>
+    // One fixed stacking context for every floating panel. The layer owns
+    // the app-level z slot (see the z-scale note in globals.css); the
+    // per-panel `z` counters only stack panels against each other inside
+    // it, so dialogs/menus above the layer always win regardless of how
+    // many times panels have been focused.
+    <div className="pg-panel-layer">
       {visiblePanels.map((panel) => (
         <PanelHost key={panel.id} panel={panel} workspaces={workspaces} />
       ))}
-    </>
+    </div>
   );
 }
 

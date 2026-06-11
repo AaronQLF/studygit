@@ -2704,7 +2704,9 @@ html[data-panel-dragging] iframe.pg-cloud-browser-iframe {
    the mouse) and it disappears the moment the pointer leaves the zone
    or the drag ends. */
 .pg-snap-preview {
-  position: fixed;
+  /* Lives inside the fixed inset-0 .pg-panel-layer, so absolute
+     coordinates are viewport coordinates. */
+  position: absolute;
   pointer-events: none;
   border-radius: 10px;
   border: 1.5px solid var(--pg-accent);
@@ -3146,4 +3148,25 @@ html[data-panel-dragging] iframe.pg-cloud-browser-iframe {
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--pg-accent);
   stroke-width: 1.75;
+}
+
+/* ------------------------------------------------------------------ */
+/* App z-index scale                                                   */
+/*                                                                     */
+/*   0–30   canvas, nodes, in-canvas chrome (AddDock 20, node menus 30) */
+/*   40     .pg-panel-layer — ALL floating panels (internal z is local) */
+/*   50     header dropdowns (user menu)                                */
+/*   64–70  full-screen overlays: browser 64, ⌘K 65, dialogs/study 70   */
+/*   90     toasts — always on top                                      */
+/*                                                                     */
+/* Floating panels MUST stay inside .pg-panel-layer: their per-panel    */
+/* z counter grows without bound, and the layer is what keeps that      */
+/* growth from ever competing with dialogs.                            */
+/* ------------------------------------------------------------------ */
+
+.pg-panel-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
 }
