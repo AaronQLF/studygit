@@ -39,6 +39,9 @@ import { useToastStore } from "@/components/ui/Toast";
 import { CardFace } from "@/components/study/CardFace";
 import { GRADE_BUTTONS } from "@/components/study/grade-buttons";
 import { ImageOcclusionEditor } from "@/components/study/ImageOcclusionEditor";
+import { QuizPanel } from "@/components/study/QuizPanel";
+import { StudyModeToggle, type StudyMode } from "@/components/study/StudyModeToggle";
+import { isQuizzable } from "@/lib/quiz";
 import { SourcePicker } from "@/components/viewers/SourcePicker";
 import { rowToSourceRefAsync, type SourceRow } from "@/lib/source-rows";
 import { readAiSettings, hasAiCredentials, AI_SETTINGS_DIALOG_EVENT } from "@/lib/ai-settings";
@@ -892,6 +895,7 @@ function StudyView({
     dueCards(cards).map((c) => c.id)
   );
   const [flipped, setFlipped] = useState(false);
+  const [mode, setMode] = useState<StudyMode>("flip");
   const [reviewed, setReviewed] = useState(0);
   const [sessionTotal, setSessionTotal] = useState(queue.length);
   const recordStudyDay = useStore((s) => s.recordStudyDay);
@@ -902,6 +906,9 @@ function StudyView({
   );
   const current =
     liveQueue.length > 0 ? cards.find((c) => c.id === liveQueue[0]) : undefined;
+
+  // Occlusion cards have no text answer to judge, so they always flip.
+  const quizMode = mode === "quiz" && current ? isQuizzable(current) : false;
 
   const grade = useCallback(
     (g: FlashcardGrade) => {
@@ -931,7 +938,10 @@ function StudyView({
   );
 
   // Keyboard: Space/Enter flips, 1–4 grades, Esc handled by PanelManager.
+  // In quiz mode the QuizPanel owns the keyboard (typed answer, then
+  // Enter-to-accept), so this handler stands down.
   useEffect(() => {
+    if (quizMode) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (
@@ -956,7 +966,7 @@ function StudyView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flipped, grade]);
+  }, [flipped, grade, quizMode]);
 
   if (!current) {
     return (
@@ -993,6 +1003,7 @@ function StudyView({
             <ArrowLeft size={12} />
             Deck
           </button>
+          <StudyModeToggle mode={mode} onChange={setMode} />
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--pg-bg-subtle)]">
             <div
               className="h-full rounded-full bg-[var(--pg-study)] transition-[width] duration-300"
@@ -1007,16 +1018,21 @@ function StudyView({
 
       <div className="flex flex-1 min-h-0 items-center justify-center px-8 py-6">
         <button
-          onClick={() => setFlipped((f) => !f)}
+          onClick={() => !quizMode && setFlipped((f) => !f)}
           className="flex max-h-full w-full max-w-xl flex-col items-center justify-center gap-4 rounded-[var(--pg-radius-xl)] border border-[var(--pg-border)] bg-[var(--pg-bg)] px-8 py-10 text-center shadow-[var(--pg-shadow)] transition-shadow hover:shadow-lg"
         >
           <span className="text-[10.5px] uppercase tracking-[0.14em] text-[var(--pg-muted)]">
-            {flipped ? "Answer" : "Question"}
+            {/* In quiz mode the answer side is the verdict surface below,
+                so the card always shows the question until graded. */}
+            {!quizMode && flipped ? "Answer" : "Question"}
           </span>
           <span className="pg-serif overflow-y-auto whitespace-pre-wrap text-[19px] font-medium leading-relaxed text-[var(--pg-fg)]">
-            <CardFace card={current} side={flipped ? "answer" : "question"} />
+            <CardFace
+              card={current}
+              side={!quizMode && flipped ? "answer" : "question"}
+            />
           </span>
-          {!flipped ? (
+          {!quizMode && !flipped ? (
             <span className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] text-[var(--pg-muted)]">
               <RotateCcw size={11} />
               Click or press Space to reveal
@@ -1026,7 +1042,9 @@ function StudyView({
       </div>
 
       <div className="shrink-0 px-6 pb-6">
-        {flipped ? (
+        {quizMode ? (
+          <QuizPanel key={current.id} card={current} onGraded={grade} />
+        ) : flipped ? (
           <div className="mx-auto flex max-w-xl items-center justify-center gap-2">
             {GRADES.map((g) => (
               <button
