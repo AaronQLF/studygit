@@ -45,7 +45,7 @@ export function ToastViewport() {
   if (items.length === 0) return null;
 
   return (
-    <div className="fixed left-1/2 bottom-4 z-[70] -translate-x-1/2 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed left-1/2 bottom-4 z-[90] -translate-x-1/2 flex flex-col gap-2 pointer-events-none">
       {items.map((item) => (
         <div
           key={item.id}

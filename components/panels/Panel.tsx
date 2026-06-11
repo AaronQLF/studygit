@@ -153,15 +153,21 @@ export function Panel({
             left: snapPreviewGeom.x,
             width: snapPreviewGeom.width,
             height: snapPreviewGeom.height,
-            // Float just under the dragged panel itself so the panel
-            // header stays visible on top of the indicator while the
-            // user is sweeping it across the viewport.
-            zIndex: 59 + panel.z,
+            // Same z as the dragged panel: DOM order keeps the preview
+            // under its own panel while still floating over the others.
+            zIndex: panel.z,
           }}
         />
       ) : null}
       <div
         className={clsx(
+          // Positioned `absolute` inside PanelManager's fixed inset-0
+          // `.pg-panel-layer` — the layer pins the whole panel stack at
+          // one app-level z-index, so the ever-growing per-panel z only
+          // competes with sibling panels and can never climb over
+          // dialogs/menus (it used to: `60 + panel.z` overtook the
+          // theme dialog's z-70 after ten focus clicks).
+          //
           // `[-webkit-app-region:no-drag]` keeps Electron's title-bar
           // drag region (defined on the app header above) from
           // swallowing clicks on panel buttons that geometrically
@@ -169,7 +175,7 @@ export function Panel({
           // / snap buttons in the upper right of a snapped or
           // maximized panel become impossible to hit in the desktop
           // build.
-          "fixed flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] [-webkit-app-region:no-drag]",
+          "absolute pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] [-webkit-app-region:no-drag]",
           dragging && "select-none"
         )}
         style={{
@@ -177,7 +183,7 @@ export function Panel({
           left: visibleGeom.x,
           width: visibleGeom.width,
           height: visibleGeom.height,
-          zIndex: 60 + panel.z,
+          zIndex: panel.z,
         }}
         onMouseDown={() => bringPanelFront(panel.id)}
       >
