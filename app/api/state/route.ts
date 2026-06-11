@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDriver, getPersistenceMode } from "@/lib/persistence";
 import { getCurrentUser } from "@/lib/server/auth";
+import type { AppState } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,11 +21,26 @@ export async function GET() {
   return NextResponse.json(await getDriver().loadState());
 }
 
-export async function PUT(request: Request) {
+async function handleSave(request: Request): Promise<Response> {
   const unauthorized = await requireAuthIfSupabase();
   if (unauthorized) return unauthorized;
-  await getDriver().saveState(await request.json());
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json body" }, { status: 400 });
+  }
+  const result = await getDriver().saveState(body as AppState);
+  if (!result.ok) {
+    // Another tab/device saved a newer snapshot first. The client
+    // re-loads and reconciles; nothing was overwritten.
+    return NextResponse.json({ error: "version_conflict" }, { status: 409 });
+  }
   return NextResponse.json({ ok: true });
+}
+
+export async function PUT(request: Request) {
+  return handleSave(request);
 }
 
 // Unload-time flush path. `navigator.sendBeacon` only speaks POST, so the
@@ -33,8 +49,5 @@ export async function PUT(request: Request) {
 // snapshot. Kept as a thin alias so the regular save path stays on PUT
 // and HTTP semantics stay clean.
 export async function POST(request: Request) {
-  const unauthorized = await requireAuthIfSupabase();
-  if (unauthorized) return unauthorized;
-  await getDriver().saveState(await request.json());
-  return NextResponse.json({ ok: true });
+  return handleSave(request);
 }

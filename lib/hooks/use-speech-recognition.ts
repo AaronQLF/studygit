@@ -96,6 +96,16 @@ export type UseSpeechRecognitionOptions = {
   continuous?: boolean;
 };
 
+// Engine error codes that mean "another start() will fail the same way"
+// — denied permission or missing hardware. Callers running auto-restart
+// loops (hands-free mode) must stop retrying when one of these lands,
+// otherwise they spin against the denied permission forever.
+export const FATAL_SPEECH_ERROR_CODES = new Set([
+  "not-allowed",
+  "service-not-allowed",
+  "audio-capture",
+]);
+
 export type UseSpeechRecognitionReturn = {
   supported: boolean;
   // True between `start()` and the engine's `onend` event firing.
@@ -105,6 +115,10 @@ export type UseSpeechRecognitionReturn = {
   // an empty string each time the engine commits a final chunk.
   interimTranscript: string;
   error: string | null;
+  // Raw engine error code behind `error` (e.g. "not-allowed"), so
+  // callers can tell fatal failures from transient ones like
+  // "no-speech". Cleared on the next start().
+  errorCode: string | null;
   start: () => void;
   stop: () => void;
 };
@@ -134,6 +148,7 @@ export function useSpeechRecognition(
   const [listening, setListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   // Resolve support once on mount. We also use this to short-circuit
   // start() — calling it on a runtime that lacks the API would throw.
@@ -176,6 +191,7 @@ export function useSpeechRecognition(
       return;
     }
     setError(null);
+    setErrorCode(null);
     setInterimTranscript("");
     sawSpeechRef.current = false;
 
@@ -229,6 +245,26 @@ export function useSpeechRecognition(
                 ? "Voice recognition needs network access."
                 : event.message || `Voice error: ${code}`;
       setError(human);
+      setErrorCode(code);
+
+      // Terminal failures (denied permission, no mic) don't reliably
+      // deliver `onend` on every engine, which would leave the dead
+      // recognizer in the ref and make every later start() short-circuit
+      // on the idempotency guard — a permanent mic lockout until reload.
+      // Abort and tear down here; if onend does fire afterwards the
+      // cleanup there is idempotent.
+      if (FATAL_SPEECH_ERROR_CODES.has(code)) {
+        try {
+          rec.abort();
+        } catch {
+          // Best effort — the engine may already be dead.
+        }
+        if (recognizerRef.current === rec) {
+          recognizerRef.current = null;
+          setListening(false);
+          setInterimTranscript("");
+        }
+      }
     };
 
     rec.onend = () => {
@@ -277,6 +313,7 @@ export function useSpeechRecognition(
     listening,
     interimTranscript,
     error,
+    errorCode,
     start,
     stop,
   };

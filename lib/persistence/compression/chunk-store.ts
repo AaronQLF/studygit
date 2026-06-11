@@ -166,6 +166,10 @@ export type StoreReport = {
 
 type ChunkStoreOpts = {
   blob?: BlobStore;
+  // Auth user id that owns the file. Stamped into the manifest and
+  // enforced by /api/files/<key>. Null/undefined = ownerless (legacy
+  // uploads, single-user file mode).
+  owner?: string | null;
 };
 
 function blob(opts: ChunkStoreOpts | undefined): BlobStore {
@@ -240,6 +244,7 @@ export async function storeFile(
     v: MANIFEST_VERSION,
     name,
     mime,
+    owner: opts?.owner ?? null,
     size: inputBuf.length,
     sha256: totalSha,
     chunker: {

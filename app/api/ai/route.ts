@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getPersistenceMode } from "@/lib/persistence";
+import { getCurrentUser } from "@/lib/server/auth";
 import {
   AI_HEADER_API_KEY,
   AI_HEADER_BASE_URL,
@@ -60,6 +62,19 @@ function readVerifyMode(): CitationVerifyMode {
 }
 
 export async function POST(request: Request) {
+  // This route makes outbound fetches to a caller-supplied base URL (and
+  // runs a JSDOM pipeline in process-only mode). Without an auth gate the
+  // hosted deployment is an open relay anyone on the internet can bounce
+  // traffic off. Mirror the /api/state and /api/upload rule: require a
+  // session whenever the deployment has auth (supabase mode); local
+  // file-mode dev stays open.
+  if (getPersistenceMode() === "supabase") {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+  }
+
   let body: AiRequestBody;
   try {
     body = (await request.json()) as AiRequestBody;
@@ -92,7 +107,8 @@ export async function POST(request: Request) {
     });
   }
 
-  // -------------------- full --------------------
+  // -------------------- full / raw --------------------
+  const rawMode = body.mode === "raw";
   const baseUrl = request.headers.get(AI_HEADER_BASE_URL)?.trim() ?? "";
   const apiKey = request.headers.get(AI_HEADER_API_KEY)?.trim() ?? "";
   const model = request.headers.get(AI_HEADER_MODEL)?.trim() ?? "";
@@ -118,7 +134,12 @@ export async function POST(request: Request) {
   const sources = sanitizeSources(body.sources);
   const sourcesBlock = renderSourcesBlock(sources);
   const extra = sanitizeSystemPromptExtra(body.systemPromptExtra);
-  const systemPrompt = extra
+  // Raw mode: the caller's prompt *replaces* the chat rules (markdown +
+  // citation instructions would corrupt structured output). Full mode
+  // appends as before.
+  const systemPrompt = rawMode
+    ? extra || SYSTEM_PROMPT_RULES
+    : extra
     ? `${SYSTEM_PROMPT_RULES}\n\n${extra}`
     : SYSTEM_PROMPT_RULES;
   const providerMessages = buildProviderMessages(
@@ -235,6 +256,21 @@ export async function POST(request: Request) {
       { error: "empty answer from model" },
       { status: 502 }
     );
+  }
+
+  if (rawMode) {
+    const provenance: AiProvenance = {
+      model,
+      baseUrlHost: hostnameOrEmpty(baseUrl),
+      promptHash,
+      createdAt,
+      finishedAt: Date.now(),
+      citationsResolved: 0,
+      citationsDropped: 0,
+      citationsDemoted: 0,
+      usage: providerJson.usage,
+    };
+    return NextResponse.json({ answer: raw, provenance } satisfies AiAnswerPayload);
   }
 
   const verify = readVerifyMode();

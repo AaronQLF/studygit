@@ -2,6 +2,7 @@ import { marked } from "marked";
 import type {
   BlogNodeData,
   CanvasNode,
+  FlashcardsNodeData,
   LinkNodeData,
   PageNodeData,
 } from "./types";
@@ -104,6 +105,18 @@ export function migrateNode(node: CanvasNode): {
     }
   }
 
+  // Flashcards decks: backfill the `cards` array so hand-edited or
+  // partially-written snapshots can't crash the deck panel.
+  if (kind === "flashcards") {
+    const data = node.data as FlashcardsNodeData;
+    if (!Array.isArray(data.cards)) {
+      return {
+        node: { ...node, data: { ...data, cards: [] } },
+        changed: true,
+      };
+    }
+  }
+
   // AI Answer / conversation nodes.
   //
   // Two ages of data to handle here:
@@ -119,7 +132,17 @@ export function migrateNode(node: CanvasNode): {
     const hasLegacyShape =
       typeof data.prompt === "string" || typeof data.answer === "string";
 
-    const needsMigration = !hasModernTurns || hasLegacyShape;
+    // A turn persisted as "running" means the app reloaded (or crashed)
+    // mid-request. Left as-is it permanently blocks the conversation —
+    // useConversation refuses to send while any turn is running — so
+    // demote it to a retryable error on load.
+    const hasStuckRunningTurn =
+      hasModernTurns &&
+      (data.turns as Array<{ status?: string }>).some(
+        (t) => t?.status === "running"
+      );
+
+    const needsMigration = !hasModernTurns || hasLegacyShape || hasStuckRunningTurn;
     if (needsMigration) {
       const turns: Array<{
         id: string;
@@ -185,7 +208,16 @@ export function migrateNode(node: CanvasNode): {
             sources: Array.isArray(data.sources)
               ? (data.sources as never[])
               : [],
-            turns: turns as never,
+            turns: turns.map((t) =>
+              t.status === "running"
+                ? {
+                    ...t,
+                    status: "error" as const,
+                    error:
+                      "Interrupted — the app reloaded while this reply was generating. Retry to re-ask.",
+                  }
+                : t
+            ) as never,
           },
         },
         changed: true,

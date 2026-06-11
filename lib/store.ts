@@ -18,18 +18,22 @@ import type {
   PdfHighlight,
   PdfHighlightRect,
   StudyBuddyState,
+  StudyStreak,
   WebHighlight,
   Workspace,
 } from "./types";
+import { localDayString } from "./study";
 import type { SnapLayoutId } from "./snap-layouts";
 import {
   DEFAULT_WORKSPACE_ID,
   INITIAL_STATE,
   INITIAL_STUDY_BUDDY,
+  NODE_WIDTHS,
   STUDY_BUDDY_MAX_WIDTH,
   STUDY_BUDDY_MIN_WIDTH,
 } from "./defaults";
 import { migrateNode } from "./migrations";
+import { useToastStore } from "@/components/ui/Toast";
 
 type LegacyFolder = {
   id: string;
@@ -55,6 +59,10 @@ export type DeletedNodeSnapshot = {
 
 type Store = AppState & {
   hydrated: boolean;
+  // Set when the *initial* load failed — the canvas must not render (and
+  // especially must not accept edits) on top of the default state, or a
+  // later save would overwrite the user's real data with it.
+  hydrateFailed: boolean;
   error: string | null;
   isDirty: boolean;
   justSaved: boolean;
@@ -68,7 +76,13 @@ type Store = AppState & {
   // via consumePendingHighlightJump.
   pendingHighlightJumps: Record<string, string>;
 
-  hydrate: () => Promise<void>;
+  // `preserveSelection` keeps the locally selected workspace (when it
+  // still exists) across a background re-load — used by cross-tab sync
+  // and 409-conflict recovery so the refresh doesn't yank the user to
+  // whatever workspace the *other* tab had selected.
+  hydrate: (opts?: { preserveSelection?: boolean }) => Promise<void>;
+  // Immediate manual flush for the "save failed" pill.
+  retrySave: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   focusNode: (id: string) => void;
@@ -96,6 +110,11 @@ type Store = AppState & {
     data: AnyNodeData,
     position: { x: number; y: number }
   ) => string;
+  // Render-order controls. React Flow paints nodes in array order (within
+  // the same zIndex tier), so overlapping shapes/frames need a way to
+  // reorder — e.g. a small frame placed on top of a big backdrop frame.
+  bringNodeToFront: (id: string) => void;
+  sendNodeToBack: (id: string) => void;
   duplicateNode: (id: string) => string | null;
   updateNode: (id: string, patch: Partial<CanvasNode>) => void;
   updateNodeData: (id: string, patch: Partial<AnyNodeData>) => void;
@@ -161,6 +180,10 @@ type Store = AppState & {
   removeStudyBuddyExtraSource: (sid: string) => void;
   restampStudyBuddyExtraSources: () => AiSourceRef[];
 
+  // Daily review streak — called once per day on the first completed
+  // review (any surface: deck panel or the Today overlay).
+  recordStudyDay: () => void;
+
   addWebHighlight: (
     nodeId: string,
     text: string,
@@ -202,6 +225,19 @@ type Store = AppState & {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let justSavedTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Single-writer save pipeline. Only one PUT is ever in flight; saves
+// requested while one is running coalesce into a single trailing save
+// that re-reads fresh state (and a fresh version) once the first
+// completes. Without this, an edit made during an in-flight save would
+// reuse the same version number and trip the server's conflict guard
+// against our own write.
+let saveInFlight = false;
+let saveQueued = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const RETRY_DELAY_INITIAL_MS = 4_000;
+const RETRY_DELAY_MAX_MS = 32_000;
+let retryDelayMs = RETRY_DELAY_INITIAL_MS;
 
 const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_HEIGHT = 280;
@@ -282,7 +318,9 @@ function maxZ(panels: FloatingPanel[]): number {
   return z;
 }
 
-async function persistToServer(body: string): Promise<boolean> {
+type SaveOutcome = "ok" | "conflict" | "error";
+
+async function persistToServer(body: string): Promise<SaveOutcome> {
   try {
     // NOTE: do NOT set `keepalive: true` here. Chromium enforces a hard
     // 64 KiB cumulative body cap on keepalive requests across the page
@@ -297,19 +335,53 @@ async function persistToServer(body: string): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body,
     });
+    if (res.status === 409) return "conflict";
     if (!res.ok) {
       console.error(
         "Failed to save state (server returned)",
         res.status,
         res.statusText
       );
-      return false;
+      return "error";
     }
-    return true;
+    return "ok";
   } catch (err) {
     console.error("Failed to save state", err);
-    return false;
+    return "error";
   }
+}
+
+// Cross-tab signal: posted after every successful save so sibling tabs
+// can pull the new snapshot instead of discovering it later via a 409.
+const STATE_CHANNEL_NAME = "studygit-state";
+let stateChannel: BroadcastChannel | null = null;
+
+function getStateChannel(): BroadcastChannel | null {
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
+    return null;
+  }
+  if (!stateChannel) stateChannel = new BroadcastChannel(STATE_CHANNEL_NAME);
+  return stateChannel;
+}
+
+let crossTabSyncInstalled = false;
+function installCrossTabSync(get: () => Store): void {
+  if (crossTabSyncInstalled) return;
+  const channel = getStateChannel();
+  if (!channel) return;
+  crossTabSyncInstalled = true;
+  channel.onmessage = (event: MessageEvent) => {
+    const data = event.data as { type?: string; version?: number } | null;
+    if (!data || data.type !== "saved" || typeof data.version !== "number") {
+      return;
+    }
+    const s = get();
+    if (data.version <= s.version) return;
+    // A dirty tab keeps its local edits; its next save will 409 and go
+    // through the conflict path instead. Only clean tabs silently follow.
+    if (s.isDirty || saveInFlight) return;
+    void s.hydrate({ preserveSelection: true });
+  };
 }
 
 // Best-effort flush at page-close time. Uses `navigator.sendBeacon` which
@@ -329,6 +401,7 @@ function flushOnUnload(get: () => Store): void {
       selectedWorkspaceId: s.selectedWorkspaceId,
       version: s.version + 1,
       studyBuddy: s.studyBuddy,
+      studyStreak: s.studyStreak,
     };
     const blob = new Blob([JSON.stringify(snapshot)], {
       type: "application/json",
@@ -372,48 +445,105 @@ function runWhenIdle(fn: () => void, timeoutMs = 1500): void {
   }
 }
 
+function performSave(
+  get: () => Store,
+  set: (patch: Partial<Store>) => void
+): void {
+  if (saveInFlight) {
+    saveQueued = true;
+    return;
+  }
+  saveInFlight = true;
+  runWhenIdle(async () => {
+    const s = get();
+    const snapshot: AppState = {
+      workspaces: s.workspaces,
+      nodes: s.nodes,
+      edges: s.edges,
+      selectedWorkspaceId: s.selectedWorkspaceId,
+      version: s.version + 1,
+      studyBuddy: s.studyBuddy,
+      studyStreak: s.studyStreak,
+    };
+    // Stringify + send inside the idle callback so the main thread
+    // stays responsive during typing bursts.
+    const body = JSON.stringify(snapshot);
+    const outcome = await persistToServer(body);
+    saveInFlight = false;
+
+    if (outcome === "conflict") {
+      // Another tab/device committed a newer snapshot. Pull it and tell
+      // the user — at most the last debounce window of local edits is
+      // discarded, versus silently erasing the other tab's work.
+      saveQueued = false;
+      retryDelayMs = RETRY_DELAY_INITIAL_MS;
+      useToastStore
+        .getState()
+        .push(
+          { message: "Updated in another tab — loaded the latest version" },
+          6000
+        );
+      await get().hydrate({ preserveSelection: true });
+      return;
+    }
+
+    if (outcome === "error") {
+      // Keep isDirty true (the data is still unsaved) and retry on a
+      // backoff. The header pill surfaces this state with a manual
+      // retry affordance.
+      set({
+        error: "Couldn't save your changes — retrying automatically.",
+      });
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        performSave(get, set);
+      }, retryDelayMs);
+      retryDelayMs = Math.min(RETRY_DELAY_MAX_MS, retryDelayMs * 2);
+      return;
+    }
+
+    retryDelayMs = RETRY_DELAY_INITIAL_MS;
+    getStateChannel()?.postMessage({ type: "saved", version: snapshot.version });
+
+    if (saveQueued) {
+      // Edits landed while this save was in flight — chain a trailing
+      // save that reads fresh state and the freshly bumped version.
+      saveQueued = false;
+      set({ error: null, version: snapshot.version, lastSavedAt: Date.now() });
+      performSave(get, set);
+      return;
+    }
+
+    if (justSavedTimer) clearTimeout(justSavedTimer);
+    set({
+      error: null,
+      version: snapshot.version,
+      isDirty: false,
+      justSaved: true,
+      lastSavedAt: Date.now(),
+    });
+    justSavedTimer = setTimeout(() => set({ justSaved: false }), 600);
+  });
+}
+
 function scheduleSave(get: () => Store, set: (patch: Partial<Store>) => void) {
   set({ isDirty: true });
+  // Fresh user activity resets the failure backoff — the manual signal
+  // beats a stale timer.
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  retryDelayMs = RETRY_DELAY_INITIAL_MS;
   if (saveTimer) clearTimeout(saveTimer);
-
-  saveTimer = setTimeout(() => {
-    runWhenIdle(async () => {
-      const s = get();
-      const snapshot: AppState = {
-        workspaces: s.workspaces,
-        nodes: s.nodes,
-        edges: s.edges,
-        selectedWorkspaceId: s.selectedWorkspaceId,
-        version: s.version + 1,
-        studyBuddy: s.studyBuddy,
-      };
-      // Stringify + send inside the idle callback so the main thread
-      // stays responsive during typing bursts.
-      const body = JSON.stringify(snapshot);
-      const ok = await persistToServer(body);
-      if (!ok) {
-        set({
-          error: "Failed to save state. Check your connection and retry.",
-        });
-        return;
-      }
-
-      if (justSavedTimer) clearTimeout(justSavedTimer);
-      set({
-        error: null,
-        version: snapshot.version,
-        isDirty: false,
-        justSaved: true,
-        lastSavedAt: Date.now(),
-      });
-      justSavedTimer = setTimeout(() => set({ justSaved: false }), 600);
-    });
-  }, 400);
+  saveTimer = setTimeout(() => performSave(get, set), 400);
 }
 
 export const useStore = create<Store>((set, get) => ({
   ...INITIAL_STATE,
   hydrated: false,
+  hydrateFailed: false,
   error: null,
   isDirty: false,
   justSaved: false,
@@ -425,10 +555,16 @@ export const useStore = create<Store>((set, get) => ({
   pendingHighlightJumps: {},
   studyBuddy: INITIAL_STUDY_BUDDY,
 
-  hydrate: async () => {
+  hydrate: async (opts) => {
     installUnloadFlush(get);
+    installCrossTabSync(get);
+    const preserveSelection = opts?.preserveSelection === true;
+    const prevSelectedWorkspaceId = get().selectedWorkspaceId;
     try {
       const res = await fetch("/api/state");
+      if (!res.ok) {
+        throw new Error(`Failed to load state (${res.status})`);
+      }
       const data = (await res.json()) as LegacyAppState;
 
       let workspaces: Workspace[] = data.workspaces ?? [];
@@ -511,12 +647,19 @@ export const useStore = create<Store>((set, get) => ({
         return { ...rest, workspaceId: wsId };
       });
 
-      const selectedWorkspaceId =
+      let selectedWorkspaceId =
         data.selectedWorkspaceId && validWsIds.has(data.selectedWorkspaceId)
           ? data.selectedWorkspaceId
           : (data.selectedFolderId &&
               folderToWs.get(data.selectedFolderId)) ||
             fallbackWsId;
+      if (
+        preserveSelection &&
+        prevSelectedWorkspaceId &&
+        validWsIds.has(prevSelectedWorkspaceId)
+      ) {
+        selectedWorkspaceId = prevSelectedWorkspaceId;
+      }
 
       // Hydrate the Study Buddy slot defensively — older snapshots
       // predate this field, and we want to gracefully ignore any
@@ -535,7 +678,19 @@ export const useStore = create<Store>((set, get) => ({
                   INITIAL_STUDY_BUDDY.width
               ),
               turns: Array.isArray((incomingBuddy as StudyBuddyState).turns)
-                ? (incomingBuddy as StudyBuddyState).turns
+                ? // Demote turns persisted as "running" (reload/crash mid-
+                  // request) to retryable errors — a stuck running turn
+                  // permanently blocks the buddy composer otherwise.
+                  (incomingBuddy as StudyBuddyState).turns.map((t) =>
+                    t.status === "running"
+                      ? {
+                          ...t,
+                          status: "error" as const,
+                          error:
+                            "Interrupted — the app reloaded while this reply was generating. Retry to re-ask.",
+                        }
+                      : t
+                  )
                 : [],
               extraSources: Array.isArray(
                 (incomingBuddy as StudyBuddyState).extraSources
@@ -549,6 +704,20 @@ export const useStore = create<Store>((set, get) => ({
             }
           : INITIAL_STUDY_BUDDY;
 
+      // Streak slot is optional + validated — malformed data degrades to
+      // "no streak" instead of breaking hydration.
+      const incomingStreak = (data as { studyStreak?: unknown }).studyStreak;
+      const studyStreak: StudyStreak | undefined =
+        incomingStreak &&
+        typeof incomingStreak === "object" &&
+        typeof (incomingStreak as StudyStreak).count === "number" &&
+        typeof (incomingStreak as StudyStreak).lastDay === "string"
+          ? {
+              count: Math.max(0, Math.floor((incomingStreak as StudyStreak).count)),
+              lastDay: (incomingStreak as StudyStreak).lastDay,
+            }
+          : undefined;
+
       set({
         workspaces,
         nodes,
@@ -556,10 +725,13 @@ export const useStore = create<Store>((set, get) => ({
         selectedWorkspaceId,
         version: data.version ?? 1,
         hydrated: true,
+        hydrateFailed: false,
+        error: null,
         isDirty: false,
         justSaved: false,
         lastSavedAt: Date.now(),
         studyBuddy,
+        studyStreak,
       });
 
       const needsMigration =
@@ -570,11 +742,28 @@ export const useStore = create<Store>((set, get) => ({
         incomingEdges.some((e) => !e.workspaceId);
       if (needsMigration) scheduleSave(get, set);
     } catch (err) {
+      // Background refreshes (cross-tab sync / conflict recovery) fail
+      // soft: keep the working in-memory state, log, move on. Only the
+      // initial load surfaces the failure screen.
+      if (preserveSelection && get().hydrated) {
+        console.warn("[store] background state refresh failed", err);
+        return;
+      }
       set({
         error: (err as Error).message,
         hydrated: true,
+        hydrateFailed: true,
       });
     }
+  },
+
+  retrySave: () => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    retryDelayMs = RETRY_DELAY_INITIAL_MS;
+    performSave(get, set);
   },
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
@@ -804,21 +993,36 @@ export const useStore = create<Store>((set, get) => ({
       workspaceId,
       position,
       data,
-      width:
-        data.kind === "blog" || data.kind === "page" || data.kind === "ai"
-          ? 440
-          : data.kind === "pdf"
-          ? 320
-          : data.kind === "image"
-          ? 280
-          : data.kind === "shape"
-          ? 360
-          : 240,
+      width: NODE_WIDTHS[data.kind] ?? 240,
       height: data.kind === "shape" ? 220 : undefined,
     };
     set((s) => ({ nodes: [...s.nodes, node] }));
     scheduleSave(get, set);
     return id;
+  },
+
+  bringNodeToFront: (id) => {
+    set((s) => {
+      const idx = s.nodes.findIndex((n) => n.id === id);
+      if (idx === -1 || idx === s.nodes.length - 1) return s;
+      const next = [...s.nodes];
+      const [node] = next.splice(idx, 1);
+      next.push(node);
+      return { nodes: next };
+    });
+    scheduleSave(get, set);
+  },
+
+  sendNodeToBack: (id) => {
+    set((s) => {
+      const idx = s.nodes.findIndex((n) => n.id === id);
+      if (idx <= 0) return s;
+      const next = [...s.nodes];
+      const [node] = next.splice(idx, 1);
+      next.unshift(node);
+      return { nodes: next };
+    });
+    scheduleSave(get, set);
   },
 
   duplicateNode: (id) => {
@@ -1182,6 +1386,16 @@ export const useStore = create<Store>((set, get) => ({
         extraSources: s.studyBuddy.extraSources.filter((src) => src.sid !== sid),
       },
     }));
+    scheduleSave(get, set);
+  },
+
+  recordStudyDay: () => {
+    const today = localDayString();
+    const prev = get().studyStreak;
+    if (prev?.lastDay === today) return; // already counted today
+    const yesterday = localDayString(-1);
+    const count = prev?.lastDay === yesterday ? prev.count + 1 : 1;
+    set({ studyStreak: { count, lastDay: today } });
     scheduleSave(get, set);
   },
 

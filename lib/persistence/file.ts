@@ -3,7 +3,7 @@ import path from "path";
 import { nanoid } from "nanoid";
 import { INITIAL_STATE } from "@/lib/defaults";
 import type { AppState } from "@/lib/types";
-import type { PersistenceDriver, UploadedFile } from "./types";
+import type { PersistenceDriver, SaveStateResult, UploadedFile } from "./types";
 
 // In Electron the install dir is read-only (inside an asar). The main
 // process sets STORAGE_ROOT to app.getPath('userData') so all writable
@@ -92,9 +92,40 @@ async function migrateLegacyUploadUrls(state: AppState): Promise<AppState> {
   return migrated;
 }
 
+// Serialize writes so two near-simultaneous saves (e.g. two dev tabs)
+// can't interleave their read-check-write sequences.
+let writeChain: Promise<unknown> = Promise.resolve();
+
 async function saveStateFile(state: AppState): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+// Optimistic-concurrency wrapper. Mirrors the version guard in the
+// Supabase save_state RPC: a snapshot whose version isn't strictly newer
+// than what's on disk is rejected as a conflict instead of clobbering
+// the newer data (multi-tab races, or an edit made on top of a failed
+// hydrate).
+async function saveStateFileVersioned(state: AppState): Promise<SaveStateResult> {
+  const run = writeChain.then(async (): Promise<SaveStateResult> => {
+    let currentVersion: number | null = null;
+    try {
+      const raw = await fs.readFile(STATE_PATH, "utf8");
+      const parsed = JSON.parse(raw) as { version?: unknown };
+      if (typeof parsed.version === "number") currentVersion = parsed.version;
+    } catch {
+      // Missing or unreadable state file — treat as first save.
+    }
+    const incoming = typeof state.version === "number" ? state.version : 1;
+    if (currentVersion !== null && incoming <= currentVersion) {
+      return { ok: false, reason: "version-conflict" };
+    }
+    await saveStateFile(state);
+    return { ok: true };
+  });
+  // Keep the chain alive even when a save throws.
+  writeChain = run.catch(() => undefined);
+  return run;
 }
 
 async function saveUploadFile(
@@ -123,7 +154,7 @@ async function getLocalFileUrl(key: string): Promise<string> {
 export function createFileDriver(): PersistenceDriver {
   return {
     loadState: ensureStateFile,
-    saveState: saveStateFile,
+    saveState: saveStateFileVersioned,
     uploadFile: async (
       buffer: Buffer,
       extension: string,

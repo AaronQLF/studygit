@@ -12,7 +12,7 @@ import {
   storeFile,
   type StoreReport,
 } from "./compression/chunk-store";
-import type { PersistenceDriver, UploadedFile } from "./types";
+import type { PersistenceDriver, SaveStateResult, UploadedFile } from "./types";
 
 function cloneInitialState(): AppState {
   return JSON.parse(JSON.stringify(INITIAL_STATE)) as AppState;
@@ -126,31 +126,42 @@ async function loadStateFromSupabase(): Promise<AppState> {
   };
 }
 
-async function saveStateToSupabase(state: AppState): Promise<void> {
+async function saveStateToSupabase(state: AppState): Promise<SaveStateResult> {
   const supabase = await getSupabaseServerClient();
   const { error } = await supabase.rpc("save_state", {
     payload: state as unknown as Record<string, unknown>,
   });
   if (error) {
+    // The save_state RPC raises `stale_version` when the incoming
+    // snapshot's version isn't strictly newer than the stored one (see
+    // supabase/migrations/0004_save_state_version_guard.sql). Translate
+    // it into a typed conflict so the route can answer 409 instead of 500.
+    if (/stale_version/i.test(error.message)) {
+      return { ok: false, reason: "version-conflict" };
+    }
     throw new Error(error.message);
   }
+  return { ok: true };
 }
 
 async function uploadToR2(
   buffer: Buffer,
   extension: string,
-  mimeType: string
+  mimeType: string,
+  ownerId?: string | null
 ): Promise<UploadedFile> {
   // The "key" is the public-facing identifier — a short opaque token that
   // appears in /api/files/<key>. The actual bytes live across many R2
   // objects (one per unique chunk) plus a single manifests/<key>.json that
-  // glues them back together.
+  // glues them back together. The owner id is stamped into the manifest so
+  // /api/files can verify the requester actually owns the file.
   const key = `${nanoid(12)}${sanitizeExtension(extension)}`;
   const report = await storeFile(
     key,
     buffer,
     mimeType || "application/pdf",
-    undefined
+    undefined,
+    { owner: ownerId ?? null }
   );
   logStoreReport(report);
   return { key };

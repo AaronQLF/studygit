@@ -74,7 +74,9 @@ export function StudyBuddyDock() {
   // dragging — covers the initial mount + any external setWidth calls.
   useEffect(() => {
     if (dragStateRef.current.dragging) return;
-    if (wrapperRef.current) wrapperRef.current.style.width = `${width}px`;
+    if (wrapperRef.current) {
+      wrapperRef.current.style.width = cssWidthFor(width);
+    }
   }, [width]);
 
   if (!open) return null;
@@ -83,7 +85,7 @@ export function StudyBuddyDock() {
     <aside
       ref={wrapperRef}
       className="relative flex h-full shrink-0 flex-col border-l border-[var(--pg-border)] bg-[var(--pg-bg)]"
-      style={{ width }}
+      style={{ width: cssWidthFor(width) }}
       aria-label="Study Buddy"
     >
       <div
@@ -111,4 +113,12 @@ export function StudyBuddyDock() {
 
 function clamp(n: number): number {
   return Math.max(STUDY_BUDDY_MIN_WIDTH, Math.min(STUDY_BUDDY_MAX_WIDTH, Math.round(n)));
+}
+
+// The persisted width can exceed a small viewport (set the dock to 720px
+// on a monitor, reopen on a laptop) — cap it at render time so the dock
+// never swallows the whole window. The 220px reserve keeps a usable
+// sliver of canvas + sidebar toggle reachable.
+function cssWidthFor(width: number): string {
+  return `min(${width}px, calc(100vw - 220px))`;
 }

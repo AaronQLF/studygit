@@ -214,13 +214,20 @@ function sanitizeExtension(extension: string): string {
   return cleaned.startsWith(".") ? cleaned : `.${cleaned}`;
 }
 
+// Set from --user-id in main() before any uploads run, so migrated
+// manifests carry the same ownership stamp as fresh uploads through
+// /api/upload (see lib/persistence/compression/manifest.ts `owner`).
+let migrationOwnerId: string | null = null;
+
 async function uploadAsset(
   buffer: Buffer,
   extension: string,
   mimeType: string
 ): Promise<{ key: string }> {
   const key = `${nanoid(12)}${sanitizeExtension(extension)}`;
-  await storeFile(key, buffer, mimeType || "application/pdf", undefined);
+  await storeFile(key, buffer, mimeType || "application/pdf", undefined, {
+    owner: migrationOwnerId,
+  });
   return { key };
 }
 
@@ -446,6 +453,7 @@ async function run(): Promise<void> {
   process.env.PERSISTENCE = "supabase";
 
   const flags = parseFlags();
+  migrationOwnerId = flags.userId;
 
   console.log(`source:      ${flags.source}`);
   console.log(`state.json:  ${flags.statePath}`);

@@ -1,6 +1,23 @@
-import type { AppState, StudyBuddyState } from "./types";
+import type { AppState, NodeKind, StudyBuddyState } from "./types";
 
 export const DEFAULT_WORKSPACE_ID = "ws-personal";
+
+// Canonical canvas card width per node kind. Single source of truth for
+// store.addNode AND the node components' fixed-width classes — if you
+// change a value here, update the matching `w-[NNNpx]` in
+// components/canvas/nodes/* (they're asserted equal by convention, not
+// plumbing, to keep the render path dependency-free).
+export const NODE_WIDTHS: Record<NodeKind, number> = {
+  link: 240,
+  image: 280,
+  note: 240,
+  blog: 440,
+  page: 440,
+  pdf: 332,
+  shape: 360,
+  ai: 440,
+  flashcards: 300,
+};
 
 export const DEFAULT_STUDY_BUDDY_WIDTH = 380;
 export const STUDY_BUDDY_MIN_WIDTH = 320;
