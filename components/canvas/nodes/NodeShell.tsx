@@ -1,11 +1,21 @@
 "use client";
 
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
-import { Handle, Position } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+  useStore as useFlowStore,
+} from "@xyflow/react";
 import { Copy, Crosshair, MoreHorizontal, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { useStore } from "@/lib/store";
 import { useToastStore } from "@/components/ui/Toast";
+
+// Below this canvas zoom, nodes that opted in (via `compactTitle`) render
+// as large-type title chips instead of shrunken full cards — the
+// level-of-detail treatment every serious canvas tool uses. Shared with
+// Canvas.tsx, which suppresses dimension persistence while compact.
+export const COMPACT_ZOOM_THRESHOLD = 0.45;
 
 export function NodeShell({
   id,
@@ -17,6 +27,7 @@ export function NodeShell({
   label,
   bare = false,
   actions,
+  compactTitle,
 }: {
   id: string;
   children: React.ReactNode;
@@ -31,6 +42,12 @@ export function NodeShell({
    * before the overflow menu. Use for primary affordances like "Open".
    */
   actions?: React.ReactNode;
+  /**
+   * Title shown by the zoomed-out compact chip. Omitting it opts the
+   * node out of level-of-detail rendering (images and shapes stay
+   * full-fidelity at every zoom).
+   */
+  compactTitle?: string;
 }) {
   const duplicateNode = useStore((s) => s.duplicateNode);
   const openPanel = useStore((s) => s.openPanel);
@@ -39,6 +56,18 @@ export function NodeShell({
   const pushUndo = useToastStore((s) => s.pushUndo);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Boolean selector: re-renders only when the threshold is crossed, not
+  // on every zoom/pan frame.
+  const compact = useFlowStore(
+    (s) => s.transform[2] < COMPACT_ZOOM_THRESHOLD && Boolean(compactTitle)
+  );
+  // Keep the chip's footprint matched to the card's natural width so
+  // edges don't re-anchor and the layout doesn't shift at the crossover.
+  const naturalWidth = useFlowStore((s) => {
+    const node = s.nodeLookup.get(id);
+    return node?.width ?? node?.measured?.width ?? 240;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -124,6 +153,38 @@ export function NodeShell({
     </div>
   );
 
+  const accent = accentColor ?? "var(--pg-border-strong)";
+
+  // Zoomed-out level of detail: one legible title chip instead of a
+  // shrunken full card. Double-click still opens the panel; handles stay
+  // live so edges keep connecting.
+  if (compact) {
+    return (
+      <div
+        className="group relative pg-anim"
+        onDoubleClick={onShellDoubleClick}
+        style={{ ["--node-accent" as string]: accent }}
+      >
+        <Handle type="target" position={Position.Top} className="!w-2 !h-2" />
+        <div
+          className="pg-node-card pg-node-chip"
+          style={{ width: naturalWidth }}
+          title={compactTitle}
+        >
+          <span className="pg-node-chip-icon" aria-hidden>
+            {WatermarkIcon ? (
+              <WatermarkIcon size={22} />
+            ) : (
+              <span className="pg-node-chip-dot" />
+            )}
+          </span>
+          <span className="pg-node-chip-title">{compactTitle}</span>
+        </div>
+        <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" />
+      </div>
+    );
+  }
+
   if (bare) {
     return (
       <div
@@ -137,8 +198,6 @@ export function NodeShell({
       </div>
     );
   }
-
-  const accent = accentColor ?? "var(--pg-border-strong)";
 
   return (
     <div

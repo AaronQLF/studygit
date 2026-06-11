@@ -42,6 +42,7 @@ export function LinkNode({ id, data }: NodeProps) {
       accentColor="#2a4a6b"
       WatermarkIcon={Link2}
       label="Link"
+      compactTitle={d.extractedTitle || d.title || d.url || "Link"}
       actions={
         !editing ? (
           <button

@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import type { NodeProps } from "@xyflow/react";
+import { StickyNote as StickyNoteIcon } from "lucide-react";
 import { NodeShell } from "./NodeShell";
 import { useStore } from "@/lib/store";
 import { NOTE_COLORS } from "@/lib/defaults";
@@ -17,11 +18,14 @@ export function NoteNode({ id, data }: NodeProps) {
   const updateNodeData = useStore((s) => s.updateNodeData);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(d.text);
+  // Re-sync the draft when the persisted text changes underneath us
+  // (undo, duplicate) while not editing — adjust-state-during-render.
+  const [prevText, setPrevText] = useState(d.text);
+  if (!editing && prevText !== d.text) {
+    setPrevText(d.text);
+    setText(d.text);
+  }
   const ref = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!editing) setText(d.text);
-  }, [d.text, editing]);
 
   useEffect(() => {
     if (!editing) return;
@@ -49,6 +53,11 @@ export function NoteNode({ id, data }: NodeProps) {
     <NodeShell
       id={id}
       bare
+      // Zoomed-out chip: first line of the note in big type, tinted with
+      // the sticky's own color. Ignored at normal zoom (bare shell).
+      compactTitle={d.text.trim().slice(0, 80) || "Empty note"}
+      WatermarkIcon={StickyNoteIcon}
+      accentColor={d.color}
       menuContent={
         <div className="px-1">
           <div className="px-1 pb-1 text-[11px] text-[var(--pg-muted)]">

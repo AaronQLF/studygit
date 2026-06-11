@@ -79,6 +79,7 @@ export function PdfNode({ id, data }: NodeProps) {
       accentColor="#a87234"
       WatermarkIcon={FileText}
       label="PDF"
+      compactTitle={d.title || d.fileName || "PDF"}
       actions={
         <button
           className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] text-[var(--pg-muted)] hover:bg-[var(--pg-bg-elevated)] hover:text-[var(--pg-fg)]"
