@@ -62,12 +62,14 @@ export function NodeShell({
   const compact = useFlowStore(
     (s) => s.transform[2] < COMPACT_ZOOM_THRESHOLD && Boolean(compactTitle)
   );
-  // Keep the chip's footprint matched to the card's natural width so
-  // edges don't re-anchor and the layout doesn't shift at the crossover.
-  const naturalWidth = useFlowStore((s) => {
-    const node = s.nodeLookup.get(id);
-    return node?.width ?? node?.measured?.width ?? 240;
-  });
+  // Keep the chip's footprint matched to the card's natural width so the
+  // horizontal layout doesn't shift at the crossover. Read from the app
+  // store (persisted card width) — React Flow no longer carries forced
+  // dimensions for content nodes, so its lookup width is undefined when
+  // the canvas mounts already zoomed out.
+  const naturalWidth = useStore(
+    (s) => s.nodes.find((n) => n.id === id)?.width ?? 240
+  );
 
   useEffect(() => {
     if (!open) return;
