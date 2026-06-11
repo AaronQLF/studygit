@@ -60,9 +60,12 @@ export function useCanvasStoreSync({
     const signature =
       selectedWorkspaceId +
       "|" +
+      // Node ids in ARRAY ORDER (not sorted): array order is render order
+      // for overlapping nodes, so bring-to-front/send-to-back must bust
+      // the signature and trigger a rebuild. Plain data edits never
+      // reorder, so the fast path below is preserved.
       wsNodes
         .map((n) => n.id)
-        .sort()
         .join(",") +
       "|" +
       wsEdges

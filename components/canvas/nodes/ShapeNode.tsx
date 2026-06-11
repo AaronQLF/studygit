@@ -14,14 +14,12 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
   Bold,
-  Circle,
   Copy,
-  Diamond,
   Italic,
   MoreHorizontal,
-  Square,
-  SquareDashed,
   Trash2,
 } from "lucide-react";
 import clsx from "clsx";
@@ -35,16 +33,67 @@ import type {
   ShapeVariant,
 } from "@/lib/types";
 
-const VARIANTS: {
-  value: ShapeVariant;
-  label: string;
-  Icon: React.ComponentType<{ size?: number }>;
-}[] = [
-  { value: "rectangle", label: "Rectangle", Icon: Square },
-  { value: "rounded", label: "Rounded", Icon: SquareDashed },
-  { value: "ellipse", label: "Ellipse", Icon: Circle },
-  { value: "diamond", label: "Diamond", Icon: Diamond },
+// Geometry per variant: a border-radius for boxy shapes, a clip-path
+// polygon for everything pointy. Note `ellipse` is a true 50% radius —
+// earlier builds used 9999px which actually renders a pill, so `pill`
+// is now its own variant and ellipse curves properly.
+const GEOMETRY: Record<
+  ShapeVariant,
+  { radius?: number | string; clip?: string; label: string }
+> = {
+  rectangle: { radius: 0, label: "Rectangle" },
+  rounded: { radius: 14, label: "Rounded" },
+  ellipse: { radius: "50%", label: "Ellipse" },
+  pill: { radius: 9999, label: "Pill" },
+  diamond: {
+    clip: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+    label: "Diamond",
+  },
+  triangle: {
+    clip: "polygon(50% 0%, 100% 100%, 0% 100%)",
+    label: "Triangle",
+  },
+  parallelogram: {
+    clip: "polygon(14% 0%, 100% 0%, 86% 100%, 0% 100%)",
+    label: "Parallelogram",
+  },
+  hexagon: {
+    clip: "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+    label: "Hexagon",
+  },
+  arrow: {
+    clip: "polygon(0% 28%, 62% 28%, 62% 6%, 100% 50%, 62% 94%, 62% 72%, 0% 72%)",
+    label: "Arrow",
+  },
+  star: {
+    clip: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
+    label: "Star",
+  },
+};
+
+const VARIANT_ORDER: ShapeVariant[] = [
+  "rectangle",
+  "rounded",
+  "ellipse",
+  "pill",
+  "diamond",
+  "triangle",
+  "parallelogram",
+  "hexagon",
+  "arrow",
+  "star",
 ];
+
+// Clipped variants lose their top edge, so their labels default to the
+// geometric center; boxy frames keep the top band free for content.
+const CENTER_LABEL_BY_DEFAULT = new Set<ShapeVariant>([
+  "diamond",
+  "triangle",
+  "parallelogram",
+  "hexagon",
+  "arrow",
+  "star",
+]);
 
 const BORDER_STYLES: { value: ShapeBorderStyle; label: string }[] = [
   { value: "solid", label: "Solid" },
@@ -73,6 +122,8 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as ShapeNodeData;
   const updateNodeData = useStore((s) => s.updateNodeData);
   const duplicateNode = useStore((s) => s.duplicateNode);
+  const bringNodeToFront = useStore((s) => s.bringNodeToFront);
+  const sendNodeToBack = useStore((s) => s.sendNodeToBack);
   const deleteNodeWithSnapshot = useStore((s) => s.deleteNodeWithSnapshot);
   const restoreDeletedNode = useStore((s) => s.restoreDeletedNode);
   const pushUndo = useToastStore((s) => s.pushUndo);
@@ -81,12 +132,16 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(d.label ?? "");
+  // Re-sync the draft when the persisted label changes underneath us
+  // (undo, duplicate, another surface) — React's adjust-state-during-
+  // render pattern, only while not actively editing.
+  const [prevLabel, setPrevLabel] = useState(d.label ?? "");
+  if (!editing && prevLabel !== (d.label ?? "")) {
+    setPrevLabel(d.label ?? "");
+    setLabelDraft(d.label ?? "");
+  }
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!editing) setLabelDraft(d.label ?? "");
-  }, [d.label, editing]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -155,19 +210,12 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
     lineHeight: 1.25,
   };
 
-  const radius =
-    variant === "rectangle"
-      ? 0
-      : variant === "rounded"
-      ? 14
-      : variant === "ellipse"
-      ? 9999
-      : 0;
-
-  const diamondClip =
-    variant === "diamond"
-      ? "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
-      : undefined;
+  const geometry = GEOMETRY[variant] ?? GEOMETRY.rounded;
+  const radius = geometry.radius ?? 0;
+  const clipPath = geometry.clip;
+  const labelPosition =
+    d.labelPosition ??
+    (CENTER_LABEL_BY_DEFAULT.has(variant) ? "center" : "top");
 
   return (
     <div className="group relative h-full w-full nodrag-children-pass">
@@ -198,18 +246,18 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
           // weight; solid stays at 1px so it doesn't compete with content.
           border: `${borderStyle === "solid" ? 1 : 1.5}px ${borderStyle} ${stroke}`,
           borderRadius: radius,
-          clipPath: diamondClip,
+          clipPath,
           boxShadow: isFrame ? "none" : "0 1px 0 rgba(28,26,23,0.04)",
         }}
       >
-        {/* Label sits at the top of the shape, leaving the body free for
-            grouping content underneath. */}
+        {/* Label: top band for frames (keeps the body free for grouped
+            content), geometric center for flowchart shapes. */}
         <div
           className={clsx(
-            "absolute inset-x-0 top-0 flex items-start justify-center px-4 pt-2.5 pb-1 text-center",
-            // Diamond is clipped to a polygon, so the very top is a sharp
-            // point. Push the label down into the wider middle band.
-            variant === "diamond" && "px-8 pt-[22%]"
+            "absolute flex justify-center px-4 text-center",
+            labelPosition === "center"
+              ? "inset-0 items-center px-8"
+              : "inset-x-0 top-0 items-start pt-2.5 pb-1"
           )}
         >
           {editing ? (
@@ -280,31 +328,46 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
         </button>
         {menuOpen && (
           <div className="absolute right-0 top-7 w-[240px] rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-2 shadow-[var(--pg-shadow)]">
-            {/* Variant picker */}
+            {/* Variant picker — each button previews its real geometry. */}
             <div className="px-1 pb-1 text-[10.5px] uppercase tracking-[0.08em] text-[var(--pg-muted)]">
               Shape
             </div>
-            <div className="grid grid-cols-4 gap-1">
-              {VARIANTS.map((v) => (
-                <button
-                  key={v.value}
-                  className={clsx(
-                    "h-8 inline-flex items-center justify-center rounded-md border text-[var(--pg-fg)] transition-colors",
-                    variant === v.value
-                      ? "border-[var(--pg-accent)] bg-[var(--pg-accent-soft)]"
-                      : "border-[var(--pg-border)] hover:bg-[var(--pg-bg-elevated)]"
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    updateNodeData(id, {
-                      variant: v.value,
-                    } as Partial<ShapeNodeData>);
-                  }}
-                  title={v.label}
-                >
-                  <v.Icon size={14} />
-                </button>
-              ))}
+            <div className="grid grid-cols-5 gap-1">
+              {VARIANT_ORDER.map((value) => {
+                const geo = GEOMETRY[value];
+                const previewRadius =
+                  typeof geo.radius === "number"
+                    ? Math.min(geo.radius, 8)
+                    : geo.radius;
+                return (
+                  <button
+                    key={value}
+                    className={clsx(
+                      "h-8 inline-flex items-center justify-center rounded-md border text-[var(--pg-fg-soft)] transition-colors",
+                      variant === value
+                        ? "border-[var(--pg-accent)] bg-[var(--pg-accent-soft)] text-[var(--pg-accent)]"
+                        : "border-[var(--pg-border)] hover:bg-[var(--pg-bg-elevated)]"
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      updateNodeData(id, {
+                        variant: value,
+                      } as Partial<ShapeNodeData>);
+                    }}
+                    title={geo.label}
+                  >
+                    <span
+                      aria-hidden
+                      className="block h-[14px] w-[20px]"
+                      style={{
+                        backgroundColor: "currentColor",
+                        borderRadius: previewRadius,
+                        clipPath: geo.clip,
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
 
             {/* Fill picker */}
@@ -404,6 +467,38 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
               })}
             </div>
 
+            {/* Label position */}
+            <div className="mt-3 px-1 pb-1 text-[10.5px] uppercase tracking-[0.08em] text-[var(--pg-muted)]">
+              Label
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {(
+                [
+                  { value: "top", label: "Top" },
+                  { value: "center", label: "Center" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  className={clsx(
+                    "h-7 inline-flex items-center justify-center rounded-md border text-[11px] font-medium text-[var(--pg-fg)] transition-colors",
+                    labelPosition === option.value
+                      ? "border-[var(--pg-accent)] bg-[var(--pg-accent-soft)]"
+                      : "border-[var(--pg-border)] hover:bg-[var(--pg-bg-elevated)]"
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    updateNodeData(id, {
+                      labelPosition: option.value,
+                    } as Partial<ShapeNodeData>);
+                  }}
+                  title={`Label at ${option.label.toLowerCase()}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             {/* Text size + style toggles */}
             <div className="mt-3 px-1 pb-1 text-[10.5px] uppercase tracking-[0.08em] text-[var(--pg-muted)]">
               Text
@@ -493,6 +588,32 @@ export function ShapeNode({ id, data, selected }: NodeProps) {
             </div>
 
             <div className="my-2 border-t border-[var(--pg-border)]" />
+
+            {/* Arrange — render order among overlapping shapes. */}
+            <div className="grid grid-cols-2 gap-1 px-0.5 pb-1">
+              <button
+                className="h-7 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--pg-border)] text-[11px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  bringNodeToFront(id);
+                }}
+                title="Bring to front"
+              >
+                <ArrowUpToLine size={11} className="text-[var(--pg-muted)]" />
+                Front
+              </button>
+              <button
+                className="h-7 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--pg-border)] text-[11px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  sendNodeToBack(id);
+                }}
+                title="Send to back"
+              >
+                <ArrowDownToLine size={11} className="text-[var(--pg-muted)]" />
+                Back
+              </button>
+            </div>
 
             <button
               className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--pg-fg)] hover:bg-[var(--pg-bg-elevated)] flex items-center gap-2"
