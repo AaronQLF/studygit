@@ -33,6 +33,7 @@ import {
   STUDY_BUDDY_MIN_WIDTH,
 } from "./defaults";
 import { migrateNode } from "./migrations";
+import type { TemplateDef } from "./templates";
 import { useToastStore } from "@/components/ui/Toast";
 
 type LegacyFolder = {
@@ -126,6 +127,14 @@ type Store = AppState & {
 
   addEdge: (workspaceId: string, source: string, target: string) => void;
   deleteEdge: (id: string) => void;
+
+  // Drop a quick-start template's nodes + edges into a workspace at the
+  // given canvas origin. Returns the created node ids in template order.
+  applyTemplate: (
+    workspaceId: string,
+    template: TemplateDef,
+    origin: { x: number; y: number }
+  ) => string[];
 
   addPdfHighlight: (
     nodeId: string,
@@ -1137,6 +1146,24 @@ export const useStore = create<Store>((set, get) => ({
   deleteEdge: (id) => {
     set((s) => ({ edges: s.edges.filter((e) => e.id !== id) }));
     scheduleSave(get, set);
+  },
+
+  applyTemplate: (workspaceId, template, origin) => {
+    // Deep-clone each node's data — templates are shared module
+    // constants and addNode stores the data object by reference.
+    const ids = template.nodes.map((tn) =>
+      get().addNode(
+        workspaceId,
+        JSON.parse(JSON.stringify(tn.data)) as AnyNodeData,
+        { x: origin.x + tn.dx, y: origin.y + tn.dy }
+      )
+    );
+    for (const [from, to] of template.edges) {
+      if (ids[from] && ids[to]) {
+        get().addEdge(workspaceId, ids[from], ids[to]);
+      }
+    }
+    return ids;
   },
 
   addPdfHighlight: (nodeId, page, rects, text, color) => {

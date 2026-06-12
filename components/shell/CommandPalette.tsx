@@ -318,7 +318,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[65] bg-[rgba(15,15,20,0.32)] backdrop-blur-[2px]"
+      className="pg-anim-fade fixed inset-0 z-[65] bg-[rgba(15,15,20,0.32)] backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div

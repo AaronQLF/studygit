@@ -33,6 +33,21 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Flashcards with spaced repetition, a Notion-grade writing upgrade, and saves that can no longer lose your work.",
     sections: [
       {
+        heading: "Getting started & polish",
+        items: [
+          {
+            tag: "new",
+            text:
+              "A new workspace is no longer a blank void. It greets you with quick-start templates — Lecture notes, Reading & flashcards, and Project workspace — that each drop in a few pre-wired nodes (a notes page connected to a deck, an AI tutor, grouped idea notes) you can edit immediately. Prefer a blank slate? Just press a key to add your own node and the prompt steps aside.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The whole app feels more intentional: dialogs, the command palette, the study session, and floating panels now ease in with a subtle rise-and-fade on the app's standard motion curve instead of snapping into place. It respects your system's reduced-motion setting.",
+          },
+        ],
+      },
+      {
         heading: "Flashcards",
         items: [
           {

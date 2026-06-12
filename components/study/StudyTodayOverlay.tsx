@@ -170,7 +170,7 @@ export function StudyTodayOverlay({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-[var(--pg-bg)]/96 backdrop-blur-[3px]">
+    <div className="pg-anim-fade fixed inset-0 z-[70] flex flex-col bg-[var(--pg-bg)]/96 backdrop-blur-[3px]">
       <div className="flex h-12 shrink-0 items-center gap-3 px-5">
         <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--pg-fg)]">
           <GraduationCap size={15} className="text-[var(--pg-study)]" />

@@ -146,11 +146,11 @@ export function ThemeSettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-[rgba(15,15,20,0.32)] backdrop-blur-[2px]"
+      className="pg-anim-fade fixed inset-0 z-[70] bg-[rgba(15,15,20,0.32)] backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-[8vh] w-[min(640px,92vw)] rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] overflow-hidden"
+        className="pg-anim-pop mx-auto mt-[8vh] w-[min(640px,92vw)] rounded-[var(--pg-radius-lg)] border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] overflow-hidden"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"

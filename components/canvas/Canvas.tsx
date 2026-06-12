@@ -29,7 +29,9 @@ import { useToastStore } from "@/components/ui/Toast";
 import { AddDock } from "@/components/shell/AddDock";
 import { defaultDataFor } from "./node-defaults";
 import { COMPACT_ZOOM_THRESHOLD } from "./nodes/NodeShell";
+import { EmptyCanvas } from "./EmptyCanvas";
 import { edgeTypes, nodeTypes } from "./node-types";
+import type { TemplateDef } from "@/lib/templates";
 import { CanvasContextMenu } from "./CanvasContextMenu";
 import { useCanvasShortcuts } from "./useCanvasShortcuts";
 import { useCanvasStoreSync } from "./useCanvasStoreSync";
@@ -57,6 +59,7 @@ function CanvasInner() {
   const restoreDeletedNode = useStore((s) => s.restoreDeletedNode);
   const addEdgeStore = useStore((s) => s.addEdge);
   const deleteEdge = useStore((s) => s.deleteEdge);
+  const applyTemplate = useStore((s) => s.applyTemplate);
   const setSelectedNode = useStore((s) => s.setSelectedNode);
   const pushUndo = useToastStore((s) => s.pushUndo);
 
@@ -166,6 +169,27 @@ function CanvasInner() {
     [selectedWorkspaceId, addNodeStore, screenToFlowPosition]
   );
 
+  const onApplyTemplate = useCallback(
+    (template: TemplateDef) => {
+      if (!selectedWorkspaceId) return;
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      // Anchor near the top-left of the visible canvas so a multi-node
+      // template lays out into view rather than off the right edge.
+      const origin =
+        rect &&
+        screenToFlowPosition({
+          x: rect.left + Math.min(220, rect.width * 0.22),
+          y: rect.top + Math.min(180, rect.height * 0.24),
+        });
+      applyTemplate(
+        selectedWorkspaceId,
+        template,
+        origin ?? { x: 120, y: 120 }
+      );
+    },
+    [selectedWorkspaceId, applyTemplate, screenToFlowPosition]
+  );
+
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault();
@@ -219,6 +243,7 @@ function CanvasInner() {
       className="absolute inset-0 bg-[var(--pg-bg-canvas)]"
     >
       <AddDock onAdd={(k) => addNode(k)} />
+      {nodes.length === 0 ? <EmptyCanvas onPick={onApplyTemplate} /> : null}
       <ReactFlow
         nodes={nodes}
         edges={edges}

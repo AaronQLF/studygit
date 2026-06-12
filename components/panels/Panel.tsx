@@ -175,7 +175,10 @@ export function Panel({
           // / snap buttons in the upper right of a snapped or
           // maximized panel become impossible to hit in the desktop
           // build.
-          "absolute pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] [-webkit-app-region:no-drag]",
+          // pg-anim-rise plays once on mount (the class is static, so a
+          // drag/resize/z re-render never restarts it) — panels gently
+          // rise in instead of snapping into place.
+          "pg-anim-rise absolute pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] shadow-[var(--pg-shadow-lg)] [-webkit-app-region:no-drag]",
           dragging && "select-none"
         )}
         style={{

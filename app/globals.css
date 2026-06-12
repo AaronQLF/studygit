@@ -3170,3 +3170,56 @@ html[data-panel-dragging] iframe.pg-cloud-browser-iframe {
   z-index: 40;
   pointer-events: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* Entrance motion vocabulary                                          */
+/* One curve (the app's standard 220ms ease), three intents: backdrop  */
+/* fade, dialog/palette pop, and panel/card rise. Applied to every     */
+/* surface that appears over the canvas so the app feels intentional   */
+/* instead of snapping into existence.                                 */
+/* ------------------------------------------------------------------ */
+
+@keyframes pg-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pg-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pg-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pg-anim-fade {
+  animation: pg-fade-in 160ms ease both;
+}
+.pg-anim-pop {
+  animation: pg-pop-in 200ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+.pg-anim-rise {
+  animation: pg-rise-in 220ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-anim-fade,
+  .pg-anim-pop,
+  .pg-anim-rise {
+    animation: pg-fade-in 1ms linear both;
+  }
+}
