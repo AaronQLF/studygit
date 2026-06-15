@@ -202,7 +202,7 @@ export function PageEditorToolbar({ editor }: { editor: Editor }) {
 // Heading outline ("table of contents") popover — scans the document for
 // headings on open and jumps the editor to the one the user picks. Long
 // study notes get navigable without scrolling blind.
-function OutlineButton({ editor }: { editor: Editor }) {
+export function OutlineButton({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<
     Array<{ level: number; text: string; pos: number }>
@@ -371,6 +371,13 @@ export const PageEditor = forwardRef<
     placeholder?: string;
     className?: string;
     showToolbar?: boolean;
+    // Word-count / reading-time footer. On by default for the notes
+    // editors (link/PDF sidebars); the page surface passes false to stay
+    // distraction-free.
+    showStats?: boolean;
+    // Focus the editor body on mount. Set by instant-capture so a freshly
+    // created page has a blinking cursor ready to type into.
+    autoFocus?: boolean;
     citationContext?: CitationContext | null;
   }
 >(function PageEditor(
@@ -380,6 +387,8 @@ export const PageEditor = forwardRef<
     placeholder = "Start writing... (press / for commands)",
     className,
     showToolbar = true,
+    showStats = true,
+    autoFocus = false,
     citationContext = null,
   },
   ref
@@ -422,6 +431,7 @@ export const PageEditor = forwardRef<
 
   const editor = useEditor({
     immediatelyRender: false,
+    autofocus: autoFocus ? "end" : false,
     extensions: createBaseExtensions({
       placeholder,
       withSlashMenu: true,
@@ -528,7 +538,7 @@ export const PageEditor = forwardRef<
       <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--pg-bg)]">
         <EditorContent editor={editor} className="h-full" />
       </div>
-      <EditorStats editor={editor} />
+      {showStats ? <EditorStats editor={editor} /> : null}
     </div>
   );
 });

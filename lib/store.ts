@@ -71,6 +71,11 @@ type Store = AppState & {
   panels: FloatingPanel[];
   focusedNodeId: string | null;
   selectedNodeId: string | null;
+  // Transient (non-persisted) marker set by instant-capture: the node id
+  // that should drop straight into edit mode on its next mount — a freshly
+  // created page autofocuses its editor, a freshly created note opens its
+  // textarea. Cleared by the consuming component once honored.
+  autoEditNodeId: string | null;
   sidebarCollapsed: boolean;
   // Pending PDF highlight jumps keyed by node id. A panel-body effect picks
   // them up once the PDF is loaded, scrolls to the highlight, and clears it
@@ -89,6 +94,7 @@ type Store = AppState & {
   focusNode: (id: string) => void;
   clearFocus: () => void;
   setSelectedNode: (id: string | null) => void;
+  setAutoEditNode: (id: string | null) => void;
 
   openPanel: (nodeId: string) => string;
   closePanel: (panelId: string) => void;
@@ -562,6 +568,7 @@ export const useStore = create<Store>((set, get) => ({
   panels: [],
   focusedNodeId: null,
   selectedNodeId: null,
+  autoEditNodeId: null,
   sidebarCollapsed: false,
   pendingHighlightJumps: {},
   studyBuddy: INITIAL_STUDY_BUDDY,
@@ -786,6 +793,7 @@ export const useStore = create<Store>((set, get) => ({
     get().closeAllPanels();
   },
   setSelectedNode: (id) => set({ selectedNodeId: id }),
+  setAutoEditNode: (id) => set({ autoEditNodeId: id }),
 
   openPanel: (nodeId) => {
     const existing = get().panels.find((p) => p.nodeId === nodeId);
