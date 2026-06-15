@@ -18,15 +18,14 @@ import {
   StickyNote,
   Target,
 } from "lucide-react";
-import { NOTE_COLORS, SHAPE_FILLS, SHAPE_STROKES } from "@/lib/defaults";
 import { cycleTheme, readThemePreference, writeThemePreference } from "@/components/ui/ThemeToggle";
 import { THEME_DIALOG_EVENT } from "./ThemeSettingsDialog";
 import { useStore } from "@/lib/store";
 import { useBrowserSession } from "@/lib/browser-session";
 import { searchContent, type SearchHit } from "@/lib/search";
-import { KIND_ICONS } from "@/components/canvas/node-defaults";
+import { KIND_ICONS, defaultDataFor } from "@/components/canvas/node-defaults";
 import { NEW_WORKSPACE_EVENT } from "./Sidebar";
-import type { AnyNodeData, NodeKind } from "@/lib/types";
+import type { NodeKind } from "@/lib/types";
 
 type PaletteItem = {
   id: string;
@@ -59,43 +58,6 @@ function jumpToHit(hit: SearchHit): void {
   s.openPanel(hit.nodeId);
 }
 
-function defaultDataFor(kind: NodeKind): AnyNodeData {
-  switch (kind) {
-    case "link":
-      return { kind, title: "New link", url: "", highlights: [] };
-    case "image":
-      return { kind, url: "" };
-    case "note":
-      return { kind, text: "", color: NOTE_COLORS[0] };
-    case "blog":
-    case "page":
-      return { kind: "page", title: "New page", content: "" };
-    case "pdf":
-      return { kind, title: "New PDF", src: "", highlights: [] };
-    case "shape":
-      return {
-        kind,
-        variant: "rounded",
-        fill: SHAPE_FILLS[1],
-        stroke: SHAPE_STROKES[0],
-        label: "",
-      };
-    case "ai":
-      return {
-        kind,
-        title: "Ask AI",
-        sources: [],
-        turns: [],
-      };
-    case "flashcards":
-      return {
-        kind,
-        title: "New deck",
-        cards: [],
-      };
-  }
-}
-
 export function CommandPalette({
   open,
   onClose,
@@ -115,6 +77,7 @@ export function CommandPalette({
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const setSidebarCollapsed = useStore((s) => s.setSidebarCollapsed);
   const openPanel = useStore((s) => s.openPanel);
+  const setAutoEditNode = useStore((s) => s.setAutoEditNode);
   const openBrowser = useBrowserSession((s) => s.openBrowser);
 
   const items = useMemo<PaletteItem[]>(() => {
@@ -123,14 +86,27 @@ export function CommandPalette({
       x: 120 + Math.random() * 120,
       y: 120 + Math.random() * 120,
     });
+    // Mirror the dock/shortcut instant-capture: a new page opens focused, a
+    // new note flags itself to enter its textarea on mount. Other kinds just
+    // get placed (they need a URL/file first).
+    const capture = (kind: NodeKind) => {
+      if (!wsId) return;
+      const id = addNode(wsId, defaultDataFor(kind), randomPos());
+      if (kind === "page") {
+        openPanel(id);
+        setAutoEditNode(id);
+      } else if (kind === "note") {
+        setAutoEditNode(id);
+      }
+    };
     const addItems: PaletteItem[] = [
-      { id: "add-link", section: "Add", label: "Add link", icon: Link2, hint: "L", onSelect: () => wsId && addNode(wsId, defaultDataFor("link"), randomPos()), disabled: !wsId },
-      { id: "add-image", section: "Add", label: "Add image", icon: ImageIcon, hint: "I", onSelect: () => wsId && addNode(wsId, defaultDataFor("image"), randomPos()), disabled: !wsId },
-      { id: "add-note", section: "Add", label: "Add note", icon: StickyNote, hint: "N", onSelect: () => wsId && addNode(wsId, defaultDataFor("note"), randomPos()), disabled: !wsId },
-      { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => wsId && addNode(wsId, defaultDataFor("page"), randomPos()), disabled: !wsId },
-      { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => wsId && addNode(wsId, defaultDataFor("pdf"), randomPos()), disabled: !wsId },
-      { id: "add-shape", section: "Add", label: "Add shape", icon: Shapes, hint: "S", keywords: ["shape", "frame", "group", "color", "organize", "rectangle", "ellipse", "diamond"], onSelect: () => wsId && addNode(wsId, defaultDataFor("shape"), randomPos()), disabled: !wsId },
-      { id: "add-flashcards", section: "Add", label: "Add flashcards", icon: Layers, hint: "F", keywords: ["flashcards", "cards", "deck", "study", "review", "spaced repetition", "anki", "quiz"], onSelect: () => wsId && addNode(wsId, defaultDataFor("flashcards"), randomPos()), disabled: !wsId },
+      { id: "add-link", section: "Add", label: "Add link", icon: Link2, hint: "L", onSelect: () => capture("link"), disabled: !wsId },
+      { id: "add-image", section: "Add", label: "Add image", icon: ImageIcon, hint: "I", onSelect: () => capture("image"), disabled: !wsId },
+      { id: "add-note", section: "Add", label: "Add note", icon: StickyNote, hint: "N", onSelect: () => capture("note"), disabled: !wsId },
+      { id: "add-page", section: "Add", label: "Add page", icon: NotebookPen, hint: "B", keywords: ["page", "note", "blog"], onSelect: () => capture("page"), disabled: !wsId },
+      { id: "add-pdf", section: "Add", label: "Add PDF", icon: FileSearch, hint: "P", onSelect: () => capture("pdf"), disabled: !wsId },
+      { id: "add-shape", section: "Add", label: "Add shape", icon: Shapes, hint: "S", keywords: ["shape", "frame", "group", "color", "organize", "rectangle", "ellipse", "diamond"], onSelect: () => capture("shape"), disabled: !wsId },
+      { id: "add-flashcards", section: "Add", label: "Add flashcards", icon: Layers, hint: "F", keywords: ["flashcards", "cards", "deck", "study", "review", "spaced repetition", "anki", "quiz"], onSelect: () => capture("flashcards"), disabled: !wsId },
     ];
 
     const workspaceActions: PaletteItem[] = [
@@ -233,6 +209,7 @@ export function CommandPalette({
     selectWorkspace,
     selectedNodeId,
     selectedWorkspaceId,
+    setAutoEditNode,
     setSidebarCollapsed,
     toggleSidebar,
     workspaces,

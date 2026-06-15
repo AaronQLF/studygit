@@ -16,7 +16,14 @@ import type { NoteNodeData } from "@/lib/types";
 export function NoteNode({ id, data }: NodeProps) {
   const d = data as unknown as NoteNodeData;
   const updateNodeData = useStore((s) => s.updateNodeData);
-  const [editing, setEditing] = useState(false);
+  // Instant capture: a note created via the dock/shortcut flags itself in
+  // the store so it opens directly in edit mode. Read it once at mount;
+  // the effect below honors and clears it.
+  const autoEdit = useStore((s) => s.autoEditNodeId === id);
+  const setAutoEditNode = useStore((s) => s.setAutoEditNode);
+  // Open directly in edit mode when instant-capture flagged this note.
+  // Lazy initial value (not an effect) so the textarea mounts focused.
+  const [editing, setEditing] = useState(autoEdit);
   const [text, setText] = useState(d.text);
   // Re-sync the draft when the persisted text changes underneath us
   // (undo, duplicate) while not editing — adjust-state-during-render.
@@ -26,6 +33,14 @@ export function NoteNode({ id, data }: NodeProps) {
     setText(d.text);
   }
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Clear the one-shot capture flag once honored so reopening the note
+    // later doesn't force it back into edit mode.
+    if (autoEdit) setAutoEditNode(null);
+    // Mount-only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!editing) return;

@@ -69,7 +69,9 @@ export function defaultDataFor(kind: NodeKind): AnyNodeData {
     case "page":
       return {
         kind,
-        title: "New page",
+        // Empty so the "Untitled page" placeholder shows and instant-capture
+        // drops the cursor in the body — nothing to select-and-delete first.
+        title: "",
         content: "",
       };
     case "blog":
