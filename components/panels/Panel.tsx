@@ -120,6 +120,12 @@ export function Panel({
       ? "PDF"
       : kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
 
+  // Pages render their own big title in the body, so the header
+  // breadcrumb (kind · title · workspace) is pure redundancy there — strip
+  // it and leave just the window controls. Every other panel kind keeps
+  // the breadcrumb: it's the only place their title shows.
+  const stripHeaderText = kindLabel === "page" || kindLabel === "blog";
+
   // Pre-compute the preview rectangle for whichever snap zone is
   // currently hovered, so we can render a translucent overlay showing
   // the user exactly where the panel will land on release.
@@ -205,20 +211,24 @@ export function Panel({
           )}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="pg-section-label">{formattedKind}</span>
-            {title ? (
+            {stripHeaderText ? null : (
               <>
-                <span className="text-[var(--pg-muted-soft)]">·</span>
-                <span className="pg-serif truncate text-[13px] text-[var(--pg-fg)]">
-                  {title}
-                </span>
+                <span className="pg-section-label">{formattedKind}</span>
+                {title ? (
+                  <>
+                    <span className="text-[var(--pg-muted-soft)]">·</span>
+                    <span className="pg-serif truncate text-[13px] text-[var(--pg-fg)]">
+                      {title}
+                    </span>
+                  </>
+                ) : null}
+                {workspaceName ? (
+                  <span className="truncate text-[11px] text-[var(--pg-muted)]">
+                    · {workspaceName}
+                  </span>
+                ) : null}
               </>
-            ) : null}
-            {workspaceName ? (
-              <span className="truncate text-[11px] text-[var(--pg-muted)]">
-                · {workspaceName}
-              </span>
-            ) : null}
+            )}
           </div>
           <div className="flex items-center gap-0.5">
             {totalPanels > 1 ? (

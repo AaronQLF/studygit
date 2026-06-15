@@ -27,6 +27,44 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.35",
+    date: "2026-06-15",
+    tagline:
+      "Writing gets out of the way: distraction-free pages, instant capture, and a dock trimmed to what a study session actually needs.",
+    sections: [
+      {
+        heading: "Focus on what matters",
+        items: [
+          {
+            tag: "improved",
+            text:
+              "Pages are distraction-free. The dense formatting toolbar is gone — press / for any block (headings, lists, tables, callouts, math, diagrams, citations), use Markdown shortcuts as you type, or select text for the inline toolbar. It's just your title and your writing now, with a quiet outline button tucked in the corner for jumping around long notes. ⌘+ / ⌘− still zoom the page.",
+          },
+          {
+            tag: "new",
+            text:
+              "Instant capture. Press B for a page or N for a note and you're typing immediately — the page opens focused and the note drops straight into edit mode, no more create-then-click-to-open. It works the same way from the dock, the keyboard shortcut, and ⌘K.",
+          },
+          {
+            tag: "improved",
+            text:
+              "A new page starts truly blank — there's no placeholder “New page” title to select and delete before you can name it.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The floating panel header on a page is now just the window controls. The redundant “Page · Title · Workspace” strip is gone, since the page already shows its own title right below it.",
+          },
+          {
+            tag: "improved",
+            text:
+              "The add dock is trimmed to the study loop — Note, Page, Link, PDF, Ask AI, Flashcards — grouped capture → sources → study. Shapes and images are a right-click (or the S / I shortcuts) away whenever you want them.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.32",
     date: "2026-06-10",
     tagline:
