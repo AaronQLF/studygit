@@ -61,6 +61,8 @@ function CanvasInner() {
   const deleteEdge = useStore((s) => s.deleteEdge);
   const applyTemplate = useStore((s) => s.applyTemplate);
   const setSelectedNode = useStore((s) => s.setSelectedNode);
+  const openPanel = useStore((s) => s.openPanel);
+  const setAutoEditNode = useStore((s) => s.setAutoEditNode);
   const pushUndo = useToastStore((s) => s.pushUndo);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -164,9 +166,29 @@ function CanvasInner() {
           x: centerPos?.x ?? 120 + Math.random() * 120,
           y: centerPos?.y ?? 120 + Math.random() * 120,
         };
-      addNodeStore(selectedWorkspaceId, defaultDataFor(kind), pos);
+      const id = addNodeStore(selectedWorkspaceId, defaultDataFor(kind), pos);
+      // Instant capture: text nodes drop straight into editing. Pages open
+      // their panel focused; notes flag themselves to enter the inline
+      // textarea on mount. Other kinds need a URL/file first, so they just
+      // get placed and selected.
+      if (kind === "page") {
+        openPanel(id);
+        setAutoEditNode(id);
+      } else if (kind === "note") {
+        setSelectedNode(id);
+        setAutoEditNode(id);
+      } else {
+        setSelectedNode(id);
+      }
     },
-    [selectedWorkspaceId, addNodeStore, screenToFlowPosition]
+    [
+      selectedWorkspaceId,
+      addNodeStore,
+      screenToFlowPosition,
+      openPanel,
+      setAutoEditNode,
+      setSelectedNode,
+    ]
   );
 
   const onApplyTemplate = useCallback(

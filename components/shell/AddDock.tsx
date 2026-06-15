@@ -4,30 +4,34 @@ import { useEffect, useState } from "react";
 import type { NodeKind } from "@/lib/types";
 import {
   FileSearch,
-  Image as ImageIcon,
   Layers,
   Link2,
   NotebookPen,
-  Shapes,
   Sparkles,
   StickyNote,
 } from "lucide-react";
 
+// The dock surfaces only the study-loop essentials, grouped capture →
+// sources → study. The peripheral kinds (Image, Shape) stay one right-click
+// or single keystroke (I / S) away via the canvas context menu and command
+// palette — de-emphasized, not removed.
 const ITEMS: {
   kind: NodeKind;
   label: string;
   keybind: string;
   icon: React.ComponentType<{ size?: number }>;
 }[] = [
-  { kind: "link", label: "Link", keybind: "L", icon: Link2 },
-  { kind: "image", label: "Image", keybind: "I", icon: ImageIcon },
   { kind: "note", label: "Note", keybind: "N", icon: StickyNote },
   { kind: "page", label: "Page", keybind: "B", icon: NotebookPen },
+  { kind: "link", label: "Link", keybind: "L", icon: Link2 },
   { kind: "pdf", label: "PDF", keybind: "P", icon: FileSearch },
-  { kind: "shape", label: "Shape", keybind: "S", icon: Shapes },
   { kind: "ai", label: "Ask AI", keybind: "A", icon: Sparkles },
   { kind: "flashcards", label: "Flashcards", keybind: "F", icon: Layers },
 ];
+
+// Render a thin divider *before* these item indices to set off the
+// capture / sources / study groups.
+const DIVIDER_BEFORE = new Set([2, 4]);
 
 const TIP_KEY = "studygit-dock-tip-dismissed";
 
@@ -63,7 +67,7 @@ export function AddDock({ onAdd }: { onAdd: (kind: NodeKind) => void }) {
         <div className="pointer-events-none absolute inset-x-2 top-0 h-px bg-white/45 dark:bg-white/10" />
         {ITEMS.map((item, index) => {
           const Icon = item.icon;
-          const showDivider = index === 2;
+          const showDivider = DIVIDER_BEFORE.has(index);
           return (
             <div key={item.kind} className="flex items-center">
               {showDivider ? (
