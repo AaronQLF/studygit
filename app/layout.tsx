@@ -35,9 +35,13 @@ const themeInitScript = `(function(){
     root.dataset.themePref = t;
     root.style.colorScheme = resolved;
     var preset = localStorage.getItem('studygit-theme-preset');
-    var valid = ['paper','slate','mocha','forest','ink','plum','retro'];
+    var valid = ['paper','slate','midnight','mocha','forest','ink','plum','sakura','retro','ocean','sunset','solarized','graphite','lavender'];
     if (valid.indexOf(preset) < 0) preset = 'paper';
     root.dataset.themePreset = preset;
+    var font = localStorage.getItem('studygit-font-preset');
+    var fonts = ['fraunces','literata','newsreader','lora','inter','mono'];
+    if (fonts.indexOf(font) < 0) font = 'fraunces';
+    root.dataset.fontPreset = font;
     var acc = localStorage.getItem('studygit-accent-override');
     if (acc && /^#[0-9a-f]{6}$/i.test(acc)) {
       root.style.setProperty('--pg-accent', acc);

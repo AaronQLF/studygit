@@ -131,10 +131,13 @@ export function snapGeom(
 }
 
 // How close to an edge / corner the pointer has to be for a drag to
-// arm the snap preview. Below this the user is "just moving the
-// window" and we leave them alone — they can still snap explicitly via
-// the snap chooser button in the panel header.
-export const SNAP_EDGE_THRESHOLD = 24;
+// arm the snap preview. This is a comfortable hot-zone band (à la
+// Windows 11) — wide enough that dragging a panel toward an edge
+// reliably arms the snap, while the whole middle of the screen still
+// lets you free-position. (Was 24px, which was effectively invisible —
+// you couldn't hit it on purpose, so drag-to-snap felt gone.) Users
+// can still snap explicitly via the snap chooser button in the header.
+export const SNAP_EDGE_THRESHOLD = 72;
 
 export type SnapPointerOptions = {
   /**

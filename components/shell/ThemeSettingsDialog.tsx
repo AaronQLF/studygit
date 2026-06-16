@@ -15,6 +15,15 @@ import {
   type ThemeId,
 } from "@/lib/themes";
 import {
+  applyFontPreset,
+  DEFAULT_FONT_ID,
+  FONT_CHANGE_EVENT,
+  FONT_ORDER,
+  readFontPresetId,
+  writeFontPreset,
+  type FontId,
+} from "@/lib/fonts";
+import {
   DEFAULT_GRID,
   GRID_DENSITY_LABELS,
   GRID_STYLE_LABELS,
@@ -30,6 +39,7 @@ import {
   type Theme as ThemeMode,
 } from "@/components/ui/ThemeToggle";
 import { PresetCard } from "./theme/PresetCard";
+import { FontCard } from "./theme/FontCard";
 import { GridStyleCard } from "./theme/GridStyleCard";
 import {
   CustomAccentInput,
@@ -70,6 +80,7 @@ export function ThemeSettingsDialog({
 }) {
   const [mode, setMode] = useState<ThemeMode>("system");
   const [presetId, setPresetId] = useState<ThemeId>(DEFAULT_THEME_ID);
+  const [fontId, setFontId] = useState<FontId>(DEFAULT_FONT_ID);
   const [accent, setAccent] = useState<string | null>(null);
   const [grid, setGrid] = useState<GridPrefs>(DEFAULT_GRID);
 
@@ -82,6 +93,7 @@ export function ThemeSettingsDialog({
     queueMicrotask(() => {
       setMode(readThemePreference());
       setPresetId(readThemePresetId());
+      setFontId(readFontPresetId());
       setAccent(readAccentOverride());
       setGrid(readGridPrefs());
     });
@@ -113,6 +125,15 @@ export function ThemeSettingsDialog({
     }
   };
 
+  const pickFont = (id: FontId) => {
+    setFontId(id);
+    applyFontPreset(id);
+    writeFontPreset(id);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(FONT_CHANGE_EVENT));
+    }
+  };
+
   const pickAccent = (hex: string | null) => {
     const normalized = hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex : null;
     setAccent(normalized);
@@ -137,6 +158,7 @@ export function ThemeSettingsDialog({
 
   const reset = () => {
     pickPreset(DEFAULT_THEME_ID);
+    pickFont(DEFAULT_FONT_ID);
     pickAccent(null);
     setGrid(DEFAULT_GRID);
     writeGridPrefs(DEFAULT_GRID);
@@ -212,6 +234,22 @@ export function ThemeSettingsDialog({
                   id={id}
                   active={id === presetId}
                   onPick={() => pickPreset(id)}
+                />
+              ))}
+            </div>
+          </Section>
+
+          <Section
+            label="Typeface"
+            hint="Heading & reading font across pages and cards."
+          >
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {FONT_ORDER.map((id) => (
+                <FontCard
+                  key={id}
+                  id={id}
+                  active={id === fontId}
+                  onPick={() => pickFont(id)}
                 />
               ))}
             </div>

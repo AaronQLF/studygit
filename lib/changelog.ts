@@ -27,6 +27,49 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.36",
+    date: "2026-06-16",
+    tagline:
+      "Make it yours: three new color themes, a typeface picker for your reading font, and a couple of canvas papercuts smoothed over.",
+    sections: [
+      {
+        heading: "Theme & typography",
+        items: [
+          {
+            tag: "new",
+            text:
+              "Three new color themes in Theme settings. Solarized — Ethan Schoonover's classic cream-and-blue, beloved by anyone who's themed an editor. Graphite — pure neutral greys with a soft pencil accent, for when you want zero hue. Lavender — cool lilac paper with periwinkle ink. That's fourteen presets now, each with hand-tuned light and dark variants.",
+          },
+          {
+            tag: "new",
+            text:
+              "A Typeface picker. Choose the heading and reading font used across your pages, node titles, and study cards: the default Fraunces, the bookish Literata, the editorial Newsreader, the contemporary Lora, a clean humanist sans (Inter), or a plain monospace “typewriter” mode. It applies instantly and sticks across reloads — and like themes, it's painted before the app loads so there's no flash.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Picking a newer theme (Midnight, Ocean, Sunset, Sakura) no longer briefly flashed the default Paper palette on first load — the pre-paint init script now knows about every preset.",
+          },
+        ],
+      },
+      {
+        heading: "Canvas polish",
+        items: [
+          {
+            tag: "fixed",
+            text:
+              "Drag-to-snap for floating panels is back to feeling responsive. The edge hot-zone that arms the snap preview was a razor-thin 24px band you basically couldn't hit on purpose; it's now a comfortable 72px edge band, so dragging a panel toward a side reliably previews where it'll land. The middle of the screen still free-positions, and Shift still force-snaps from anywhere.",
+          },
+          {
+            tag: "fixed",
+            text:
+              "Link cards on the canvas are no longer oversized. They stretched to fit long titles and URLs; now they're a fixed width that matches page cards, so the canvas stays tidy.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.35",
     date: "2026-06-15",
     tagline:
