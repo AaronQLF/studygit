@@ -39,6 +39,7 @@ export function LinkNode({ id, data }: NodeProps) {
   return (
     <NodeShell
       id={id}
+      className="w-[440px]"
       accentColor="#2a4a6b"
       WatermarkIcon={Link2}
       label="Link"
@@ -55,7 +56,7 @@ export function LinkNode({ id, data }: NodeProps) {
         ) : null
       }
     >
-      <div className="px-3 pb-3 pt-2.5 min-w-[240px]">
+      <div className="px-3 pb-3 pt-2.5">
         {editing ? (
           <div className="flex flex-col gap-2">
             <input

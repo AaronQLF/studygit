@@ -1,4 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap");
+/* Optional reading faces offered by the Typeface picker (see lib/fonts.ts
+   and the [data-font-preset] rules below). Loaded lazily via display=swap
+   so they never block first paint. */
+@import url("https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Lora:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
@@ -378,6 +382,125 @@
   --pg-accent: #fb7437;
   --pg-accent-soft: rgba(251, 116, 55, 0.2);
   --pg-marker: #7a3b14;
+}
+
+[data-theme-preset="solarized"] {
+  --pg-bg: #fdf6e3;
+  --pg-bg-subtle: #f4edd9;
+  --pg-bg-elevated: #eee8d5;
+  --pg-bg-canvas: #f7f1de;
+  --pg-fg: #002b36;
+  --pg-fg-soft: #073642;
+  --pg-muted: #657b83;
+  --pg-muted-soft: #93a1a1;
+  --pg-border: #e3dcc4;
+  --pg-border-strong: #c9c0a3;
+  --pg-accent: #268bd2;
+  --pg-accent-soft: rgba(38, 139, 210, 0.1);
+  --pg-marker: #f3e0a0;
+}
+[data-theme-preset="solarized"].dark {
+  --pg-bg: #002b36;
+  --pg-bg-subtle: #073642;
+  --pg-bg-elevated: #0a4150;
+  --pg-bg-canvas: #00212b;
+  --pg-fg: #fdf6e3;
+  --pg-fg-soft: #93a1a1;
+  --pg-muted: #839496;
+  --pg-muted-soft: #586e75;
+  --pg-border: #0f4451;
+  --pg-border-strong: #1a5563;
+  --pg-accent: #4ba3dd;
+  --pg-accent-soft: rgba(75, 163, 221, 0.2);
+  --pg-marker: #5a4a1a;
+}
+
+[data-theme-preset="graphite"] {
+  --pg-bg: #f7f7f6;
+  --pg-bg-subtle: #efefee;
+  --pg-bg-elevated: #e4e4e2;
+  --pg-bg-canvas: #f1f1f0;
+  --pg-fg: #1b1b1a;
+  --pg-fg-soft: #3c3c3a;
+  --pg-muted: #717170;
+  --pg-muted-soft: #c2c2bf;
+  --pg-border: #d9d9d6;
+  --pg-border-strong: #b0b0ac;
+  --pg-accent: #4a4a47;
+  --pg-accent-soft: rgba(74, 74, 71, 0.1);
+  --pg-marker: #e3e1d0;
+}
+[data-theme-preset="graphite"].dark {
+  --pg-bg: #161615;
+  --pg-bg-subtle: #1d1d1c;
+  --pg-bg-elevated: #272725;
+  --pg-bg-canvas: #111110;
+  --pg-fg: #ececea;
+  --pg-fg-soft: #c9c9c6;
+  --pg-muted: #8c8c89;
+  --pg-muted-soft: #3c3c3a;
+  --pg-border: #2b2b29;
+  --pg-border-strong: #3f3f3c;
+  --pg-accent: #b9b9b4;
+  --pg-accent-soft: rgba(185, 185, 180, 0.16);
+  --pg-marker: #4a4836;
+}
+
+[data-theme-preset="lavender"] {
+  --pg-bg: #f5f3fb;
+  --pg-bg-subtle: #ebe8f6;
+  --pg-bg-elevated: #ddd8ef;
+  --pg-bg-canvas: #f0edf9;
+  --pg-fg: #191630;
+  --pg-fg-soft: #353050;
+  --pg-muted: #7b76a0;
+  --pg-muted-soft: #c4bde0;
+  --pg-border: #d9d3ef;
+  --pg-border-strong: #b3a9d9;
+  --pg-accent: #6d5ae6;
+  --pg-accent-soft: rgba(109, 90, 230, 0.1);
+  --pg-marker: #ddd0ff;
+}
+[data-theme-preset="lavender"].dark {
+  --pg-bg: #131120;
+  --pg-bg-subtle: #1a1729;
+  --pg-bg-elevated: #241f38;
+  --pg-bg-canvas: #0d0b17;
+  --pg-fg: #e4e0f5;
+  --pg-fg-soft: #c6c0e3;
+  --pg-muted: #948dbf;
+  --pg-muted-soft: #4c4670;
+  --pg-border: #2a2540;
+  --pg-border-strong: #3a3358;
+  --pg-accent: #9b8cff;
+  --pg-accent-soft: rgba(155, 140, 255, 0.2);
+  --pg-marker: #423a6a;
+}
+
+/* ---------------------------------------------------------------------
+   Typeface presets. Swap the reading/heading serif (`--font-serif`,
+   consumed by `.pg-serif` and prose headings). The data attribute is
+   written by the pre-paint init script in app/layout.tsx and by
+   ThemeSettingsDialog. `fraunces` matches the base @theme value and is
+   listed explicitly so reset/round-trips stay obvious. See lib/fonts.ts.
+   ------------------------------------------------------------------ */
+[data-font-preset="fraunces"] {
+  --font-serif: "Fraunces", "Iowan Old Style", "Times New Roman", serif;
+}
+[data-font-preset="literata"] {
+  --font-serif: "Literata", Georgia, "Times New Roman", serif;
+}
+[data-font-preset="newsreader"] {
+  --font-serif: "Newsreader", "Times New Roman", Georgia, serif;
+}
+[data-font-preset="lora"] {
+  --font-serif: "Lora", Georgia, "Times New Roman", serif;
+}
+[data-font-preset="inter"] {
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+[data-font-preset="mono"] {
+  --font-serif: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
 }
 
 html,

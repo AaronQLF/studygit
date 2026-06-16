@@ -17,7 +17,10 @@ export type ThemeId =
   | "sakura"
   | "retro"
   | "ocean"
-  | "sunset";
+  | "sunset"
+  | "solarized"
+  | "graphite"
+  | "lavender";
 
 export type ThemeMode = "light" | "dark";
 
@@ -479,18 +482,140 @@ export const THEMES: Record<ThemeId, ThemeDef> = {
       "--pg-marker": "#5a3e6a",
     },
   },
+
+  // Ethan Schoonover's Solarized, adapted to the `--pg-*` surface. The
+  // signature yellow-cream base (base3) with a cyan-tinted neutral text
+  // ramp and a calm blue accent — instantly recognizable to anyone
+  // who's themed an editor, and distinct from Slate/Midnight (no warm
+  // base) and Retro/Mocha (no cyan-leaning neutrals).
+  solarized: {
+    id: "solarized",
+    name: "Solarized",
+    description: "Schoonover's classic — cream base, calm blue ink.",
+    light: {
+      "--pg-bg": "#fdf6e3",
+      "--pg-bg-subtle": "#f4edd9",
+      "--pg-bg-elevated": "#eee8d5",
+      "--pg-bg-canvas": "#f7f1de",
+      "--pg-fg": "#002b36",
+      "--pg-fg-soft": "#073642",
+      "--pg-muted": "#657b83",
+      "--pg-muted-soft": "#93a1a1",
+      "--pg-border": "#e3dcc4",
+      "--pg-border-strong": "#c9c0a3",
+      "--pg-accent": "#268bd2",
+      "--pg-accent-soft": soft("#268bd2"),
+      "--pg-marker": "#f3e0a0",
+    },
+    dark: {
+      "--pg-bg": "#002b36",
+      "--pg-bg-subtle": "#073642",
+      "--pg-bg-elevated": "#0a4150",
+      "--pg-bg-canvas": "#00212b",
+      "--pg-fg": "#fdf6e3",
+      "--pg-fg-soft": "#93a1a1",
+      "--pg-muted": "#839496",
+      "--pg-muted-soft": "#586e75",
+      "--pg-border": "#0f4451",
+      "--pg-border-strong": "#1a5563",
+      "--pg-accent": "#4ba3dd",
+      "--pg-accent-soft": soft("#4ba3dd", 0.2),
+      "--pg-marker": "#5a4a1a",
+    },
+  },
+
+  // Pure achromatic neutral — a pencil-on-newsprint feel. Differs from
+  // Ink (which is maximum black-on-white contrast) by living in the soft
+  // mid-greys, and from Slate (cool blue-grey) by carrying no hue at all.
+  graphite: {
+    id: "graphite",
+    name: "Graphite",
+    description: "Neutral greys with a soft pencil accent.",
+    light: {
+      "--pg-bg": "#f7f7f6",
+      "--pg-bg-subtle": "#efefee",
+      "--pg-bg-elevated": "#e4e4e2",
+      "--pg-bg-canvas": "#f1f1f0",
+      "--pg-fg": "#1b1b1a",
+      "--pg-fg-soft": "#3c3c3a",
+      "--pg-muted": "#717170",
+      "--pg-muted-soft": "#c2c2bf",
+      "--pg-border": "#d9d9d6",
+      "--pg-border-strong": "#b0b0ac",
+      "--pg-accent": "#4a4a47",
+      "--pg-accent-soft": soft("#4a4a47"),
+      "--pg-marker": "#e3e1d0",
+    },
+    dark: {
+      "--pg-bg": "#161615",
+      "--pg-bg-subtle": "#1d1d1c",
+      "--pg-bg-elevated": "#272725",
+      "--pg-bg-canvas": "#111110",
+      "--pg-fg": "#ececea",
+      "--pg-fg-soft": "#c9c9c6",
+      "--pg-muted": "#8c8c89",
+      "--pg-muted-soft": "#3c3c3a",
+      "--pg-border": "#2b2b29",
+      "--pg-border-strong": "#3f3f3c",
+      "--pg-accent": "#b9b9b4",
+      "--pg-accent-soft": soft("#b9b9b4", 0.16),
+      "--pg-marker": "#4a4836",
+    },
+  },
+
+  // Cool lilac / periwinkle paper with a blue-violet accent. Sits in the
+  // cool end of purple, deliberately apart from Plum (warm red-violet
+  // eggplant) — airier and bluer in both modes.
+  lavender: {
+    id: "lavender",
+    name: "Lavender",
+    description: "Cool lilac paper with periwinkle ink.",
+    light: {
+      "--pg-bg": "#f5f3fb",
+      "--pg-bg-subtle": "#ebe8f6",
+      "--pg-bg-elevated": "#ddd8ef",
+      "--pg-bg-canvas": "#f0edf9",
+      "--pg-fg": "#191630",
+      "--pg-fg-soft": "#353050",
+      "--pg-muted": "#7b76a0",
+      "--pg-muted-soft": "#c4bde0",
+      "--pg-border": "#d9d3ef",
+      "--pg-border-strong": "#b3a9d9",
+      "--pg-accent": "#6d5ae6",
+      "--pg-accent-soft": soft("#6d5ae6"),
+      "--pg-marker": "#ddd0ff",
+    },
+    dark: {
+      "--pg-bg": "#131120",
+      "--pg-bg-subtle": "#1a1729",
+      "--pg-bg-elevated": "#241f38",
+      "--pg-bg-canvas": "#0d0b17",
+      "--pg-fg": "#e4e0f5",
+      "--pg-fg-soft": "#c6c0e3",
+      "--pg-muted": "#948dbf",
+      "--pg-muted-soft": "#4c4670",
+      "--pg-border": "#2a2540",
+      "--pg-border-strong": "#3a3358",
+      "--pg-accent": "#9b8cff",
+      "--pg-accent-soft": soft("#9b8cff", 0.2),
+      "--pg-marker": "#423a6a",
+    },
+  },
 };
 
 export const THEME_ORDER: ThemeId[] = [
   "paper",
   "slate",
+  "graphite",
   "midnight",
   "ocean",
+  "solarized",
   "mocha",
   "sunset",
   "forest",
   "ink",
   "plum",
+  "lavender",
   "sakura",
   "retro",
 ];
@@ -512,7 +637,10 @@ export function isThemeId(value: unknown): value is ThemeId {
     value === "sakura" ||
     value === "retro" ||
     value === "ocean" ||
-    value === "sunset"
+    value === "sunset" ||
+    value === "solarized" ||
+    value === "graphite" ||
+    value === "lavender"
   );
 }
 
