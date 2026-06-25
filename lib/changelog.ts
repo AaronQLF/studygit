@@ -416,11 +416,6 @@ export const CHANGELOG: ChangelogEntry[] = [
         heading: "AI conversations \u2014 desktop",
         items: [
           {
-            tag: "fixed",
-            text:
-              "Conversation node 502\u2019d with `fetch failed` in the packaged app whenever the configured AI base URL was a corp / VPN / LAN host (e.g. `*.stingray-private.com`, `*.internal`, a localhost LLM, a `10.x` / `192.168.x` IP). Root cause: the desktop shell is a thin window over the hosted Vercel deployment, so `POST /api/ai` ran inside a Vercel function in `iad1` \u2014 which has no line of sight to your corp DNS / VPN and ENOTFOUND\u2019d on the upstream `fetch` to the provider. Local dev didn\u2019t show this because `next dev` is on your laptop and can resolve the host normally.",
-          },
-          {
             tag: "improved",
             text:
               "Desktop AI requests now leave your machine directly. The renderer assembles the OpenAI chat-completions payload locally (via a new isomorphic `lib/ai-request.ts` shared with the route), asks the Electron main process to make the actual provider call over a new `studygit:ai-fetch` IPC, and only then posts the raw answer back to `/api/ai` in a new `mode: \"process-only\"` branch to reuse the server\u2019s JSDOM + marked + sanitize-html citation pipeline. Net effect: corp / VPN / LAN endpoints work in the packaged app for the same reason your browser tab on the same machine can reach them \u2014 the request goes out through your own network, not Vercel\u2019s.",
